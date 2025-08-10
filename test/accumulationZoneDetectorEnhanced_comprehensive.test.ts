@@ -41,8 +41,6 @@ const ACCUMULATION_CONFIG = {
     confidenceThreshold: 0.2, // Lowered for easier signal generation in tests
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.1,
-    confluenceConfidenceBoost: 0.1,
-    crossTimeframeConfidenceBoost: 0.15,
     accumulationVolumeThreshold: 3, // Lowered for test scenarios
     accumulationRatioThreshold: 0.45,
     alignmentScoreThreshold: 0.5,

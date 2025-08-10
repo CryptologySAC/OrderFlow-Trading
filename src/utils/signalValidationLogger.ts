@@ -83,6 +83,14 @@ export interface SignalValidationRecord {
     signalAccuracy5min?: boolean;
     signalAccuracy15min?: boolean;
     signalAccuracy1hr?: boolean;
+    tpSlStatus?: "TP" | "SL" | "PENDING" | "NEITHER"; // Target reached or stop loss hit
+
+    // Quality flags
+    crossTimeframe?: boolean;
+    institutionalVolume?: boolean;
+    zoneConfluence?: boolean;
+    exhaustionGap?: boolean;
+    priceEfficiencyHigh?: boolean;
 
     // Calculated Values (for CSV output)
     calculatedValues:
@@ -128,7 +136,6 @@ export interface SignalRejectionRecord {
     exhaustion_depletionVolumeThreshold?: number;
     exhaustion_depletionRatioThreshold?: number;
     exhaustion_enableDepletionAnalysis?: boolean;
-    exhaustion_depletionConfidenceBoost?: number;
     exhaustion_varianceReductionFactor?: number;
     exhaustion_alignmentNormalizationFactor?: number;
     exhaustion_passiveVolumeExhaustionRatio?: number;
@@ -148,15 +155,12 @@ export interface SignalRejectionRecord {
     absorption_minPassiveMultiplier?: number;
     absorption_passiveAbsorptionThreshold?: number;
     absorption_expectedMovementScalingFactor?: number;
-    absorption_contextConfidenceBoostMultiplier?: number;
     absorption_liquidityGradientRange?: number;
     absorption_institutionalVolumeThreshold?: number;
     absorption_institutionalVolumeRatioThreshold?: number;
     absorption_enableInstitutionalVolumeFilter?: boolean;
-    absorption_institutionalVolumeBoost?: number;
     absorption_minAbsorptionScore?: number;
     absorption_finalConfidenceRequired?: number;
-    absorption_confidenceBoostReduction?: number;
     absorption_maxZoneCountForScoring?: number;
     absorption_minEnhancedConfidenceThreshold?: number;
     absorption_useStandardizedZones?: boolean;
@@ -186,6 +190,14 @@ export interface SignalRejectionRecord {
     subsequentMovement15min?: number;
     subsequentMovement1hr?: number;
     wasValidSignal?: boolean; // True if significant movement occurred despite rejection
+    tpSlStatus?: "TP" | "SL" | "NEITHER"; // Would have hit target or stop loss
+
+    // Quality flags (what signal had when rejected)
+    crossTimeframe?: boolean;
+    institutionalVolume?: boolean;
+    zoneConfluence?: boolean;
+    exhaustionGap?: boolean;
+    priceEfficiencyHigh?: boolean;
 }
 
 /**
@@ -210,7 +222,6 @@ export interface SuccessfulSignalRecord {
         enableDepletionAnalysis?: boolean;
         depletionVolumeThreshold?: number;
         depletionRatioThreshold?: number;
-        depletionConfidenceBoost?: number;
         passiveVolumeExhaustionRatio?: number;
         varianceReductionFactor?: number;
         alignmentNormalizationFactor?: number;
@@ -228,15 +239,12 @@ export interface SuccessfulSignalRecord {
         minPassiveMultiplier?: number;
         passiveAbsorptionThreshold?: number;
         expectedMovementScalingFactor?: number;
-        contextConfidenceBoostMultiplier?: number;
         liquidityGradientRange?: number;
         institutionalVolumeThreshold?: number;
         institutionalVolumeRatioThreshold?: number;
         enableInstitutionalVolumeFilter?: boolean;
-        institutionalVolumeBoost?: number;
         minAbsorptionScore?: number;
         finalConfidenceRequired?: number;
-        confidenceBoostReduction?: number;
         maxZoneCountForScoring?: number;
         balanceThreshold?: number;
         confluenceMinZones?: number;
@@ -284,6 +292,14 @@ export interface SuccessfulSignalRecord {
     subsequentMovement90min?: number;
     wasTopOrBottomSignal?: boolean;
     signalQuality?: "top" | "bottom" | "noise";
+    tpSlStatus?: "TP" | "SL" | "NEITHER"; // Target reached or stop loss hit
+
+    // Quality flags
+    crossTimeframe?: boolean;
+    institutionalVolume?: boolean;
+    zoneConfluence?: boolean;
+    exhaustionGap?: boolean;
+    priceEfficiencyHigh?: boolean;
 }
 
 /**
@@ -338,6 +354,9 @@ export class SignalValidationLogger {
 
     // Price tracking for validation
     private currentPrice: number | null = null;
+    private priceHistory: Map<number, number> = new Map(); // timestamp -> price for stop loss tracking
+    private readonly STOP_LOSS_THRESHOLD = 0.0035; // 0.35% stop loss
+    private readonly TARGET_THRESHOLD = 0.007; // 0.7% target
 
     // Daily rotation tracking
     private currentDateString: string;
@@ -537,6 +556,12 @@ export class SignalValidationLogger {
                     "signalAccuracy5min",
                     "signalAccuracy15min",
                     "signalAccuracy1hr",
+                    "TP_SL",
+                    "crossTimeframe",
+                    "institutionalVolume",
+                    "zoneConfluence",
+                    "exhaustionGap",
+                    "priceEfficiencyHigh",
                 ];
 
                 let configParameters: string[] = [];
@@ -553,7 +578,6 @@ export class SignalValidationLogger {
                             "enableDepletionAnalysis",
                             "depletionVolumeThreshold",
                             "depletionRatioThreshold",
-                            "depletionConfidenceBoost",
                             "passiveVolumeExhaustionRatio",
                             "varianceReductionFactor",
                             "alignmentNormalizationFactor",
@@ -575,15 +599,12 @@ export class SignalValidationLogger {
                             "minPassiveMultiplier",
                             "passiveAbsorptionThreshold",
                             "expectedMovementScalingFactor",
-                            "contextConfidenceBoostMultiplier",
                             "liquidityGradientRange",
                             "institutionalVolumeThreshold",
                             "institutionalVolumeRatioThreshold",
                             "enableInstitutionalVolumeFilter",
-                            "institutionalVolumeBoost",
                             "minAbsorptionScore",
                             "finalConfidenceRequired",
-                            "confidenceBoostReduction",
                             "maxZoneCountForScoring",
                             "minEnhancedConfidenceThreshold",
                             "useStandardizedZones",
@@ -634,6 +655,12 @@ export class SignalValidationLogger {
                     "subsequentMovement15min",
                     "subsequentMovement1hr",
                     "wasValidSignal",
+                    "TP_SL",
+                    "crossTimeframe",
+                    "institutionalVolume",
+                    "zoneConfluence",
+                    "exhaustionGap",
+                    "priceEfficiencyHigh",
                 ];
 
                 let configParameters: string[] = [];
@@ -650,7 +677,6 @@ export class SignalValidationLogger {
                             "enableDepletionAnalysis",
                             "depletionVolumeThreshold",
                             "depletionRatioThreshold",
-                            "depletionConfidenceBoost",
                             "passiveVolumeExhaustionRatio",
                             "varianceReductionFactor",
                             "alignmentNormalizationFactor",
@@ -672,15 +698,12 @@ export class SignalValidationLogger {
                             "minPassiveMultiplier",
                             "passiveAbsorptionThreshold",
                             "expectedMovementScalingFactor",
-                            "contextConfidenceBoostMultiplier",
                             "liquidityGradientRange",
                             "institutionalVolumeThreshold",
                             "institutionalVolumeRatioThreshold",
                             "enableInstitutionalVolumeFilter",
-                            "institutionalVolumeBoost",
                             "minAbsorptionScore",
                             "finalConfidenceRequired",
-                            "confidenceBoostReduction",
                             "maxZoneCountForScoring",
                             "minEnhancedConfidenceThreshold",
                             "useStandardizedZones",
@@ -724,6 +747,12 @@ export class SignalValidationLogger {
                     "subsequentMovement15min",
                     "subsequentMovement1hr",
                     "wasValidSignal",
+                    "TP_SL",
+                    "crossTimeframe",
+                    "institutionalVolume",
+                    "zoneConfluence",
+                    "exhaustionGap",
+                    "priceEfficiencyHigh",
                 ];
 
                 let configParameters: string[] = [];
@@ -741,7 +770,6 @@ export class SignalValidationLogger {
                             "enableDepletionAnalysis",
                             "depletionVolumeThreshold",
                             "depletionRatioThreshold",
-                            "depletionConfidenceBoost",
                             "passiveVolumeExhaustionRatio",
                             "varianceReductionFactor",
                             "alignmentNormalizationFactor",
@@ -763,15 +791,12 @@ export class SignalValidationLogger {
                             "minPassiveMultiplier",
                             "passiveAbsorptionThreshold",
                             "expectedMovementScalingFactor",
-                            "contextConfidenceBoostMultiplier",
                             "liquidityGradientRange",
                             "institutionalVolumeThreshold",
                             "institutionalVolumeRatioThreshold",
                             "enableInstitutionalVolumeFilter",
-                            "institutionalVolumeBoost",
                             "minAbsorptionScore",
                             "finalConfidenceRequired",
-                            "confidenceBoostReduction",
                             "maxZoneCountForScoring",
                             "minEnhancedConfidenceThreshold",
                             "useStandardizedZones",
@@ -1059,6 +1084,19 @@ export class SignalValidationLogger {
      */
     public updateCurrentPrice(price: number): void {
         this.currentPrice = price;
+        // Store price history for stop loss tracking (keep last 2 hours)
+        const now = Date.now();
+        this.priceHistory.set(now, price);
+
+        // Clean up old price history (older than 2 hours)
+        const cutoff = now - 2 * 60 * 60 * 1000;
+        for (const [timestamp] of this.priceHistory) {
+            if (timestamp < cutoff) {
+                this.priceHistory.delete(timestamp);
+            } else {
+                break; // Map is ordered by insertion, so we can stop once we hit recent entries
+            }
+        }
     }
 
     /**
@@ -1143,6 +1181,15 @@ export class SignalValidationLogger {
                     signal.confidence,
                     marketContext.institutionalVolumeRatio
                 ),
+
+                // Quality flags from signal (default to false if not present)
+                crossTimeframe: signal.qualityFlags?.crossTimeframe ?? false,
+                institutionalVolume:
+                    signal.qualityFlags?.institutionalVolume ?? false,
+                zoneConfluence: signal.qualityFlags?.zoneConfluence ?? false,
+                exhaustionGap: signal.qualityFlags?.exhaustionGap ?? false,
+                priceEfficiencyHigh:
+                    signal.qualityFlags?.priceEfficiency ?? false,
 
                 // Store calculated values for later use
                 calculatedValues: calculatedValues,
@@ -1471,6 +1518,72 @@ export class SignalValidationLogger {
     }
 
     /**
+     * Check if signal hit stop loss or target within a timeframe
+     */
+    private checkSignalOutcome(
+        signalTimestamp: number,
+        signalPrice: number,
+        signalSide: "buy" | "sell",
+        endTime: number
+    ): { hitStopLoss: boolean; hitTarget: boolean; finalPrice: number | null } {
+        const stopLossPrice =
+            signalSide === "buy"
+                ? signalPrice * (1 - this.STOP_LOSS_THRESHOLD) // Buy signal: stop loss below entry
+                : signalPrice * (1 + this.STOP_LOSS_THRESHOLD); // Sell signal: stop loss above entry
+
+        const targetPrice =
+            signalSide === "buy"
+                ? signalPrice * (1 + this.TARGET_THRESHOLD) // Buy signal: target above entry
+                : signalPrice * (1 - this.TARGET_THRESHOLD); // Sell signal: target below entry
+
+        let hitStopLoss = false;
+        let hitTarget = false;
+        let hitStopLossFirst = false;
+        let finalPrice: number | null = null;
+
+        // Check price history from signal time to endTime
+        // Track BOTH: if TP was reached AND if SL was hit before TP
+        for (const [timestamp, price] of this.priceHistory) {
+            if (timestamp <= signalTimestamp) continue;
+            if (timestamp > endTime) break;
+
+            finalPrice = price;
+
+            // Check for stop loss hit (only matters if TP not yet reached)
+            if (!hitTarget) {
+                if (signalSide === "buy" && price <= stopLossPrice) {
+                    hitStopLoss = true;
+                    hitStopLossFirst = true; // SL hit before TP
+                }
+                if (signalSide === "sell" && price >= stopLossPrice) {
+                    hitStopLoss = true;
+                    hitStopLossFirst = true; // SL hit before TP
+                }
+            }
+
+            // Check for target hit
+            if (signalSide === "buy" && price >= targetPrice) {
+                hitTarget = true;
+                // Don't break - continue to check full timeframe
+            }
+            if (signalSide === "sell" && price <= targetPrice) {
+                hitTarget = true;
+                // Don't break - continue to check full timeframe
+            }
+        }
+
+        // Return whether target was hit and if SL was hit BEFORE target
+        hitStopLoss = hitStopLossFirst;
+
+        // If we don't have enough price history, use current price
+        if (finalPrice === null) {
+            finalPrice = this.currentPrice;
+        }
+
+        return { hitStopLoss, hitTarget, finalPrice };
+    }
+
+    /**
      * Validate signal performance at specific time intervals
      */
     private validateSignal(
@@ -1494,6 +1607,23 @@ export class SignalValidationLogger {
             return;
         }
 
+        // Calculate timeframe end
+        const timeframeMs =
+            timeframe === "5min"
+                ? 5 * 60 * 1000
+                : timeframe === "15min"
+                  ? 15 * 60 * 1000
+                  : 60 * 60 * 1000;
+        const endTime = record.timestamp + timeframeMs;
+
+        // Check if stop loss or target was hit
+        const outcome = this.checkSignalOutcome(
+            record.timestamp,
+            originalPrice,
+            record.signalSide,
+            endTime
+        );
+
         const movement = FinancialMath.divideQuantities(
             Math.abs(currentPrice - originalPrice),
             originalPrice
@@ -1506,11 +1636,8 @@ export class SignalValidationLogger {
                   ? "down"
                   : "sideways";
 
-        const isAccurate = this.evaluateSignalAccuracy(
-            record.signalSide,
-            direction,
-            movement
-        );
+        // Signal is accurate only if target hit WITHOUT stop loss
+        const isAccurate = outcome.hitTarget && !outcome.hitStopLoss;
 
         // Update record
         switch (timeframe) {
@@ -1532,8 +1659,33 @@ export class SignalValidationLogger {
                 record.maxMovement1hr = movement;
                 record.signalAccuracy1hr = isAccurate;
 
-                // Write final record with outcomes
-                this.writeSignalRecord(record, record.calculatedValues);
+                // CRITICAL FIX: Proper success list categorization
+                // Only signals that reach 0.7% TP within 90 minutes go to success list
+
+                if (outcome.hitTarget) {
+                    // Signal reached 0.7% TP within timeframe - goes to success list
+                    if (outcome.hitStopLoss) {
+                        // Hit 0.35% SL BEFORE reaching TP (but still reached TP later)
+                        record.tpSlStatus = "SL";
+                    } else {
+                        // Reached TP directly without hitting SL first
+                        record.tpSlStatus = "TP";
+                    }
+                    // Write to success/validation file - this signal was successful (reached TP)
+                    this.writeSignalRecord(record, record.calculatedValues);
+                } else {
+                    // Signal did NOT reach 0.7% TP within timeframe
+                    // This is a FALSE signal - don't track it in success/validation
+                    // Simply don't write it anywhere - it failed to reach TP
+                    this.logger.debug(
+                        "Signal failed to reach TP within timeframe, not tracking",
+                        {
+                            signalId: record.signalId,
+                            price: record.price,
+                            maxMovement: record.maxMovement1hr,
+                        }
+                    );
+                }
                 break;
         }
 
@@ -1545,6 +1697,8 @@ export class SignalValidationLogger {
             movement,
             direction,
             isAccurate,
+            hitStopLoss: outcome.hitStopLoss,
+            hitTarget: outcome.hitTarget,
         });
     }
 
@@ -1574,18 +1728,39 @@ export class SignalValidationLogger {
             case "90min":
                 record.subsequentMovement90min = movement;
 
-                // Classify signal quality based on 90-minute movement
-                const absMovement = Math.abs(movement);
-                record.wasTopOrBottomSignal = absMovement >= 0.007; // 0.7% threshold
+                // Determine signal side based on detector type and movement expectation
+                // This is a simplified assumption - you may need to store actual signal side
+                const expectedMovement =
+                    record.detectorType === "absorption" ? "up" : "down";
+                const signalSide = expectedMovement === "up" ? "buy" : "sell";
 
-                if (absMovement >= 0.007) {
-                    // Determine if top or bottom signal
-                    if (movement >= 0.007) {
+                // Check if stop loss or target was hit within 90 minutes
+                const endTime = record.timestamp + 90 * 60 * 1000;
+                const outcome = this.checkSignalOutcome(
+                    record.timestamp,
+                    originalPrice,
+                    signalSide,
+                    endTime
+                );
+
+                // Signal is only successful if it reached target WITHOUT hitting stop loss
+                record.wasTopOrBottomSignal =
+                    outcome.hitTarget && !outcome.hitStopLoss;
+
+                // Set TP/SL status
+                if (outcome.hitStopLoss) {
+                    record.tpSlStatus = "SL";
+                    record.signalQuality = "noise"; // Stop loss hit = failed signal
+                } else if (outcome.hitTarget) {
+                    record.tpSlStatus = "TP";
+                    // Determine if top or bottom signal based on movement
+                    if (movement >= this.TARGET_THRESHOLD) {
                         record.signalQuality = "bottom"; // Price went up = bottom signal
-                    } else if (movement <= -0.007) {
+                    } else if (movement <= -this.TARGET_THRESHOLD) {
                         record.signalQuality = "top"; // Price went down = top signal
                     }
                 } else {
+                    record.tpSlStatus = "NEITHER";
                     record.signalQuality = "noise";
                 }
                 break;
@@ -1609,9 +1784,6 @@ export class SignalValidationLogger {
             originalPrice
         );
 
-        // Determine if this was a valid signal that should not have been rejected
-        const significantMovement = Math.abs(movement) > 0.007; // 0.7% movement threshold
-
         switch (timeframe) {
             case "5min":
                 record.subsequentMovement5min = movement;
@@ -1621,7 +1793,34 @@ export class SignalValidationLogger {
                 break;
             case "1hr":
                 record.subsequentMovement1hr = movement;
-                record.wasValidSignal = significantMovement;
+
+                // Determine what would have happened if signal was not rejected
+                // Assume signal direction based on detector type
+                const expectedMovement =
+                    record.detectorType === "absorption" ? "up" : "down";
+                const signalSide = expectedMovement === "up" ? "buy" : "sell";
+
+                // Check if it would have hit target or stop loss
+                const endTime = record.timestamp + 60 * 60 * 1000;
+                const outcome = this.checkSignalOutcome(
+                    record.timestamp,
+                    originalPrice,
+                    signalSide,
+                    endTime
+                );
+
+                // Signal was a missed opportunity if it would have hit target without stop loss
+                record.wasValidSignal =
+                    outcome.hitTarget && !outcome.hitStopLoss;
+
+                // Set TP/SL status for what would have happened
+                if (outcome.hitStopLoss) {
+                    record.tpSlStatus = "SL";
+                } else if (outcome.hitTarget) {
+                    record.tpSlStatus = "TP";
+                } else {
+                    record.tpSlStatus = "NEITHER";
+                }
 
                 // Write final rejection record and clean up
                 this.writeRejectionRecord(record);
@@ -1679,7 +1878,6 @@ export class SignalValidationLogger {
                         exhaustionValues.calculatedEnableDepletionAnalysis,
                         exhaustionValues.calculatedDepletionVolumeThreshold,
                         exhaustionValues.calculatedDepletionRatioThreshold,
-                        exhaustionValues.calculatedDepletionConfidenceBoost,
                         exhaustionValues.calculatedPassiveVolumeExhaustionRatio,
                         exhaustionValues.calculatedVarianceReductionFactor,
                         exhaustionValues.calculatedAlignmentNormalizationFactor,
@@ -1703,15 +1901,12 @@ export class SignalValidationLogger {
                         absorptionValues.calculatedMinPassiveMultiplier,
                         absorptionValues.calculatedPassiveAbsorptionThreshold,
                         absorptionValues.calculatedExpectedMovementScalingFactor,
-                        absorptionValues.calculatedContextConfidenceBoostMultiplier,
                         absorptionValues.calculatedLiquidityGradientRange,
                         absorptionValues.calculatedInstitutionalVolumeThreshold,
                         absorptionValues.calculatedInstitutionalVolumeRatioThreshold,
                         absorptionValues.calculatedEnableInstitutionalVolumeFilter,
-                        absorptionValues.calculatedInstitutionalVolumeBoost,
                         absorptionValues.calculatedMinAbsorptionScore,
                         absorptionValues.calculatedFinalConfidenceRequired,
-                        absorptionValues.calculatedConfidenceBoostReduction,
                         absorptionValues.calculatedMaxZoneCountForScoring,
                         absorptionValues.calculatedMinEnhancedConfidenceThreshold,
                         absorptionValues.calculatedUseStandardizedZones,
@@ -1728,9 +1923,21 @@ export class SignalValidationLogger {
                 record.priceAt5min || "",
                 record.priceAt15min || "",
                 record.priceAt1hr || "",
-                record.signalAccuracy5min || "",
-                record.signalAccuracy15min || "",
-                record.signalAccuracy1hr || "",
+                record.signalAccuracy5min !== undefined
+                    ? record.signalAccuracy5min
+                    : "",
+                record.signalAccuracy15min !== undefined
+                    ? record.signalAccuracy15min
+                    : "",
+                record.signalAccuracy1hr !== undefined
+                    ? record.signalAccuracy1hr
+                    : "",
+                record.tpSlStatus || "",
+                record.crossTimeframe || false,
+                record.institutionalVolume || false,
+                record.zoneConfluence || false,
+                record.exhaustionGap || false,
+                record.priceEfficiencyHigh || false,
             ];
 
             const csvLine =
@@ -1783,7 +1990,15 @@ export class SignalValidationLogger {
             record.subsequentMovement5min || "",
             record.subsequentMovement15min || "",
             record.subsequentMovement90min || "", // Map 90min to 1hr header for compatibility
-            record.wasTopOrBottomSignal || "", // Map to wasValidSignal header for compatibility
+            record.wasTopOrBottomSignal !== undefined
+                ? record.wasTopOrBottomSignal
+                : "", // Map to wasValidSignal header for compatibility
+            record.tpSlStatus || "",
+            record.crossTimeframe || false,
+            record.institutionalVolume || false,
+            record.zoneConfluence || false,
+            record.exhaustionGap || false,
+            record.priceEfficiencyHigh || false,
         ];
 
         // ✅ EXPLICIT FIELD EXTRACTION: Match exact header order from getDetectorSpecificSuccessfulHeader
@@ -1804,7 +2019,6 @@ export class SignalValidationLogger {
                     exhaustionValues.calculatedEnableDepletionAnalysis,
                     exhaustionValues.calculatedDepletionVolumeThreshold,
                     exhaustionValues.calculatedDepletionRatioThreshold,
-                    exhaustionValues.calculatedDepletionConfidenceBoost,
                     exhaustionValues.calculatedPassiveVolumeExhaustionRatio,
                     exhaustionValues.calculatedVarianceReductionFactor,
                     exhaustionValues.calculatedAlignmentNormalizationFactor,
@@ -1828,15 +2042,12 @@ export class SignalValidationLogger {
                     absorptionValues.calculatedMinPassiveMultiplier,
                     absorptionValues.calculatedPassiveAbsorptionThreshold,
                     absorptionValues.calculatedExpectedMovementScalingFactor,
-                    absorptionValues.calculatedContextConfidenceBoostMultiplier,
                     absorptionValues.calculatedLiquidityGradientRange,
                     absorptionValues.calculatedInstitutionalVolumeThreshold,
                     absorptionValues.calculatedInstitutionalVolumeRatioThreshold,
                     absorptionValues.calculatedEnableInstitutionalVolumeFilter,
-                    absorptionValues.calculatedInstitutionalVolumeBoost,
                     absorptionValues.calculatedMinAbsorptionScore,
                     absorptionValues.calculatedFinalConfidenceRequired,
-                    absorptionValues.calculatedConfidenceBoostReduction,
                     absorptionValues.calculatedMaxZoneCountForScoring,
                     absorptionValues.calculatedMinEnhancedConfidenceThreshold,
                     absorptionValues.calculatedUseStandardizedZones,
@@ -1938,7 +2149,13 @@ export class SignalValidationLogger {
             record.subsequentMovement5min || "",
             record.subsequentMovement15min || "",
             record.subsequentMovement1hr || "",
-            record.wasValidSignal || "",
+            record.wasValidSignal !== undefined ? record.wasValidSignal : "",
+            record.tpSlStatus || "",
+            record.crossTimeframe || false,
+            record.institutionalVolume || false,
+            record.zoneConfluence || false,
+            record.exhaustionGap || false,
+            record.priceEfficiencyHigh || false,
         ];
 
         // ✅ EXPLICIT FIELD EXTRACTION: Match exact header order from getDetectorSpecificRejectionHeader
@@ -1959,7 +2176,6 @@ export class SignalValidationLogger {
                     exhaustionValues.calculatedEnableDepletionAnalysis,
                     exhaustionValues.calculatedDepletionVolumeThreshold,
                     exhaustionValues.calculatedDepletionRatioThreshold,
-                    exhaustionValues.calculatedDepletionConfidenceBoost,
                     exhaustionValues.calculatedPassiveVolumeExhaustionRatio,
                     exhaustionValues.calculatedVarianceReductionFactor,
                     exhaustionValues.calculatedAlignmentNormalizationFactor,
@@ -1983,15 +2199,12 @@ export class SignalValidationLogger {
                     absorptionValues.calculatedMinPassiveMultiplier,
                     absorptionValues.calculatedPassiveAbsorptionThreshold,
                     absorptionValues.calculatedExpectedMovementScalingFactor,
-                    absorptionValues.calculatedContextConfidenceBoostMultiplier,
                     absorptionValues.calculatedLiquidityGradientRange,
                     absorptionValues.calculatedInstitutionalVolumeThreshold,
                     absorptionValues.calculatedInstitutionalVolumeRatioThreshold,
                     absorptionValues.calculatedEnableInstitutionalVolumeFilter,
-                    absorptionValues.calculatedInstitutionalVolumeBoost,
                     absorptionValues.calculatedMinAbsorptionScore,
                     absorptionValues.calculatedFinalConfidenceRequired,
-                    absorptionValues.calculatedConfidenceBoostReduction,
                     absorptionValues.calculatedMaxZoneCountForScoring,
                     absorptionValues.calculatedMinEnhancedConfidenceThreshold,
                     absorptionValues.calculatedUseStandardizedZones,
@@ -2116,24 +2329,6 @@ export class SignalValidationLogger {
     }
 
     /**
-     * Evaluate signal accuracy based on movement direction and magnitude
-     */
-    private evaluateSignalAccuracy(
-        signalSide: "buy" | "sell",
-        actualDirection: "up" | "down" | "sideways",
-        movement: number
-    ): boolean {
-        // Require minimum 0.3% movement for accuracy
-        if (movement < 0.003) return false;
-
-        // Check direction alignment
-        return (
-            (signalSide === "buy" && actualDirection === "up") ||
-            (signalSide === "sell" && actualDirection === "down")
-        );
-    }
-
-    /**
      * Clean up validation timers and records
      */
     private cleanupValidation(signalId: string): void {
@@ -2199,8 +2394,6 @@ export class SignalValidationLogger {
                     exhaustionValues.calculatedDepletionVolumeThreshold;
                 result.depletionRatioThreshold =
                     exhaustionValues.calculatedDepletionRatioThreshold;
-                result.depletionConfidenceBoost =
-                    exhaustionValues.calculatedDepletionConfidenceBoost;
                 result.passiveVolumeExhaustionRatio =
                     exhaustionValues.calculatedPassiveVolumeExhaustionRatio;
                 result.varianceReductionFactor =
@@ -2234,8 +2427,6 @@ export class SignalValidationLogger {
                     absorptionValues.calculatedPassiveAbsorptionThreshold;
                 result.expectedMovementScalingFactor =
                     absorptionValues.calculatedExpectedMovementScalingFactor;
-                result.contextConfidenceBoostMultiplier =
-                    absorptionValues.calculatedContextConfidenceBoostMultiplier;
                 result.liquidityGradientRange =
                     absorptionValues.calculatedLiquidityGradientRange;
                 result.institutionalVolumeThreshold =
@@ -2244,14 +2435,10 @@ export class SignalValidationLogger {
                     absorptionValues.calculatedInstitutionalVolumeRatioThreshold;
                 result.enableInstitutionalVolumeFilter =
                     absorptionValues.calculatedEnableInstitutionalVolumeFilter;
-                result.institutionalVolumeBoost =
-                    absorptionValues.calculatedInstitutionalVolumeBoost;
                 result.minAbsorptionScore =
                     absorptionValues.calculatedMinAbsorptionScore;
                 result.finalConfidenceRequired =
                     absorptionValues.calculatedFinalConfidenceRequired;
-                result.confidenceBoostReduction =
-                    absorptionValues.calculatedConfidenceBoostReduction;
                 result.maxZoneCountForScoring =
                     absorptionValues.calculatedMaxZoneCountForScoring;
                 result.useStandardizedZones =

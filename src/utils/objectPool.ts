@@ -8,7 +8,7 @@ import type {
     VolumeCalculationResult,
     ImbalanceResult,
 } from "../indicators/interfaces/detectorInterfaces.js";
-import { AggressiveTrade } from "../types/marketEvents.js";
+import { AggressiveTrade, ZoneTradeRecord } from "../types/marketEvents.js";
 
 /**
  * Generic object pool for reducing garbage collection pressure
@@ -189,6 +189,9 @@ export class SharedPools {
     public readonly numberArrays: ObjectPool<number[]>;
     public readonly tradeArrays: ObjectPool<AggressiveTrade[]>;
 
+    // HIGH PERFORMANCE: ZoneTradeRecord pool for hot path optimization
+    public readonly zoneTradeRecords: ObjectPool<ZoneTradeRecord>;
+
     private constructor() {
         this.zoneSamples = new ObjectPool(
             () => ({ bid: 0, ask: 0, total: 0, timestamp: 0 }),
@@ -343,6 +346,25 @@ export class SharedPools {
             100
         );
 
+        // HIGH PERFORMANCE: ZoneTradeRecord pool for hot path (orderFlowPreprocessor.aggregateTradeIntoZones)
+        this.zoneTradeRecords = new ObjectPool<ZoneTradeRecord>(
+            () => ({
+                price: 0,
+                quantity: 0,
+                timestamp: 0,
+                tradeId: "",
+                buyerIsMaker: false,
+            }),
+            (record) => {
+                record.price = 0;
+                record.quantity = 0;
+                record.timestamp = 0;
+                record.tradeId = "";
+                record.buyerIsMaker = false;
+            },
+            1000 // Large pool size for high-frequency zone processing
+        );
+
         // Pre-warm the most commonly used pools
         this.zoneSamples.prewarm(50);
         this.absorptionConditions.prewarm(30);
@@ -352,6 +374,7 @@ export class SharedPools {
         this.imbalanceResults.prewarm(25);
         this.numberArrays.prewarm(20);
         this.tradeArrays.prewarm(20);
+        this.zoneTradeRecords.prewarm(100); // Heavy pre-warming for hot path optimization
     }
 
     public static getInstance(): SharedPools {
@@ -375,6 +398,7 @@ export class SharedPools {
             imbalanceResults: this.imbalanceResults.size(),
             numberArrays: this.numberArrays.size(),
             tradeArrays: this.tradeArrays.size(),
+            zoneTradeRecords: this.zoneTradeRecords.size(),
         };
     }
 
@@ -391,6 +415,7 @@ export class SharedPools {
         this.imbalanceResults.clear();
         this.numberArrays.clear();
         this.tradeArrays.clear();
+        this.zoneTradeRecords.clear();
     }
 
     /**
@@ -405,5 +430,6 @@ export class SharedPools {
         this.imbalanceResults.prewarm(25);
         this.numberArrays.prewarm(20);
         this.tradeArrays.prewarm(20);
+        this.zoneTradeRecords.prewarm(100);
     }
 }

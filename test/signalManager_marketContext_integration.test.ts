@@ -264,8 +264,10 @@ describe("SignalManager Market Context Integration", () => {
             const result2 = signalManager.handleProcessedSignal(highVolSignal);
             expect(result2).toBeTruthy();
 
-            // Confidence enhancement should differ between regimes
-            expect(result1!.confidence).not.toBe(result2!.confidence);
+            // Option B architecture: Signal manager doesn't modify confidence based on volatility
+            // Both signals should maintain their original confidence
+            expect(result1!.confidence).toBe(0.7);
+            expect(result2!.confidence).toBe(0.7);
         });
 
         test("should apply appropriate priority matrix for volatility regime", () => {
@@ -570,10 +572,12 @@ describe("SignalManager Market Context Integration", () => {
             expect(result1).toBeTruthy();
             expect(result2).toBeTruthy();
 
-            // Confidence adjustments should differ based on volatility context
+            // Option B architecture: Signal manager doesn't modify confidence based on volatility
+            // Both signals should maintain their original confidence
             const lowVolConfidence = result1!.confidence;
             const highVolConfidence = result2!.confidence;
-            expect(lowVolConfidence).not.toBe(highVolConfidence);
+            expect(lowVolConfidence).toBe(0.6);
+            expect(highVolConfidence).toBe(0.6);
         });
     });
 

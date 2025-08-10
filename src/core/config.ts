@@ -129,7 +129,6 @@ export const ExhaustionDetectorSchema = z.object({
     depletionVolumeThreshold: z.number().min(10).max(100000),
     depletionRatioThreshold: z.number().min(-1.0).max(0),
     enableDepletionAnalysis: z.boolean(),
-    depletionConfidenceBoost: z.number().min(0.05).max(0.3),
 
     // Dynamic zone tracking for true exhaustion detection
     enableDynamicZoneTracking: z.boolean(),
@@ -161,24 +160,21 @@ export const AbsorptionDetectorSchema = z.object({
     // Absorption thresholds
     priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
     maxAbsorptionRatio: z.number().min(0.1).max(1.0),
-    minPassiveMultiplier: z.number().min(0.5).max(5.0),
-    passiveAbsorptionThreshold: z.number().min(10).max(50),
+    minPassiveMultiplier: z.number().min(0.5).max(50.0),
+    passiveAbsorptionThreshold: z.number().min(0.1).max(50),
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
-    contextConfidenceBoostMultiplier: z.number().min(0.1).max(1.0),
     liquidityGradientRange: z.number().int().min(1).max(20),
 
     // Institutional analysis
-    institutionalVolumeThreshold: z.number().min(10000).max(100000),
+    institutionalVolumeThreshold: z.number().min(100).max(100000),
     institutionalVolumeRatioThreshold: z.number().min(1).max(50),
     enableInstitutionalVolumeFilter: z.boolean(),
-    institutionalVolumeBoost: z.number().min(0.05).max(0.3),
 
     // Confidence and scoring
     minAbsorptionScore: z.number().min(0.3).max(0.99),
     finalConfidenceRequired: z.number().min(0.1).max(3.0),
-    confidenceBoostReduction: z.number().min(0.3).max(0.8),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
     minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
 
@@ -192,6 +188,15 @@ export const AbsorptionDetectorSchema = z.object({
     // Zone confluence parameters (CLAUDE.md compliance - no magic numbers)
     confluenceMinZones: z.number().int().min(1).max(10),
     confluenceMaxDistance: z.number().int().min(1).max(20),
+
+    // Zone tracking configuration for dynamic absorption detection
+    enableDynamicZoneTracking: z.boolean(),
+    maxZonesPerSide: z.number().int().min(3).max(10),
+    zoneHistoryWindowMs: z.number().int().min(30000).max(300000),
+    absorptionZoneThreshold: z.number().min(1.2).max(3.0), // Passive/aggressive ratio
+    minPassiveVolumeForZone: z.number().min(10).max(10000),
+    priceStabilityTicks: z.number().int().min(1).max(5),
+    minAbsorptionEvents: z.number().int().min(1).max(10),
 });
 
 // DELTACVD detector - CLEANED UP - Only used settings remain
@@ -213,6 +218,9 @@ export const DeltaCVDDetectorSchema = z.object({
 
     // Institutional trade threshold (replace hardcoded 17.8 LTC)
     institutionalThreshold: z.number().min(0.001).max(5.0), // LTC threshold for institutional trade detection
+
+    // Volume efficiency threshold for quality flag
+    volumeEfficiencyThreshold: z.number().min(0.1).max(0.5),
 });
 
 // ACCUMULATION detector - CLEANED UP - Only used settings remain
@@ -456,7 +464,6 @@ const BasicSymbolConfigSchema = z
                 balanced: z.record(z.number().min(0).max(1)),
             }),
             // 🔧 Configurable parameters to eliminate magic numbers (REQUIRED)
-            correlationBoostFactor: z.number().min(0.1).max(2.0),
             priceTolerancePercent: z.number().min(0.01).max(10.0),
             signalThrottleMs: z.number().int().min(1000).max(60000),
             correlationWindowMs: z.number().int().min(60000).max(3600000),
@@ -466,8 +473,6 @@ const BasicSymbolConfigSchema = z
             volatilityLowThreshold: z.number().min(0.001).max(0.1),
             defaultLowVolatility: z.number().min(0.001).max(0.1),
             defaultVolatilityError: z.number().min(0.01).max(0.2),
-            contextBoostHigh: z.number().min(0.05).max(0.5),
-            contextBoostLow: z.number().min(0.05).max(0.3),
             priorityQueueHighThreshold: z.number().min(5.0).max(10.0),
             backpressureYieldMs: z.number().int().min(1).max(100),
             marketVolatilityWeight: z.number().min(0.1).max(1.0),
@@ -989,7 +994,6 @@ export class Config {
             conflictResolution: smConfig.conflictResolution,
             signalPriorityMatrix: smConfig.signalPriorityMatrix,
             // 🔧 Configurable parameters to eliminate magic numbers (REQUIRED)
-            correlationBoostFactor: Number(smConfig.correlationBoostFactor),
             priceTolerancePercent: Number(smConfig.priceTolerancePercent),
             signalThrottleMs: Number(smConfig.signalThrottleMs),
             correlationWindowMs: Number(smConfig.correlationWindowMs),
@@ -999,8 +1003,6 @@ export class Config {
             volatilityLowThreshold: Number(smConfig.volatilityLowThreshold),
             defaultLowVolatility: Number(smConfig.defaultLowVolatility),
             defaultVolatilityError: Number(smConfig.defaultVolatilityError),
-            contextBoostHigh: Number(smConfig.contextBoostHigh),
-            contextBoostLow: Number(smConfig.contextBoostLow),
             priorityQueueHighThreshold: Number(
                 smConfig.priorityQueueHighThreshold
             ),

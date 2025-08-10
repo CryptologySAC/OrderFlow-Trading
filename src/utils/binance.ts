@@ -71,8 +71,10 @@ export class BinanceDataFeed implements IBinanceDataFeed {
     private readonly streamClient: Spot;
     private readonly apiClient: Spot;
     private readonly logger: Logger;
-    private apiConnection?: SpotWebsocketAPI.WebsocketAPIConnection;
-    private streamConnection?: SpotWebsocketStreams.WebsocketStreamsConnection;
+    private apiConnection: SpotWebsocketAPI.WebsocketAPIConnection | null =
+        null;
+    private streamConnection: SpotWebsocketStreams.WebsocketStreamsConnection | null =
+        null;
 
     private readonly configurationWebsocketStreams: ConfigurationWebsocketStreams =
         {
@@ -118,10 +120,49 @@ export class BinanceDataFeed implements IBinanceDataFeed {
 
     public async connectToStreams(): Promise<SpotWebsocketStreams.WebsocketStreamsConnection> {
         try {
-            if (this.streamConnection) return this.streamConnection;
-            this.streamConnection =
-                await this.streamClient.websocketStreams.connect();
-            return this.streamConnection;
+            // Always ensure we establish a fresh, valid connection
+            if (this.streamConnection) {
+                try {
+                    await this.streamConnection.disconnect();
+                } catch {
+                    // Ignore disconnect errors; we'll re-establish below
+                } finally {
+                    this.streamConnection = null;
+                }
+            }
+
+            const conn = await this.streamClient.websocketStreams.connect();
+            this.streamConnection = conn;
+
+            // Ensure cached reference is cleared if underlying socket closes/errors
+            try {
+                type EventOn = {
+                    on: (
+                        event: "close" | "error",
+                        listener: () => void
+                    ) => void;
+                };
+                const hasOnMethod = Object.prototype.hasOwnProperty.call(
+                    conn as object,
+                    "on"
+                );
+                const onValue: unknown = (
+                    conn as unknown as Record<string, unknown>
+                )["on"];
+                if (hasOnMethod && typeof onValue === "function") {
+                    const eventConn = conn as unknown as EventOn;
+                    eventConn.on("close", () => {
+                        this.streamConnection = null;
+                    });
+                    eventConn.on("error", () => {
+                        this.streamConnection = null;
+                    });
+                }
+            } catch {
+                // Best-effort only; DataStreamManager still handles reconnection
+            }
+
+            return conn;
         } catch (error) {
             this.logger.error(
                 `connectToStreams() failed: ${JSON.stringify(error)}`
@@ -407,6 +448,10 @@ export class BinanceDataFeed implements IBinanceDataFeed {
                 `Error during disconnect: ${JSON.stringify(error)}`
             );
             throw new BinanceApiError("disconnect", error);
+        } finally {
+            // Ensure stale connections are not reused on next connect
+            this.apiConnection = null;
+            this.streamConnection = null;
         }
     }
 }

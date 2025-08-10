@@ -41,7 +41,6 @@ const mockSignalManagerConfig = {
         distribution: 0.7,
     },
     // Required configurable parameters (CLAUDE.md compliance)
-    correlationBoostFactor: 0.7,
     priceTolerancePercent: 0.3,
     signalThrottleMs: 10000,
     correlationWindowMs: 300000,
@@ -51,8 +50,6 @@ const mockSignalManagerConfig = {
     volatilityLowThreshold: 0.02,
     defaultLowVolatility: 0.02,
     defaultVolatilityError: 0.03,
-    contextBoostHigh: 0.15,
-    contextBoostLow: 0.1,
     priorityQueueHighThreshold: 8.0,
     backpressureYieldMs: 1,
     marketVolatilityWeight: 0.6,
@@ -108,6 +105,7 @@ const mockDeltaCVDConfig = {
     // CVD divergence analysis (pure divergence mode only)
     cvdImbalanceThreshold: 0.3,
     institutionalThreshold: 17.8, // Add institutional threshold parameter
+    volumeEfficiencyThreshold: 0.3, // Volume efficiency threshold for quality flag
 };
 
 // Mock Universal Zone Configuration (CRITICAL for DeltaCVD tests)
@@ -131,8 +129,6 @@ const mockUniversalZoneConfig = {
     maxZoneConfluenceDistance: 3,
     enableZoneConfluenceFilter: true,
     enableCrossTimeframeAnalysis: false,
-    confluenceConfidenceBoost: 0.1,
-    crossTimeframeBoost: 0.05,
     useStandardizedZones: true,
     enhancementMode: "production" as const,
 };
@@ -149,16 +145,13 @@ const mockAbsorptionConfig = {
     institutionalVolumeThreshold: 5, // Very low threshold for testing
     institutionalVolumeRatioThreshold: 0.4, // More permissive for testing
     enableInstitutionalVolumeFilter: false, // Disable strict filtering for tests
-    institutionalVolumeBoost: 0.1,
     minAbsorptionScore: 0.3, // Minimum valid score per schema
     finalConfidenceRequired: 0.2, // Very low confidence requirement for testing
     minEnhancedConfidenceThreshold: 0.1,
     useStandardizedZones: true,
     enhancementMode: "production" as const,
     liquidityGradientRange: 5,
-    contextConfidenceBoostMultiplier: 0.2,
     expectedMovementScalingFactor: 8,
-    confidenceBoostReduction: 0.4,
     maxZoneCountForScoring: 3,
     balanceThreshold: 0.05, // Add new balance threshold parameter
 };
@@ -175,7 +168,6 @@ const mockExhaustionConfig = {
     enableDepletionAnalysis: true,
     depletionVolumeThreshold: 10, // Very low threshold for testing
     depletionRatioThreshold: 0.05, // Very low threshold for testing (5%)
-    depletionConfidenceBoost: 0.15,
     passiveVolumeExhaustionRatio: 0.4,
     enableDynamicZoneTracking: true,
     maxZonesPerSide: 5,

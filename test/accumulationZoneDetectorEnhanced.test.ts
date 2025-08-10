@@ -32,20 +32,13 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
                     enhancementCallFrequency: 5,
                     highConfidenceThreshold: 0.8,
                     lowConfidenceThreshold: 0.4,
-                    minConfidenceBoostThreshold: 0.05,
                     defaultMinEnhancedConfidenceThreshold: 0.3,
-                    confidenceReductionFactor: 0.8,
-                    significanceBoostMultiplier: 0.3,
-                    neutralBoostReductionFactor: 0.5,
-                    enhancementSignificanceBoost: true,
 
                     // CLAUDE.md compliant standalone detector parameters
                     baseConfidenceRequired: 0.3,
                     finalConfidenceRequired: 0.5,
                     confluenceMinZones: 2,
                     confluenceMaxDistance: 0.1,
-                    confluenceConfidenceBoost: 0.1,
-                    crossTimeframeConfidenceBoost: 0.15,
                     accumulationVolumeThreshold: 20,
                     accumulationRatioThreshold: 0.6,
                     alignmentScoreThreshold: 0.5,
@@ -61,7 +54,6 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
                     varianceReductionFactor: 1.0,
                     aggressiveBuyingRatioThreshold: 0.6,
                     aggressiveBuyingReductionFactor: 0.5,
-                    buyingPressureConfidenceBoost: 0.08,
                     enableZoneConfluenceFilter: true,
                     enableBuyingPressureAnalysis: true,
                     enableCrossTimeframeAnalysis: true,
@@ -202,20 +194,13 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
         enhancementCallFrequency: 5,
         highConfidenceThreshold: 0.8,
         lowConfidenceThreshold: 0.4,
-        minConfidenceBoostThreshold: 0.05,
         defaultMinEnhancedConfidenceThreshold: 0.3,
-        confidenceReductionFactor: 0.8,
-        significanceBoostMultiplier: 0.3,
-        neutralBoostReductionFactor: 0.5,
-        enhancementSignificanceBoost: true,
 
         // CLAUDE.md compliant standalone detector parameters
         baseConfidenceRequired: 0.3,
         finalConfidenceRequired: 0.5,
         confluenceMinZones: 2,
         confluenceMaxDistance: 0.1,
-        confluenceConfidenceBoost: 0.1,
-        crossTimeframeConfidenceBoost: 0.15,
         accumulationVolumeThreshold: 20,
         accumulationRatioThreshold: 0.6,
         alignmentScoreThreshold: 0.5,
@@ -231,7 +216,6 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
         varianceReductionFactor: 1.0,
         aggressiveBuyingRatioThreshold: 0.6,
         aggressiveBuyingReductionFactor: 0.5,
-        buyingPressureConfidenceBoost: 0.08,
         enableZoneConfluenceFilter: true,
         enableBuyingPressureAnalysis: true,
         enableCrossTimeframeAnalysis: true,
@@ -364,9 +348,6 @@ describe("AccumulationZoneDetectorEnhanced - Nuclear Cleanup Reality", () => {
             expect(typeof mockAccumulationConfig.useStandardizedZones).toBe(
                 "boolean"
             );
-            expect(
-                typeof mockAccumulationConfig.enhancementSignificanceBoost
-            ).toBe("boolean");
         });
     });
 

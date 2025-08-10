@@ -619,20 +619,14 @@ export class AutomaticParameterOptimizer {
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
-                contextConfidenceBoostMultiplier:
-                    config.contextConfidenceBoostMultiplier,
                 liquidityGradientRange: config.liquidityGradientRange,
                 institutionalVolumeThreshold:
                     config.institutionalVolumeThreshold,
                 institutionalVolumeRatioThreshold:
                     config.institutionalVolumeRatioThreshold,
-                institutionalVolumeBoost: config.institutionalVolumeBoost,
                 minAbsorptionScore: config.minAbsorptionScore,
                 finalConfidenceRequired: config.finalConfidenceRequired,
-                confidenceBoostReduction: config.confidenceBoostReduction,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
-                minEnhancedConfidenceThreshold:
-                    config.minEnhancedConfidenceThreshold,
                 balanceThreshold: config.balanceThreshold,
                 confluenceMinZones: config.confluenceMinZones,
                 confluenceMaxDistance: config.confluenceMaxDistance,
@@ -645,11 +639,8 @@ export class AutomaticParameterOptimizer {
                 timeWindowIndex: config.timeWindowIndex,
                 exhaustionThreshold: config.exhaustionThreshold,
                 eventCooldownMs: config.eventCooldownMs,
-                minEnhancedConfidenceThreshold:
-                    config.minEnhancedConfidenceThreshold,
                 depletionVolumeThreshold: config.depletionVolumeThreshold,
                 depletionRatioThreshold: config.depletionRatioThreshold,
-                depletionConfidenceBoost: config.depletionConfidenceBoost,
                 passiveVolumeExhaustionRatio:
                     config.passiveVolumeExhaustionRatio,
                 varianceReductionFactor: config.varianceReductionFactor,
@@ -689,20 +680,14 @@ export class AutomaticParameterOptimizer {
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
-                contextConfidenceBoostMultiplier:
-                    config.contextConfidenceBoostMultiplier,
                 liquidityGradientRange: config.liquidityGradientRange,
                 institutionalVolumeThreshold:
                     config.institutionalVolumeThreshold,
                 institutionalVolumeRatioThreshold:
                     config.institutionalVolumeRatioThreshold,
-                institutionalVolumeBoost: config.institutionalVolumeBoost,
                 minAbsorptionScore: config.minAbsorptionScore,
                 finalConfidenceRequired: config.finalConfidenceRequired,
-                confidenceBoostReduction: config.confidenceBoostReduction,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
-                minEnhancedConfidenceThreshold:
-                    config.minEnhancedConfidenceThreshold,
                 balanceThreshold: config.balanceThreshold,
                 confluenceMinZones: config.confluenceMinZones,
                 confluenceMaxDistance: config.confluenceMaxDistance,
@@ -715,11 +700,8 @@ export class AutomaticParameterOptimizer {
                 timeWindowIndex: config.timeWindowIndex,
                 exhaustionThreshold: config.exhaustionThreshold,
                 eventCooldownMs: config.eventCooldownMs,
-                minEnhancedConfidenceThreshold:
-                    config.minEnhancedConfidenceThreshold,
                 depletionVolumeThreshold: config.depletionVolumeThreshold,
                 depletionRatioThreshold: config.depletionRatioThreshold,
-                depletionConfidenceBoost: config.depletionConfidenceBoost,
                 passiveVolumeExhaustionRatio:
                     config.passiveVolumeExhaustionRatio,
                 varianceReductionFactor: config.varianceReductionFactor,

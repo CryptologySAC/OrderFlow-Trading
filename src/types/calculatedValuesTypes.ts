@@ -18,15 +18,12 @@ export interface AbsorptionCalculatedValues {
     calculatedMinPassiveMultiplier: number; // vs config minPassiveMultiplier (2.2)
     calculatedPassiveAbsorptionThreshold: number; // vs config passiveAbsorptionThreshold (0.62)
     calculatedExpectedMovementScalingFactor: number; // vs config expectedMovementScalingFactor (10)
-    calculatedContextConfidenceBoostMultiplier: number; // vs config contextConfidenceBoostMultiplier (0.3)
     calculatedLiquidityGradientRange: number; // vs config liquidityGradientRange (5)
     calculatedInstitutionalVolumeThreshold: number; // vs config institutionalVolumeThreshold (400)
     calculatedInstitutionalVolumeRatioThreshold: number; // vs config institutionalVolumeRatioThreshold (0.65)
     calculatedEnableInstitutionalVolumeFilter: boolean; // vs config enableInstitutionalVolumeFilter (true)
-    calculatedInstitutionalVolumeBoost: number; // vs config institutionalVolumeBoost (0.1)
     calculatedMinAbsorptionScore: number; // vs config minAbsorptionScore (0.8)
     calculatedFinalConfidenceRequired: number; // vs config finalConfidenceRequired (2.0)
-    calculatedConfidenceBoostReduction: number; // vs config confidenceBoostReduction (0.3)
     calculatedMaxZoneCountForScoring: number; // vs config maxZoneCountForScoring (5)
     calculatedMinEnhancedConfidenceThreshold: number; // vs config minEnhancedConfidenceThreshold (0.5)
     calculatedUseStandardizedZones: boolean; // vs config useStandardizedZones (true)
@@ -34,6 +31,15 @@ export interface AbsorptionCalculatedValues {
     calculatedBalanceThreshold: number; // vs config balanceThreshold (0.017)
     calculatedConfluenceMinZones: number; // vs config confluenceMinZones (2)
     calculatedConfluenceMaxDistance: number; // vs config confluenceMaxDistance (5)
+
+    // Zone tracking parameters
+    calculatedEnableDynamicZoneTracking: boolean; // vs config enableDynamicZoneTracking (true)
+    calculatedMaxZonesPerSide: number; // vs config maxZonesPerSide (5)
+    calculatedZoneHistoryWindowMs: number; // vs config zoneHistoryWindowMs (60000)
+    calculatedAbsorptionZoneThreshold: number; // vs config absorptionZoneThreshold (1.5)
+    calculatedMinPassiveVolumeForZone: number; // vs config minPassiveVolumeForZone (50)
+    calculatedPriceStabilityTicks: number; // vs config priceStabilityTicks (2)
+    calculatedMinAbsorptionEvents: number; // vs config minAbsorptionEvents (2)
 }
 
 /**
@@ -52,7 +58,6 @@ export interface ExhaustionCalculatedValues {
     calculatedEnableDepletionAnalysis: boolean; // vs config enableDepletionAnalysis (true)
     calculatedDepletionVolumeThreshold: number; // vs config depletionVolumeThreshold (750)
     calculatedDepletionRatioThreshold: number; // vs config depletionRatioThreshold (0.2)
-    calculatedDepletionConfidenceBoost: number; // vs config depletionConfidenceBoost (0.2)
     calculatedPassiveVolumeExhaustionRatio: number; // vs config passiveVolumeExhaustionRatio (0.4)
     calculatedVarianceReductionFactor: number; // vs config varianceReductionFactor (1.0)
     calculatedAlignmentNormalizationFactor: number; // vs config alignmentNormalizationFactor (0.4)
@@ -78,6 +83,7 @@ export interface DeltaCVDCalculatedValues {
     calculatedCvdImbalanceThreshold: number; // compared against cvdImbalanceThreshold (0.18)
     calculatedTimeWindowIndex: number; // compared against timeWindowIndex (0)
     calculatedInstitutionalThreshold: number; // compared against institutionalThreshold (25.0)
+    calculatedVolumeEfficiencyThreshold: number; // compared against volumeEfficiencyThreshold (0.3)
 }
 
 /**

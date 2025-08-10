@@ -236,7 +236,11 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // Calculate base accumulation strength from pure volume ratios
         const calculatedAccumulationStrength =
             this.calculateAccumulationStrength(event, relevantZones);
-        if (calculatedAccumulationStrength === null) return;
+        if (
+            calculatedAccumulationStrength === null ||
+            calculatedAccumulationStrength === 0
+        )
+            return; // Volume below threshold or no valid accumulation
 
         // Start with base detection strength
         let totalConfidence = calculatedAccumulationStrength;
@@ -244,19 +248,25 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         // Add confluence contribution (pure volume concentration)
         const calculatedConfluenceStrength =
             this.calculateConfluenceContribution(event.zoneData, event.price);
-        totalConfidence += calculatedConfluenceStrength;
+        if (calculatedConfluenceStrength > 0) {
+            totalConfidence += calculatedConfluenceStrength;
+        }
 
         // Add institutional contribution (pure volume size analysis)
         const calculatedInstitutionalScore =
             this.calculateInstitutionalContribution(event.zoneData, event);
-        totalConfidence += calculatedInstitutionalScore;
+        if (calculatedInstitutionalScore > 0) {
+            totalConfidence += calculatedInstitutionalScore;
+        }
 
         // Add alignment contribution (pure volume consistency)
         const calculatedAlignmentScore = this.calculateAlignmentContribution(
             event.zoneData,
             event
         );
-        totalConfidence += calculatedAlignmentScore;
+        if (calculatedAlignmentScore > 0) {
+            totalConfidence += calculatedAlignmentScore;
+        }
 
         // SINGLE confidence check before any emission
         if (totalConfidence >= this.enhancementConfig.confidenceThreshold) {
@@ -361,7 +371,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                     price: event.price,
                 }
             );
-            return null;
+            return 0;
         }
 
         let totalVolume = 0;
@@ -382,7 +392,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 totalVolume >= this.accumulationVolumeThreshold,
         });
 
-        if (totalVolume === 0) return null;
+        if (totalVolume === 0) return 0;
 
         // ✅ CRITICAL: Volume threshold validation - must meet minimum LTC requirement
         if (totalVolume < this.accumulationVolumeThreshold) {
@@ -394,7 +404,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                     threshold: this.accumulationVolumeThreshold,
                 }
             );
-            return null; // Insufficient volume - reject immediately
+            return 0; // Insufficient volume - reject immediately
         }
 
         // Calculate buy ratio
@@ -405,7 +415,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
         // ✅ CRITICAL: Ratio threshold validation - must meet minimum buy ratio
         if (buyRatio < this.accumulationRatioThreshold) {
-            return null; // Insufficient buy ratio - reject immediately
+            return 0; // Insufficient buy ratio - reject immediately
         }
 
         // Accumulation strength based purely on aggressive buying ratio
@@ -709,7 +719,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             zone: zoneData,
             actionType: signalType,
             confidence: calculatedConfidence,
-            urgency: confidenceBoost > 0.15 ? "high" : "medium",
+            urgency: "medium", // TODO: Implement quality flags for urgency
             expectedDirection: signalSide === "buy" ? "up" : "down",
             detectorId: this.getId(),
             timestamp: Date.now(),
@@ -757,10 +767,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 max: event.price + this.confluenceMaxDistance,
             },
             strength: accumulationMetrics.strength,
-            confidence: Math.min(
-                1.0,
-                accumulationMetrics.strength + confidenceBoost
-            ),
+            confidence: accumulationMetrics.strength + confidenceBoost,
             volume: accumulationMetrics.volumeConcentration,
             timespan: accumulationMetrics.duration,
             startTime: Date.now() - accumulationMetrics.duration,
@@ -779,11 +786,8 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
     private determineZoneUpdateType(confidenceBoost: number): string | null {
         // Always create/update zones for visualization
         if (confidenceBoost >= this.enhancementConfig.confidenceThreshold) {
-            if (confidenceBoost > 0.15) {
-                return "zone_strengthened";
-            } else {
-                return "zone_updated";
-            }
+            // TODO: Use quality flags to determine zone strength
+            return "zone_updated";
         }
         return "zone_created"; // Default for new zones
     }
@@ -880,7 +884,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
 
         // Create signal candidate
         const signalCandidate: SignalCandidate = {
-            id: `enhanced-accumulation-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+            id: `enhanced-accumulation-${Date.now()}-${event.price.toFixed(2)}`,
             type: "accumulation",
             side: signalSide,
             confidence: enhancedConfidence,
@@ -948,7 +952,10 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             totalBuyVolume,
             totalVolume
         );
-        const strength = Math.min(1.0, buyRatio * 1.5); // Boost strength for high buy ratios
+        const strength = Math.min(
+            1.0,
+            buyRatio * this.enhancementConfig.confluenceStrengthDivisor
+        ); // Boost strength for high buy ratios
 
         // Calculate duration (configurable)
         const duration = this.enhancementConfig.defaultDurationMs;
@@ -997,9 +1004,9 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 relevantPassive: totalPassiveVolume,
                 totalPassive: totalPassiveVolume,
                 strength,
-                velocity: 1,
+                velocity: 1.0,
                 dominantSide: "buy" as const,
-                recentActivity: 1,
+                recentActivity: 1.0,
                 tradeCount: relevantZones.length,
                 meetsMinDuration: true,
                 meetsMinRatio: buyRatio >= this.accumulationRatioThreshold,

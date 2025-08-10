@@ -200,7 +200,6 @@
                         "distribution": 0.6
                     }
                 },
-                "correlationBoostFactor": 0.7,
                 "priceTolerancePercent": 0.3,
                 "signalThrottleMs": 10000,
                 "correlationWindowMs": 300000,
@@ -210,8 +209,6 @@
                 "volatilityLowThreshold": 0.02,
                 "defaultLowVolatility": 0.02,
                 "defaultVolatilityError": 0.03,
-                "contextBoostHigh": 0.15,
-                "contextBoostLow": 0.1,
                 "priorityQueueHighThreshold": 8.0,
                 "backpressureYieldMs": 1,
                 "marketVolatilityWeight": 0.6
@@ -235,7 +232,6 @@
                 "depletionRatioThreshold": 0.05,
                 "minEnhancedConfidenceThreshold": 0.01,
                 "enableDepletionAnalysis": true,
-                "depletionConfidenceBoost": 0.1,
                 "enableDynamicZoneTracking": true,
                 "maxZonesPerSide": 5,
                 "zoneDepletionThreshold": 0.7,
@@ -259,22 +255,26 @@
                 "minPassiveMultiplier": 1.2,
                 "passiveAbsorptionThreshold": 0.6,
                 "expectedMovementScalingFactor": 10,
-                "contextConfidenceBoostMultiplier": 0.3,
                 "liquidityGradientRange": 5,
                 "institutionalVolumeThreshold": 5,
                 "institutionalVolumeRatioThreshold": 0.5,
                 "enableInstitutionalVolumeFilter": true,
-                "institutionalVolumeBoost": 0.1,
                 "minAbsorptionScore": 0.5,
                 "finalConfidenceRequired": 2.0,
-                "confidenceBoostReduction": 0.5,
                 "maxZoneCountForScoring": 3,
                 "minEnhancedConfidenceThreshold": 0.3,
                 "useStandardizedZones": true,
                 "enhancementMode": "production",
                 "balanceThreshold": 0.05,
                 "confluenceMinZones": 2,
-                "confluenceMaxDistance": 5
+                "confluenceMaxDistance": 5,
+                "enableDynamicZoneTracking": true,
+                "maxZonesPerSide": 5,
+                "zoneHistoryWindowMs": 60000,
+                "absorptionZoneThreshold": 1.5,
+                "minPassiveVolumeForZone": 50,
+                "priceStabilityTicks": 2,
+                "minAbsorptionEvents": 2
             },
             "spoofingDetector": {
                 "wallTicks": 10,
@@ -379,7 +379,8 @@
                 "timeWindowIndex": 0,
                 "enhancementMode": "production",
                 "cvdImbalanceThreshold": 0.3,
-                "institutionalThreshold": 17.8
+                "institutionalThreshold": 17.8,
+                "volumeEfficiencyThreshold": 0.3
             },
             "simpleIceberg": {
                 "enhancementMode": "production",

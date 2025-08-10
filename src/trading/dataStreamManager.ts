@@ -78,6 +78,7 @@ export class DataStreamManager extends EventEmitter {
     private reconnectAttempts = 0n;
     private connectedAt?: number | undefined;
     private lastReconnectAttempt = 0;
+    private connectionHandlersSetup = false;
 
     // Timers
     private heartbeatTimer?: NodeJS.Timeout | undefined;
@@ -296,10 +297,15 @@ export class DataStreamManager extends EventEmitter {
     private setupConnectionHandlers(): void {
         if (!this.connection) return;
 
+        // CRITICAL FIX: Prevent EventEmitter memory leak by only setting up handlers once
+        if (this.connectionHandlersSetup) return;
+
         this.connection.on("close", () => this.handleConnectionClose());
         this.connection.on("error", (error: Error) =>
             this.handleConnectionError(error)
         );
+
+        this.connectionHandlersSetup = true;
     }
 
     private setupDataStreams(): void {
@@ -757,6 +763,7 @@ export class DataStreamManager extends EventEmitter {
             }
 
             this.connectedAt = undefined;
+            this.connectionHandlersSetup = false; // Reset flag for next connection
         } catch (error) {
             this.logger.error(
                 "Error during connection cleanup",

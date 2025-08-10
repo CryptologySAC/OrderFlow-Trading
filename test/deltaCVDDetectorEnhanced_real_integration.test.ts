@@ -92,8 +92,6 @@ const DELTACVD_CONFIG = {
     momentumScoreMultiplier: 2,
     enableCVDDivergenceAnalysis: true,
     enableMomentumAlignment: false,
-    divergenceConfidenceBoost: 0.12,
-    momentumAlignmentBoost: 0.08,
 
     // Trading logic parameters
     minTradesForAnalysis: 15, // Lowered for faster testing

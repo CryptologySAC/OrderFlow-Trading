@@ -17,64 +17,12 @@ vi.mock("../src/core/config.js", async (importOriginal) => {
             get DELTACVD_DETECTOR() {
                 return {
                     // ALL DeltaCVDDetectorSchema properties - COMPLETE COMPLIANCE
-                    windowsSec: [60, 300],
-                    minZ: 0.4,
-                    priceCorrelationWeight: 0.3,
-                    volumeConcentrationWeight: 0.2,
-                    adaptiveThresholdMultiplier: 0.7,
-                    eventCooldownMs: 15000,
-                    minTradesPerSec: 0.1,
-                    minVolPerSec: 0.5,
-                    minSamplesForStats: 15,
-                    pricePrecision: 2,
-                    volatilityLookbackSec: 3600,
-                    maxDivergenceAllowed: 0.5,
-                    stateCleanupIntervalSec: 300,
-                    dynamicThresholds: true,
-                    logDebug: true,
-                    volumeSurgeMultiplier: 2.5,
-                    imbalanceThreshold: 0.15,
-                    institutionalThreshold: 17.8,
-                    burstDetectionMs: 1000,
-                    sustainedVolumeMs: 30000,
-                    medianTradeSize: 0.6,
-                    detectionMode: "momentum",
-                    divergenceThreshold: 0.3,
-                    divergenceLookbackSec: 60,
-                    enableDepthAnalysis: false,
-                    usePassiveVolume: true,
-                    maxOrderbookAge: 5000,
-                    absorptionCVDThreshold: 75,
-                    absorptionPriceThreshold: 0.1,
-                    imbalanceWeight: 0.2,
-                    icebergMinRefills: 3,
-                    icebergMinSize: 20,
-                    baseConfidenceRequired: 0.2,
-                    finalConfidenceRequired: 0.35,
-                    strongCorrelationThreshold: 0.7,
-                    weakCorrelationThreshold: 0.3,
-                    depthImbalanceThreshold: 0.2,
-                    useStandardizedZones: true,
-                    enhancementMode: "production",
-                    minEnhancedConfidenceThreshold: 0.3,
-                    cvdDivergenceVolumeThreshold: 50,
-                    cvdDivergenceStrengthThreshold: 0.7,
-                    cvdSignificantImbalanceThreshold: 0.3,
-                    cvdDivergenceScoreMultiplier: 1.5,
-                    alignmentMinimumThreshold: 0.5,
-                    momentumScoreMultiplier: 2,
-                    enableCVDDivergenceAnalysis: true,
-                    enableMomentumAlignment: false,
-                    divergenceConfidenceBoost: 0.12,
-                    momentumAlignmentBoost: 0.08,
-                    minTradesForAnalysis: 20,
-                    minVolumeRatio: 0.1,
-                    maxVolumeRatio: 5.0,
-                    priceChangeThreshold: 0.001,
-                    minZScoreBound: -20,
-                    maxZScoreBound: 20,
-                    minCorrelationBound: -0.999,
-                    maxCorrelationBound: 0.999,
+                    minTradesPerSec: 3.0,
+                    minVolPerSec: 13.0,
+                    signalThreshold: 0.94,
+                    eventCooldownMs: 1200000,
+                    timeWindowIndex: 0,
+                    enhancementMode: "production" as const,
                 };
             },
             get STANDARD_ZONE_CONFIG() {
@@ -229,73 +177,16 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
 
     // Mock Config.DELTACVD_DETECTOR - COMPLETE Zod schema compliance - ALL 58 properties
     const mockDeltaCVDConfig = {
-        // Core CVD analysis (12 properties)
-        windowsSec: [60, 300],
-        minZ: 0.4,
-        priceCorrelationWeight: 0.3,
-        volumeConcentrationWeight: 0.2,
-        adaptiveThresholdMultiplier: 0.7,
-        eventCooldownMs: 15000,
-        minTradesPerSec: 0.1,
-        minVolPerSec: 0.5,
-        minSamplesForStats: 15,
-        pricePrecision: 2,
-        volatilityLookbackSec: 3600,
-        maxDivergenceAllowed: 0.5,
-        stateCleanupIntervalSec: 300,
-        dynamicThresholds: true,
-        logDebug: true,
-
-        // Volume and detection parameters (15 properties)
-        volumeSurgeMultiplier: 2.5,
-        imbalanceThreshold: 0.15,
-        institutionalThreshold: 17.8,
-        burstDetectionMs: 1000,
-        sustainedVolumeMs: 30000,
-        medianTradeSize: 0.6,
-        detectionMode: "momentum" as const,
-        divergenceThreshold: 0.3,
-        divergenceLookbackSec: 60,
-        enableDepthAnalysis: false,
-        usePassiveVolume: true,
-        maxOrderbookAge: 5000,
-        absorptionCVDThreshold: 75,
-        absorptionPriceThreshold: 0.1,
-        imbalanceWeight: 0.2,
-        icebergMinRefills: 3,
-        icebergMinSize: 20,
-        baseConfidenceRequired: 0.2,
-        finalConfidenceRequired: 0.35,
-        strongCorrelationThreshold: 0.7,
-        weakCorrelationThreshold: 0.3,
-        depthImbalanceThreshold: 0.2,
-
-        // Enhancement control (3 properties)
-        useStandardizedZones: true,
+        // Valid DeltaCVDDetectorSchema properties only
+        minTradesPerSec: 3.0,
+        minVolPerSec: 13.0,
+        signalThreshold: 0.94,
+        eventCooldownMs: 1200000,
+        timeWindowIndex: 0,
         enhancementMode: "production" as const,
-        minEnhancedConfidenceThreshold: 0.3,
-
-        // Enhanced CVD analysis (6 properties)
-        cvdDivergenceVolumeThreshold: 50,
-        cvdDivergenceStrengthThreshold: 0.7,
-        cvdSignificantImbalanceThreshold: 0.3,
-        cvdDivergenceScoreMultiplier: 1.5,
-        alignmentMinimumThreshold: 0.5,
-        momentumScoreMultiplier: 2,
-        enableCVDDivergenceAnalysis: true,
-        enableMomentumAlignment: false,
-        divergenceConfidenceBoost: 0.12,
-        momentumAlignmentBoost: 0.08,
-
-        // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
-        minTradesForAnalysis: 20,
-        minVolumeRatio: 0.1,
-        maxVolumeRatio: 5.0,
-        priceChangeThreshold: 0.001,
-        minZScoreBound: -20,
-        maxZScoreBound: 20,
-        minCorrelationBound: -0.999,
-        maxCorrelationBound: 0.999,
+        cvdImbalanceThreshold: 0.18,
+        institutionalThreshold: 0.05,
+        volumeEfficiencyThreshold: 0.3,
     };
 
     beforeEach(() => {
@@ -330,8 +221,8 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
         it("should use config-driven initialization with no fallbacks", () => {
             // Verify it uses production config from Config.DELTACVD_DETECTOR
             expect(mockDeltaCVDConfig.enhancementMode).toBe("production");
-            expect(mockDeltaCVDConfig.useStandardizedZones).toBe(true);
-            expect(mockDeltaCVDConfig.detectionMode).toBe("momentum");
+            expect(mockDeltaCVDConfig.timeWindowIndex).toBe(0);
+            expect(mockDeltaCVDConfig.signalThreshold).toBe(0.94);
         });
 
         it("should process trades independently without base detector dependency", () => {
@@ -365,23 +256,23 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
     describe("Configuration Validation", () => {
         it("should validate all required threshold properties", () => {
             // Verify that all critical thresholds are present in config
-            expect(mockDeltaCVDConfig.minZ).toBeDefined();
-            expect(mockDeltaCVDConfig.divergenceThreshold).toBeDefined();
-            expect(mockDeltaCVDConfig.baseConfidenceRequired).toBeDefined();
-            expect(mockDeltaCVDConfig.finalConfidenceRequired).toBeDefined();
+            expect(mockDeltaCVDConfig.minTradesPerSec).toBeDefined();
+            expect(mockDeltaCVDConfig.signalThreshold).toBeDefined();
+            expect(mockDeltaCVDConfig.cvdImbalanceThreshold).toBeDefined();
+            expect(mockDeltaCVDConfig.volumeEfficiencyThreshold).toBeDefined();
         });
 
         it("should use production-grade thresholds from config", () => {
             // Verify production config values match expected institutional standards
-            expect(mockDeltaCVDConfig.minZ).toBe(0.4);
-            expect(mockDeltaCVDConfig.baseConfidenceRequired).toBe(0.2);
+            expect(mockDeltaCVDConfig.signalThreshold).toBe(0.94);
+            expect(mockDeltaCVDConfig.cvdImbalanceThreshold).toBe(0.18);
             expect(mockDeltaCVDConfig.enhancementMode).toBe("production");
         });
 
         it("should reject configuration with missing mandatory properties", () => {
             const incompleteConfig = {
-                minZ: 0.4,
-                windowsSec: [60, 300],
+                minTradesPerSec: 3.0,
+                minVolPerSec: 13.0,
                 // Missing other required properties
             };
 
@@ -401,11 +292,11 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
         it("should not allow optional properties in configuration", () => {
             // All properties in config must be mandatory - no optionals allowed
             const configKeys = Object.keys(mockDeltaCVDConfig);
-            expect(configKeys.length).toBeGreaterThan(30); // Substantial configuration
+            expect(configKeys.length).toBe(9); // Exactly 9 required properties
 
             // Verify key properties are not undefined (would indicate optional)
-            expect(mockDeltaCVDConfig.detectionMode).not.toBeUndefined();
-            expect(mockDeltaCVDConfig.divergenceThreshold).not.toBeUndefined();
+            expect(mockDeltaCVDConfig.minTradesPerSec).not.toBeUndefined();
+            expect(mockDeltaCVDConfig.signalThreshold).not.toBeUndefined();
             expect(mockDeltaCVDConfig.enhancementMode).not.toBeUndefined();
         });
     });
@@ -414,7 +305,7 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
         it("should crash immediately on invalid configuration values", () => {
             const invalidConfig = {
                 ...mockDeltaCVDConfig,
-                minZ: -1, // Invalid negative value
+                signalThreshold: -1, // Invalid negative value
             };
 
             expect(() => {
@@ -432,25 +323,20 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
 
         it("should require all numeric thresholds to be within valid ranges", () => {
             // Verify all thresholds are within institutional-grade ranges
-            expect(mockDeltaCVDConfig.minZ).toBeGreaterThan(0);
-            expect(mockDeltaCVDConfig.minZ).toBeLessThanOrEqual(10);
-            expect(mockDeltaCVDConfig.baseConfidenceRequired).toBeGreaterThan(
-                0
-            );
-            expect(mockDeltaCVDConfig.finalConfidenceRequired).toBeGreaterThan(
-                0
-            );
+            expect(mockDeltaCVDConfig.signalThreshold).toBeGreaterThan(0);
+            expect(mockDeltaCVDConfig.signalThreshold).toBeLessThanOrEqual(10);
+            expect(mockDeltaCVDConfig.cvdImbalanceThreshold).toBeGreaterThan(0);
+            expect(
+                mockDeltaCVDConfig.volumeEfficiencyThreshold
+            ).toBeGreaterThan(0);
         });
 
         it("should enforce mandatory boolean configuration properties", () => {
-            // Verify boolean properties are explicitly set, not undefined
-            expect(typeof mockDeltaCVDConfig.useStandardizedZones).toBe(
-                "boolean"
+            // Verify string enum properties are explicitly set, not undefined
+            expect(typeof mockDeltaCVDConfig.enhancementMode).toBe("string");
+            expect(mockDeltaCVDConfig.enhancementMode).toMatch(
+                /^(disabled|monitoring|production)$/
             );
-            expect(typeof mockDeltaCVDConfig.enableDepthAnalysis).toBe(
-                "boolean"
-            );
-            expect(typeof mockDeltaCVDConfig.usePassiveVolume).toBe("boolean");
         });
     });
 
@@ -509,8 +395,8 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
 
         it("should have no fallback operators in configuration usage", () => {
             // Test verifies that no ?? or || operators are used for config values
-            expect(mockDeltaCVDConfig.detectionMode).toBeDefined();
-            expect(mockDeltaCVDConfig.minZ).toBeDefined();
+            expect(mockDeltaCVDConfig.minTradesPerSec).toBeDefined();
+            expect(mockDeltaCVDConfig.signalThreshold).toBeDefined();
             expect(mockDeltaCVDConfig.enhancementMode).toBeDefined();
         });
     });
@@ -518,10 +404,12 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
     describe("Institutional Grade Standards", () => {
         it("should enforce production-grade configuration values", () => {
             // Verify that config contains institutional-grade thresholds
-            expect(mockDeltaCVDConfig.minZ).toBeGreaterThanOrEqual(0.1);
+            expect(mockDeltaCVDConfig.signalThreshold).toBeGreaterThanOrEqual(
+                0.01
+            );
             expect(
-                mockDeltaCVDConfig.baseConfidenceRequired
-            ).toBeGreaterThanOrEqual(0.1);
+                mockDeltaCVDConfig.cvdImbalanceThreshold
+            ).toBeGreaterThanOrEqual(0.05);
             expect(mockDeltaCVDConfig.enhancementMode).toBe("production");
         });
     });
@@ -551,8 +439,8 @@ describe("DeltaCVDDetectorEnhanced - Standalone Architecture", () => {
             // Enhanced detectors CANNOT have any default values
 
             // Verify that the detector uses explicit configuration values
-            expect(mockDeltaCVDConfig.minZ).toBeDefined();
-            expect(mockDeltaCVDConfig.windowsSec).toBeDefined();
+            expect(mockDeltaCVDConfig.minTradesPerSec).toBeDefined();
+            expect(mockDeltaCVDConfig.timeWindowIndex).toBeDefined();
             expect(mockDeltaCVDConfig.enhancementMode).toBe("production");
 
             // Verify the detector was created with explicit configuration

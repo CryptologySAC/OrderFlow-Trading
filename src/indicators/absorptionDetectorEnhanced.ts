@@ -21,6 +21,10 @@
 import { Detector } from "./base/detectorEnrichedTrade.js";
 import { FinancialMath } from "../utils/financialMath.js";
 import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
+import {
+    AbsorptionZoneTracker,
+    type AbsorptionTrackerConfig,
+} from "./helpers/absorptionZoneTracker.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
@@ -71,6 +75,8 @@ export interface AbsorptionEnhancementStats {
     enhancementSuccessRate: number;
 }
 
+const _BALANCE_CENTER_POINT = 0.5;
+
 /**
  * AbsorptionDetectorEnhanced - Standalone enhanced absorption detector
  *
@@ -93,11 +99,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
     // CLAUDE.md compliant configuration parameters - NO MAGIC NUMBERS
     private readonly confluenceMinZones: number;
     private readonly confluenceMaxDistance: number;
-    private readonly confluenceConfidenceBoost: number;
-    private readonly crossTimeframeConfidenceBoost: number;
     private readonly absorptionVolumeThreshold: number;
     private readonly absorptionRatioThreshold: number;
     private readonly absorptionScoreThreshold: number;
+
+    // Dynamic zone tracking for true absorption detection
+    private readonly zoneTracker: AbsorptionZoneTracker;
+    private readonly enableDynamicZoneTracking: boolean;
 
     constructor(
         id: string,
@@ -126,9 +134,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
         // CLAUDE.md Compliance: Extract all configurable parameters (NO MAGIC NUMBERS)
         this.confluenceMinZones = settings.confluenceMinZones; // Dedicated parameter for minimum confluence zones
         this.confluenceMaxDistance = settings.confluenceMaxDistance; // Dedicated parameter for maximum confluence distance
-        this.confluenceConfidenceBoost = settings.institutionalVolumeBoost;
-        this.crossTimeframeConfidenceBoost =
-            settings.contextConfidenceBoostMultiplier;
         this.absorptionVolumeThreshold = settings.institutionalVolumeThreshold;
         this.absorptionRatioThreshold = settings.passiveAbsorptionThreshold;
         this.absorptionScoreThreshold = settings.minAbsorptionScore;
@@ -145,6 +150,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
             totalConfidenceBoost: 0,
             enhancementSuccessRate: 0,
         };
+
+        // Initialize dynamic zone tracking
+        this.enableDynamicZoneTracking = settings.enableDynamicZoneTracking;
+        const zoneTrackerConfig: AbsorptionTrackerConfig = {
+            maxZonesPerSide: settings.maxZonesPerSide,
+            historyWindowMs: settings.zoneHistoryWindowMs,
+            absorptionThreshold: settings.absorptionZoneThreshold,
+            minPassiveVolume: settings.minPassiveVolumeForZone,
+            priceStabilityTicks: settings.priceStabilityTicks,
+            minAbsorptionEvents: settings.minAbsorptionEvents,
+        };
+        this.zoneTracker = new AbsorptionZoneTracker(
+            zoneTrackerConfig,
+            Config.TICK_SIZE
+        );
 
         this.logger.info("AbsorptionDetectorEnhanced initialized", {
             detectorId: id,
@@ -287,7 +307,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     calculatedInstitutionalVolumeBoost: 0,
                     calculatedMinAbsorptionScore: 0,
                     calculatedFinalConfidenceRequired: 0,
-                    calculatedConfidenceBoostReduction: 0,
                     calculatedMaxZoneCountForScoring: 0,
                     calculatedMinEnhancedConfidenceThreshold: 0,
                     calculatedUseStandardizedZones:
@@ -297,9 +316,33 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     calculatedBalanceThreshold: 0,
                     calculatedConfluenceMinZones: 0,
                     calculatedConfluenceMaxDistance: 0,
+                    calculatedEnableDynamicZoneTracking:
+                        this.enhancementConfig.enableDynamicZoneTracking,
+                    calculatedMaxZonesPerSide: 0,
+                    calculatedZoneHistoryWindowMs: 0,
+                    calculatedAbsorptionZoneThreshold: 0,
+                    calculatedMinPassiveVolumeForZone: 0,
+                    calculatedPriceStabilityTicks: 0,
+                    calculatedMinAbsorptionEvents: 0,
                 } as AbsorptionCalculatedValues
             );
             return;
+        }
+
+        // Update zone tracker with current market data
+        if (this.enableDynamicZoneTracking) {
+            // Update spread if available
+            if (event.bestBid && event.bestAsk) {
+                this.zoneTracker.updateSpread(event.bestBid, event.bestAsk);
+            }
+
+            // Update price history for stability tracking
+            this.zoneTracker.updatePrice(event.price, event.timestamp);
+
+            // Update zones in tracker
+            for (const zone of event.zoneData.zones) {
+                this.zoneTracker.updateZone(zone, event.timestamp);
+            }
         }
 
         // STEP 1: CORE ABSORPTION DETECTION (Required for any signals)
@@ -332,9 +375,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return;
         }
 
-        // STEP 2: ENHANCEMENT ANALYSIS (Boost confidence of core signal)
-        let totalConfidenceBoost = 0;
-        let enhancementApplied = false;
+        // STEP 2: QUALITY FLAG ANALYSIS (Track signal quality indicators)
+        let hasZoneConfluence = false;
+        let hasInstitutionalVolume = false;
+        let hasCrossTimeframe = false;
+        let hasPriceEfficiency = false;
 
         // Zone confluence analysis for absorption validation (CLAUDE.md compliant)
         if (this.enhancementConfig.enableInstitutionalVolumeFilter) {
@@ -343,9 +388,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 event.price
             );
             if (confluenceResult.hasConfluence) {
+                hasZoneConfluence = true;
                 this.enhancementStats.confluenceDetectionCount++;
-                totalConfidenceBoost += this.confluenceConfidenceBoost;
-                enhancementApplied = true;
 
                 this.logger.debug(
                     "AbsorptionDetectorEnhanced: Zone confluence detected for absorption validation",
@@ -354,7 +398,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                         price: event.price,
                         confluenceZones: confluenceResult.confluenceZones,
                         confluenceStrength: confluenceResult.confluenceStrength,
-                        confidenceBoost: this.confluenceConfidenceBoost,
                     }
                 );
             }
@@ -367,10 +410,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 event
             );
             if (absorptionResult.hasAbsorption) {
+                hasInstitutionalVolume = true;
                 this.enhancementStats.institutionalDetectionCount++;
-                totalConfidenceBoost +=
-                    this.enhancementConfig.institutionalVolumeBoost;
-                enhancementApplied = true;
 
                 this.logger.debug(
                     "AbsorptionDetectorEnhanced: Institutional absorption detected",
@@ -379,8 +420,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                         price: event.price,
                         absorptionRatio: absorptionResult.absorptionRatio,
                         affectedZones: absorptionResult.affectedZones,
-                        confidenceBoost:
-                            this.enhancementConfig.institutionalVolumeBoost,
                     }
                 );
             }
@@ -397,9 +436,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
             };
         } = this.analyzeCrossTimeframeAbsorption(event.zoneData, event);
         if (crossTimeframeResult.hasAlignment) {
+            hasCrossTimeframe = true;
             this.enhancementStats.crossTimeframeAnalysisCount++;
-            totalConfidenceBoost += this.crossTimeframeConfidenceBoost;
-            enhancementApplied = true;
 
             this.logger.debug(
                 "AbsorptionDetectorEnhanced: Cross-timeframe absorption alignment",
@@ -408,49 +446,52 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     price: event.price,
                     alignmentScore: crossTimeframeResult.alignmentScore,
                     timeframeBreakdown: crossTimeframeResult.timeframeBreakdown,
-                    confidenceBoost: this.crossTimeframeConfidenceBoost,
                 }
             );
         }
 
-        // STEP 3: EMIT SINGLE SIGNAL with enhanced confidence
+        // Check price efficiency from the core signal data
+        const signalData =
+            coreAbsorptionResult.data as EnhancedAbsorptionSignalData;
+        if (
+            signalData.priceEfficiency !== null &&
+            signalData.priceEfficiency <=
+                this.enhancementConfig.priceEfficiencyThreshold
+        ) {
+            hasPriceEfficiency = true;
+        }
+
+        // Determine if any enhancements/quality flags were detected
+        const enhancementApplied =
+            hasZoneConfluence ||
+            hasInstitutionalVolume ||
+            hasCrossTimeframe ||
+            hasPriceEfficiency;
+
+        // STEP 3: EMIT SINGLE SIGNAL with quality flags
         if (enhancementApplied) {
             // Update enhancement statistics
             this.enhancementStats.enhancementCount++;
-            this.enhancementStats.totalConfidenceBoost += totalConfidenceBoost;
-            this.enhancementStats.averageConfidenceBoost =
-                this.enhancementStats.totalConfidenceBoost /
-                this.enhancementStats.enhancementCount;
             this.enhancementStats.enhancementSuccessRate =
                 this.enhancementStats.enhancementCount /
                 this.enhancementStats.callCount;
 
-            // Store enhanced absorption metrics for monitoring
-            this.storeEnhancedAbsorptionMetrics(event, totalConfidenceBoost);
-
-            // Boost the core signal confidence and emit enhanced signal
-            const enhancedConfidence =
-                coreAbsorptionResult.confidence + totalConfidenceBoost;
-
-            // Only emit if enhanced confidence meets the final confidence requirement
-            if (
-                enhancedConfidence <
-                this.enhancementConfig.finalConfidenceRequired
-            ) {
-                return; // Enhanced signal doesn't meet confidence threshold
-            }
-
-            // Create enhanced signal with boosted confidence
+            // Create enhanced signal with quality flags
             const enhancedSignal: SignalCandidate = {
                 ...coreAbsorptionResult,
-                confidence: enhancedConfidence,
                 id: `enhanced-${coreAbsorptionResult.id}`,
+                qualityFlags: {
+                    crossTimeframe: hasCrossTimeframe,
+                    institutionalVolume: hasInstitutionalVolume,
+                    zoneConfluence: hasZoneConfluence,
+                    priceEfficiency: hasPriceEfficiency,
+                },
             };
 
             // Update cooldown tracking before emitting signal
             this.canEmitSignal(eventKey, true);
 
-            // Log enhanced signal for validation tracking
+            // Log enhanced signal for validation tracking BEFORE checking thresholds
             const signalZones = event.zoneData ? event.zoneData.zones : [];
             void this.logSignalForValidation(
                 enhancedSignal,
@@ -461,6 +502,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
             // Log successful signal parameters for 90-minute optimization
             void this.logSuccessfulSignalParameters(enhancedSignal, event);
 
+            // Only emit if confidence meets the final confidence requirement
+            if (
+                coreAbsorptionResult.confidence <
+                this.enhancementConfig.finalConfidenceRequired
+            ) {
+                return; // Signal doesn't meet confidence threshold but was logged
+            }
+
             this.emit("signalCandidate", enhancedSignal);
 
             this.logger.info(
@@ -469,48 +518,128 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     detectorId: this.getId(),
                     price: event.price,
                     side: enhancedSignal.side,
-                    originalConfidence: coreAbsorptionResult.confidence,
-                    enhancedConfidence: enhancedConfidence,
-                    confidenceBoost: totalConfidenceBoost,
+                    confidence: coreAbsorptionResult.confidence,
+                    qualityFlags: enhancedSignal.qualityFlags,
                     signalId: enhancedSignal.id,
                     signalType: "absorption",
                     timestamp: new Date(enhancedSignal.timestamp).toISOString(),
                 }
             );
         } else {
-            // No enhancements - check if core signal meets final confidence requirement
-            if (
-                coreAbsorptionResult.confidence <
-                this.enhancementConfig.finalConfidenceRequired
-            ) {
-                return; // Core signal doesn't meet final confidence threshold
+            // Add quality flags to core signal
+            const signalWithFlags: SignalCandidate = {
+                ...coreAbsorptionResult,
+                qualityFlags: {
+                    crossTimeframe: hasCrossTimeframe,
+                    institutionalVolume: hasInstitutionalVolume,
+                    zoneConfluence: hasZoneConfluence,
+                    priceEfficiency: hasPriceEfficiency,
+                },
+            };
+
+            // MANDATORY: Zone tracking validation when enabled
+            let finalSignal = signalWithFlags;
+            if (this.enableDynamicZoneTracking) {
+                const isBuyTrade = !event.buyerIsMaker;
+                const absorptionPattern =
+                    this.zoneTracker.analyzeAbsorption(isBuyTrade);
+
+                // MANDATORY: Zone tracking MUST confirm absorption
+                if (
+                    !absorptionPattern.hasAbsorption ||
+                    !absorptionPattern.direction
+                ) {
+                    this.logger.info(
+                        "Signal BLOCKED: Zone tracking did not confirm absorption",
+                        {
+                            hasAbsorption: absorptionPattern.hasAbsorption,
+                            direction: absorptionPattern.direction,
+                            priceStability: absorptionPattern.priceStability,
+                            absorptionRatio: absorptionPattern.absorptionRatio,
+                            affectedZones: absorptionPattern.affectedZones,
+                            minEvents:
+                                this.zoneTracker.getConfig()
+                                    .minAbsorptionEvents,
+                        }
+                    );
+                    return; // BLOCK signal if zone tracking doesn't confirm
+                }
+
+                // MANDATORY: Price stability check
+                if (!absorptionPattern.priceStability) {
+                    this.logger.info(
+                        "Signal BLOCKED: Price not stable during absorption",
+                        {
+                            priceStability: absorptionPattern.priceStability,
+                            priceStabilityTicks:
+                                this.zoneTracker.getConfig()
+                                    .priceStabilityTicks,
+                        }
+                    );
+                    return; // BLOCK signal if price isn't stable
+                }
+
+                // Zone tracking confirmed - use its direction and confidence
+                const enhancedData =
+                    signalWithFlags.data as EnhancedAbsorptionSignalData;
+                finalSignal = {
+                    ...signalWithFlags,
+                    side: absorptionPattern.direction,
+                    confidence: Math.max(
+                        signalWithFlags.confidence,
+                        absorptionPattern.confidence
+                    ),
+                    data: {
+                        ...enhancedData,
+                        metadata: {
+                            ...enhancedData.metadata,
+                            absorptionPattern: {
+                                type: absorptionPattern.absorptionType,
+                                ratio: absorptionPattern.absorptionRatio,
+                                strength: absorptionPattern.absorptionStrength,
+                                affectedZones: absorptionPattern.affectedZones,
+                                priceStability:
+                                    absorptionPattern.priceStability,
+                            },
+                        },
+                    } as EnhancedAbsorptionSignalData,
+                };
+
+                this.logger.info("Zone tracking CONFIRMED absorption signal", {
+                    absorptionType: absorptionPattern.absorptionType,
+                    direction: absorptionPattern.direction,
+                    ratio: absorptionPattern.absorptionRatio,
+                    confidence: absorptionPattern.confidence,
+                    priceStability: absorptionPattern.priceStability,
+                });
             }
 
             // Update cooldown tracking before emitting signal
             this.canEmitSignal(eventKey, true);
 
-            // Log core signal for validation tracking
+            // Log final signal for validation tracking BEFORE checking thresholds
             const signalZones = event.zoneData ? event.zoneData.zones : [];
-            void this.logSignalForValidation(
-                coreAbsorptionResult,
-                event,
-                signalZones
-            );
+            void this.logSignalForValidation(finalSignal, event, signalZones);
 
             // Log successful signal parameters for 90-minute optimization
-            void this.logSuccessfulSignalParameters(
-                coreAbsorptionResult,
-                event
-            );
+            void this.logSuccessfulSignalParameters(finalSignal, event);
 
-            this.emit("signalCandidate", coreAbsorptionResult);
+            // Only check threshold AFTER logging
+            if (
+                finalSignal.confidence <
+                this.enhancementConfig.finalConfidenceRequired
+            ) {
+                return; // Signal doesn't meet final confidence threshold but was logged
+            }
+
+            this.emit("signalCandidate", finalSignal);
 
             this.logger.info(
                 "🎯 AbsorptionDetectorEnhanced: CORE ABSORPTION SIGNAL GENERATED!",
                 {
                     detectorId: this.getId(),
                     price: event.price,
-                    side: coreAbsorptionResult.side,
+                    side: signalWithFlags.side,
                     confidence: coreAbsorptionResult.confidence,
                     signalId: coreAbsorptionResult.id,
                     signalType: "absorption",
@@ -580,7 +709,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     calculatedInstitutionalVolumeBoost: 0,
                     calculatedMinAbsorptionScore: 0,
                     calculatedFinalConfidenceRequired: 0,
-                    calculatedConfidenceBoostReduction: 0,
                     calculatedMaxZoneCountForScoring: 0,
                     calculatedMinEnhancedConfidenceThreshold: 0,
                     calculatedUseStandardizedZones:
@@ -590,6 +718,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     calculatedBalanceThreshold: 0,
                     calculatedConfluenceMinZones: 0,
                     calculatedConfluenceMaxDistance: 0,
+                    calculatedEnableDynamicZoneTracking:
+                        this.enhancementConfig.enableDynamicZoneTracking,
+                    calculatedMaxZonesPerSide: 0,
+                    calculatedZoneHistoryWindowMs: 0,
+                    calculatedAbsorptionZoneThreshold: 0,
+                    calculatedMinPassiveVolumeForZone: 0,
+                    calculatedPriceStabilityTicks: 0,
+                    calculatedMinAbsorptionEvents: 0,
                 } as AbsorptionCalculatedValues
             );
             return null;
@@ -718,6 +854,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
             relevantZones
         );
 
+        // Calculate actual price movement in ticks from zones
+        const priceMovementTicks =
+            relevantZones.length > 0 && relevantZones[0]
+                ? Math.abs(event.price - relevantZones[0].priceLevel) /
+                  Config.TICK_SIZE
+                : 0;
+
         // Calculate absorption ratio using FinancialMath
         const absorptionRatio = volumePressure
             ? this.calculateAbsorptionRatio(event, volumePressure)
@@ -777,9 +920,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const passesAbsorptionRatioThreshold =
             absorptionRatio !== null &&
             absorptionRatio <= this.enhancementConfig.maxAbsorptionRatio;
+        // MANDATORY: Check passive multiplier (passive must be X times aggressive)
+        const actualPassiveMultiplier =
+            totalAggressiveVolume > 0
+                ? FinancialMath.divideQuantities(
+                      totalPassiveVolume,
+                      totalAggressiveVolume
+                  )
+                : null;
+        const passesPassiveMultiplierThreshold =
+            actualPassiveMultiplier !== null &&
+            actualPassiveMultiplier >=
+                this.enhancementConfig.minPassiveMultiplier;
         const passesConfidenceThreshold =
             confidence !== null &&
-            confidence >= this.enhancementConfig.minEnhancedConfidenceThreshold;
+            confidence >= this.enhancementConfig.finalConfidenceRequired;
         const hasValidSignalSide = dominantSide !== null;
         const isNotBalanced = !isBalancedInstitutional;
 
@@ -791,8 +946,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 Date.now() - (this.lastSignal.get("last") || 0),
             calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
             calculatedMaxAbsorptionRatio: absorptionRatio ?? 0,
-            calculatedMinPassiveMultiplier:
-                totalPassiveVolume / Math.max(totalAggressiveVolume, 1),
+            calculatedMinPassiveMultiplier: actualPassiveMultiplier ?? 0,
             calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
             calculatedExpectedMovementScalingFactor:
                 FinancialMath.divideQuantities(
@@ -802,8 +956,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     ),
                     event.quantity
                 ),
-            calculatedContextConfidenceBoostMultiplier:
-                this.crossTimeframeConfidenceBoost,
             calculatedLiquidityGradientRange: FinancialMath.multiplyQuantities(
                 this.enhancementConfig.liquidityGradientRange,
                 event.zoneData?.zoneConfig.tickValue ?? 0
@@ -814,16 +966,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 totalPassiveVolume / Math.max(totalAggressiveVolume, 1),
             calculatedEnableInstitutionalVolumeFilter:
                 this.enhancementConfig.enableInstitutionalVolumeFilter,
-            calculatedInstitutionalVolumeBoost:
-                this.enhancementConfig.institutionalVolumeBoost,
             calculatedMinAbsorptionScore:
                 totalPassiveVolume > 0
                     ? totalPassiveVolume /
                       (totalAggressiveVolume + totalPassiveVolume)
                     : 0,
             calculatedFinalConfidenceRequired: confidence ?? 0,
-            calculatedConfidenceBoostReduction:
-                this.enhancementConfig.confidenceBoostReduction,
             calculatedMaxZoneCountForScoring: relevantZones.length,
             calculatedMinEnhancedConfidenceThreshold: confidence ?? 0,
             calculatedUseStandardizedZones:
@@ -836,7 +984,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                             totalAggressiveVolume + totalPassiveVolume,
                             1
                         ) -
-                        0.5
+                        _BALANCE_CENTER_POINT
                 ),
                 Math.abs(
                     totalPassiveVolume /
@@ -844,11 +992,28 @@ export class AbsorptionDetectorEnhanced extends Detector {
                             totalAggressiveVolume + totalPassiveVolume,
                             1
                         ) -
-                        0.5
+                        _BALANCE_CENTER_POINT
                 )
             ),
             calculatedConfluenceMinZones: relevantZones.length,
             calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+            // Zone tracking ACTUAL market values (what we're comparing against thresholds)
+            calculatedEnableDynamicZoneTracking: this.enableDynamicZoneTracking,
+            calculatedMaxZonesPerSide: this.enableDynamicZoneTracking
+                ? this.zoneTracker.getStats().bidZonesTracked +
+                  this.zoneTracker.getStats().askZonesTracked
+                : 0,
+            calculatedZoneHistoryWindowMs: this.enableDynamicZoneTracking
+                ? this.zoneTracker.getStats().totalHistoryEntries
+                : 0,
+            calculatedAbsorptionZoneThreshold: absorptionRatio ?? 0, // Actual absorption ratio observed
+            calculatedMinPassiveVolumeForZone: totalPassiveVolume, // Actual passive volume observed
+            calculatedPriceStabilityTicks: priceMovementTicks, // Actual price movement in ticks
+            calculatedMinAbsorptionEvents: this.enableDynamicZoneTracking
+                ? Math.round(
+                      this.zoneTracker.getStats().averageAbsorptionEvents
+                  )
+                : 0,
         };
 
         // Comprehensive rejection with complete threshold data
@@ -909,11 +1074,15 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 thresholdType = "absorption_ratio";
                 thresholdValue = this.enhancementConfig.maxAbsorptionRatio;
                 actualValue = absorptionRatio ?? -1;
+            } else if (!passesPassiveMultiplierThreshold) {
+                rejectionReason = "passive_multiplier_too_low";
+                thresholdType = "passive_multiplier";
+                thresholdValue = this.enhancementConfig.minPassiveMultiplier;
+                actualValue = actualPassiveMultiplier ?? -1;
             } else if (!passesConfidenceThreshold) {
                 rejectionReason = "confidence_below_threshold";
                 thresholdType = "confidence_threshold";
-                thresholdValue =
-                    this.enhancementConfig.minEnhancedConfidenceThreshold;
+                thresholdValue = this.enhancementConfig.finalConfidenceRequired;
                 actualValue = confidence ?? 0;
             } else if (!hasValidSignalSide) {
                 rejectionReason = "no_dominant_side";
@@ -1012,28 +1181,28 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const isBuyTrade = !event.buyerIsMaker;
 
         for (const zone of zones) {
+            // Get directional volumes
+            const directionalAggressive = isBuyTrade
+                ? (zone.aggressiveBuyVolume ?? 0) // Buy trades: only aggressive buying affects asks
+                : (zone.aggressiveSellVolume ?? 0); // Sell trades: only aggressive selling affects bids
+            const directionalPassive = isBuyTrade
+                ? (zone.passiveAskVolume ?? 0) // Buy trades absorb ask liquidity
+                : (zone.passiveBidVolume ?? 0); // Sell trades absorb bid liquidity
+
             // Validate inputs before FinancialMath calls to prevent NaN BigInt errors
-            if (
-                isNaN(zone.aggressiveVolume) ||
-                isNaN(zone.passiveBidVolume) ||
-                isNaN(zone.passiveAskVolume)
-            ) {
+            if (isNaN(directionalAggressive) || isNaN(directionalPassive)) {
                 return null; // Skip this calculation if any zone has NaN values
             }
 
             totalAggressive = FinancialMath.safeAdd(
                 totalAggressive,
-                zone.aggressiveVolume
+                directionalAggressive
             );
 
-            // DIRECTIONAL PASSIVE VOLUME: Only count relevant side
-            const relevantPassiveVolume = isBuyTrade
-                ? zone.passiveAskVolume // Buy trades absorb ask liquidity
-                : zone.passiveBidVolume; // Sell trades absorb bid liquidity
-
+            // DIRECTIONAL PASSIVE VOLUME: Add the relevant passive volume already calculated
             totalPassive = FinancialMath.safeAdd(
                 totalPassive,
-                relevantPassiveVolume
+                directionalPassive
             );
         }
 
@@ -1469,6 +1638,19 @@ export class AbsorptionDetectorEnhanced extends Detector {
             event.timestamp
         );
 
+        // CLAUDE.md compliance: return early if calculation fails
+        if (absorptionStrength === null) {
+            return {
+                hasAlignment: false,
+                alignmentScore: 0,
+                timeframeBreakdown: {
+                    tick5: 0,
+                    tick10: 0,
+                    tick20: 0,
+                },
+            }; // CLAUDE.md compliance: return default when calculation cannot be performed
+        }
+
         const timeframeBreakdown = {
             tick5: absorptionStrength,
             tick10: absorptionStrength,
@@ -1483,7 +1665,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 hasAlignment: false,
                 alignmentScore: 0,
                 timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            }; // CLAUDE.md compliance: return default when calculation cannot be performed
         }
 
         const stdDev = FinancialMath.calculateStdDev(absorptionValues);
@@ -1492,7 +1674,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 hasAlignment: false,
                 alignmentScore: 0,
                 timeframeBreakdown,
-            }; // CLAUDE.md compliance: return null when calculation cannot be performed
+            }; // CLAUDE.md compliance: return default when calculation cannot be performed
         }
 
         const variance = FinancialMath.multiplyQuantities(stdDev, stdDev); // Variance = stdDev^2
@@ -1518,8 +1700,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
         zones: ZoneSnapshot[],
         price: number,
         tradeTimestamp: number
-    ): number {
-        if (zones.length === 0) return 0;
+    ): number | null {
+        if (zones.length === 0) return null;
 
         // CRITICAL FIX: Filter zones by time window using trade timestamp for temporal absorption analysis
         const windowStartTime = tradeTimestamp - this.windowMs;
@@ -1536,14 +1718,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
             tradeTimestamp,
         });
 
-        if (recentZones.length === 0) return 0;
+        if (recentZones.length === 0) return null;
 
         const relevantZones = this.preprocessor.findZonesNearPrice(
             recentZones,
             price,
             this.confluenceMaxDistance
         );
-        if (relevantZones.length === 0) return 0;
+        if (relevantZones.length === 0) return null;
 
         let totalAbsorptionScore = 0;
 
@@ -1564,7 +1746,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     ? passiveRatio
                     : FinancialMath.multiplyQuantities(
                           passiveRatio,
-                          this.enhancementConfig.confidenceBoostReduction
+                          0 // confidence boost removed
                       );
 
             totalAbsorptionScore = FinancialMath.safeAdd(
@@ -1576,30 +1758,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
         return FinancialMath.divideQuantities(
             totalAbsorptionScore,
             relevantZones.length
-        );
-    }
-
-    /**
-     * Store enhanced absorption metrics for monitoring and analysis
-     *
-     * STANDALONE VERSION: Comprehensive metrics tracking
-     */
-    private storeEnhancedAbsorptionMetrics(
-        event: EnrichedTradeEvent,
-        confidenceBoost: number
-    ): void {
-        // Store metrics for monitoring (commented out to avoid metrics interface errors)
-        // this.metricsCollector.recordGauge('absorption.enhanced.confidence_boost', confidenceBoost);
-        // this.metricsCollector.recordCounter('absorption.enhanced.analysis_count', 1);
-
-        this.logger.debug(
-            "AbsorptionDetectorEnhanced: Enhanced metrics stored",
-            {
-                detectorId: this.getId(),
-                price: event.price,
-                confidenceBoost,
-                enhancementStats: this.enhancementStats,
-            }
         );
     }
 
@@ -1655,10 +1813,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Check for balanced flow (both ratios close to 0.5)
         const aggressiveBalance = FinancialMath.calculateAbs(
-            FinancialMath.safeSubtract(aggressiveBuyRatio, 0.5)
+            FinancialMath.safeSubtract(
+                aggressiveBuyRatio,
+                _BALANCE_CENTER_POINT
+            )
         );
         const passiveBalance = FinancialMath.calculateAbs(
-            FinancialMath.safeSubtract(passiveBuyRatio, 0.5)
+            FinancialMath.safeSubtract(passiveBuyRatio, _BALANCE_CENTER_POINT)
         );
 
         // Balanced threshold: within configurable % of perfect balance using FinancialMath
@@ -1744,6 +1905,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 (sum: number, zone) => sum + zone.passiveVolume,
                 0
             );
+
+            // Calculate actual price movement in ticks from zones
+            const priceMovementTicks =
+                relevantZones.length > 0 && relevantZones[0]
+                    ? Math.abs(event.price - relevantZones[0].priceLevel) /
+                      Config.TICK_SIZE
+                    : 0;
             const priceEfficiency = this.calculatePriceEfficiency(
                 event,
                 relevantZones
@@ -1779,8 +1947,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                         ),
                         event.quantity
                     ),
-                calculatedContextConfidenceBoostMultiplier:
-                    this.crossTimeframeConfidenceBoost,
                 calculatedLiquidityGradientRange:
                     FinancialMath.multiplyQuantities(
                         this.enhancementConfig.liquidityGradientRange,
@@ -1792,16 +1958,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     totalPassiveVolume / Math.max(totalAggVol, 1),
                 calculatedEnableInstitutionalVolumeFilter:
                     this.enhancementConfig.enableInstitutionalVolumeFilter,
-                calculatedInstitutionalVolumeBoost:
-                    this.enhancementConfig.institutionalVolumeBoost,
                 calculatedMinAbsorptionScore:
                     totalPassiveVolume > 0
                         ? totalPassiveVolume /
                           (totalAggVol + totalPassiveVolume)
                         : 0,
                 calculatedFinalConfidenceRequired: signal.confidence,
-                calculatedConfidenceBoostReduction:
-                    this.enhancementConfig.confidenceBoostReduction,
                 calculatedMaxZoneCountForScoring: confluenceCount,
                 calculatedMinEnhancedConfidenceThreshold: signal.confidence,
                 calculatedUseStandardizedZones:
@@ -1812,16 +1974,34 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     Math.abs(
                         totalAggVol /
                             Math.max(totalAggVol + totalPassiveVolume, 1) -
-                            0.5
+                            _BALANCE_CENTER_POINT
                     ),
                     Math.abs(
                         totalPassiveVolume /
                             Math.max(totalAggVol + totalPassiveVolume, 1) -
-                            0.5
+                            _BALANCE_CENTER_POINT
                     )
                 ),
                 calculatedConfluenceMinZones: confluenceCount,
                 calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+                // Zone tracking parameters with ACTUAL values from tracking
+                calculatedEnableDynamicZoneTracking:
+                    this.enableDynamicZoneTracking,
+                calculatedMaxZonesPerSide: this.enableDynamicZoneTracking
+                    ? this.zoneTracker.getStats().bidZonesTracked +
+                      this.zoneTracker.getStats().askZonesTracked
+                    : 0,
+                calculatedZoneHistoryWindowMs: this.enableDynamicZoneTracking
+                    ? this.zoneTracker.getStats().totalHistoryEntries
+                    : 0,
+                calculatedAbsorptionZoneThreshold: absorptionRatio ?? 0, // Actual absorption ratio
+                calculatedMinPassiveVolumeForZone: totalPassiveVolume, // Actual passive volume
+                calculatedPriceStabilityTicks: priceMovementTicks, // Actual price movement in ticks
+                calculatedMinAbsorptionEvents: this.enableDynamicZoneTracking
+                    ? Math.round(
+                          this.zoneTracker.getStats().averageAbsorptionEvents
+                      )
+                    : 0,
             };
 
             this.validationLogger.logSignal(
@@ -1890,6 +2070,16 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     0
                 ) || 0;
 
+            // Calculate actual price movement in ticks from zones
+            const priceMovementTicks =
+                event.zoneData?.zones &&
+                event.zoneData.zones.length > 0 &&
+                event.zoneData.zones[0]
+                    ? Math.abs(
+                          event.price - event.zoneData.zones[0].priceLevel
+                      ) / Config.TICK_SIZE
+                    : 0;
+
             // Market context at time of successful signal
             const marketContext = {
                 marketVolume:
@@ -1946,8 +2136,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                         ),
                         event.quantity
                     ),
-                calculatedContextConfidenceBoostMultiplier:
-                    this.crossTimeframeConfidenceBoost,
                 calculatedLiquidityGradientRange:
                     FinancialMath.multiplyQuantities(
                         this.enhancementConfig.liquidityGradientRange,
@@ -1959,16 +2147,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     totalPassiveVolume / Math.max(totalAggVol, 1),
                 calculatedEnableInstitutionalVolumeFilter:
                     this.enhancementConfig.enableInstitutionalVolumeFilter,
-                calculatedInstitutionalVolumeBoost:
-                    this.enhancementConfig.institutionalVolumeBoost,
                 calculatedMinAbsorptionScore:
                     totalPassiveVolume > 0
                         ? totalPassiveVolume /
                           (totalAggVol + totalPassiveVolume)
                         : 0,
                 calculatedFinalConfidenceRequired: signal.confidence,
-                calculatedConfidenceBoostReduction:
-                    this.enhancementConfig.confidenceBoostReduction,
                 calculatedMaxZoneCountForScoring: confluenceCount,
                 calculatedMinEnhancedConfidenceThreshold: signal.confidence,
                 calculatedUseStandardizedZones:
@@ -1979,16 +2163,34 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     Math.abs(
                         totalAggVol /
                             Math.max(totalAggVol + totalPassiveVolume, 1) -
-                            0.5
+                            _BALANCE_CENTER_POINT
                     ),
                     Math.abs(
                         totalPassiveVolume /
                             Math.max(totalAggVol + totalPassiveVolume, 1) -
-                            0.5
+                            _BALANCE_CENTER_POINT
                     )
                 ),
                 calculatedConfluenceMinZones: confluenceCount,
                 calculatedConfluenceMaxDistance: this.confluenceMaxDistance,
+                // Zone tracking parameters with ACTUAL values from tracking
+                calculatedEnableDynamicZoneTracking:
+                    this.enableDynamicZoneTracking,
+                calculatedMaxZonesPerSide: this.enableDynamicZoneTracking
+                    ? this.zoneTracker.getStats().bidZonesTracked +
+                      this.zoneTracker.getStats().askZonesTracked
+                    : 0,
+                calculatedZoneHistoryWindowMs: this.enableDynamicZoneTracking
+                    ? this.zoneTracker.getStats().totalHistoryEntries
+                    : 0,
+                calculatedAbsorptionZoneThreshold: absorptionRatio ?? 0, // Actual absorption ratio
+                calculatedMinPassiveVolumeForZone: totalPassiveVolume, // Actual passive volume
+                calculatedPriceStabilityTicks: priceMovementTicks, // Actual price movement in ticks
+                calculatedMinAbsorptionEvents: this.enableDynamicZoneTracking
+                    ? Math.round(
+                          this.zoneTracker.getStats().averageAbsorptionEvents
+                      )
+                    : 0,
             };
 
             this.validationLogger.logSuccessfulSignal(

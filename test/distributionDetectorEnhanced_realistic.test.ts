@@ -47,8 +47,6 @@ const REAL_DISTRIBUTION_CONFIG = {
     confidenceThreshold: 0.4, // Real config.json value
     confluenceMinZones: 1,
     confluenceMaxDistance: 0.1, // 10-cent confluence range
-    confluenceConfidenceBoost: 0.1,
-    crossTimeframeConfidenceBoost: 0.15,
     distributionVolumeThreshold: 15, // 15 LTC minimum volume
     distributionRatioThreshold: 0.5, // 50% sell ratio threshold
     maxTradesPerZone: 1500, // Required for CircularBuffer capacity

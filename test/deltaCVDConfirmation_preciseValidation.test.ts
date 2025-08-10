@@ -103,8 +103,6 @@ describe("DeltaCVDConfirmation - Precise Signal Validation", () => {
         momentumScoreMultiplier: 2,
         enableCVDDivergenceAnalysis: true,
         enableMomentumAlignment: false,
-        divergenceConfidenceBoost: 0.12,
-        momentumAlignmentBoost: 0.08,
         // Essential configurable parameters
         minTradesForAnalysis: 20,
         minVolumeRatio: 0.1,

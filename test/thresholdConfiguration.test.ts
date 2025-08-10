@@ -254,7 +254,6 @@ describe("Threshold Configuration Chain", () => {
 
                 // Enhanced depletion analysis
                 enableDepletionAnalysis: true,
-                depletionConfidenceBoost: 0.15,
 
                 // Cross-timeframe calculations
                 varianceReductionFactor: 1.5,

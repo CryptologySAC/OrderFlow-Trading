@@ -1,0 +1,52 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "npm",
+            "script": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "label": "npm: build",
+            "detail": "yarn format && tsc -p tsconfig.build.json"
+        },
+        {
+            "type": "npm",
+            "script": "lint",
+            "problemMatcher": [],
+            "label": "npm: lint",
+            "detail": "eslint \"src/**/*.{ts,tsx}\" --fix"
+        },
+        {
+            "type": "npm",
+            "script": "test",
+            "group": "test",
+            "problemMatcher": [],
+            "label": "npm: test",
+            "detail": "vitest --run"
+        },
+        {
+            "type": "npm",
+            "script": "prettier",
+            "problemMatcher": [],
+            "label": "npm: prettier",
+            "detail": "npx prettier --write './**/*.{ts,tsx,js,json,css,html,md}'"
+        },
+        {
+            "type": "npm",
+            "script": "update",
+            "problemMatcher": [],
+            "label": "npm: update",
+            "detail": "npx npm-check-updates -u"
+        },
+        {
+            "type": "npm",
+            "script": "updates",
+            "problemMatcher": [],
+            "label": "npm: updates",
+            "detail": "npx npm-check-updates"
+        }
+    ]
+}

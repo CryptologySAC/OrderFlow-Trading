@@ -66,7 +66,6 @@ vi.mock("../src/core/config.js", () => {
             accumulation: 0.6,
             distribution: 0.7,
         },
-        correlationBoostFactor: 0.7,
         priceTolerancePercent: 0.3,
         signalThrottleMs: 100, // Short throttle for testing
         correlationWindowMs: 300000,
@@ -76,8 +75,6 @@ vi.mock("../src/core/config.js", () => {
         volatilityLowThreshold: 0.02,
         defaultLowVolatility: 0.02,
         defaultVolatilityError: 0.03,
-        contextBoostHigh: 0.15,
-        contextBoostLow: 0.1,
         priorityQueueHighThreshold: 8.0,
         backpressureYieldMs: 1,
         marketVolatilityWeight: 0.6,
