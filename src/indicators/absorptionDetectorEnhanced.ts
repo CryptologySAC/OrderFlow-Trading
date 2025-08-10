@@ -1181,28 +1181,28 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const isBuyTrade = !event.buyerIsMaker;
 
         for (const zone of zones) {
+            // Get directional volumes
+            const directionalAggressive = isBuyTrade
+                ? (zone.aggressiveBuyVolume ?? 0) // Buy trades: only aggressive buying affects asks
+                : (zone.aggressiveSellVolume ?? 0); // Sell trades: only aggressive selling affects bids
+            const directionalPassive = isBuyTrade
+                ? (zone.passiveAskVolume ?? 0) // Buy trades absorb ask liquidity
+                : (zone.passiveBidVolume ?? 0); // Sell trades absorb bid liquidity
+
             // Validate inputs before FinancialMath calls to prevent NaN BigInt errors
-            if (
-                isNaN(zone.aggressiveVolume) ||
-                isNaN(zone.passiveBidVolume) ||
-                isNaN(zone.passiveAskVolume)
-            ) {
+            if (isNaN(directionalAggressive) || isNaN(directionalPassive)) {
                 return null; // Skip this calculation if any zone has NaN values
             }
 
             totalAggressive = FinancialMath.safeAdd(
                 totalAggressive,
-                zone.aggressiveVolume
+                directionalAggressive
             );
 
-            // DIRECTIONAL PASSIVE VOLUME: Only count relevant side
-            const relevantPassiveVolume = isBuyTrade
-                ? zone.passiveAskVolume // Buy trades absorb ask liquidity
-                : zone.passiveBidVolume; // Sell trades absorb bid liquidity
-
+            // DIRECTIONAL PASSIVE VOLUME: Add the relevant passive volume already calculated
             totalPassive = FinancialMath.safeAdd(
                 totalPassive,
-                relevantPassiveVolume
+                directionalPassive
             );
         }
 

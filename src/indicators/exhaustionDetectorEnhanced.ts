@@ -522,15 +522,20 @@ export class ExhaustionDetectorEnhanced extends Detector {
         }
 
         // ARCHITECTURAL FIX: Calculate accumulated exhaustion metrics over time window
-        // CRITICAL: Use only DIRECTIONAL passive volume for exhaustion
-        let totalAggressiveVolume = 0;
+        // CRITICAL: Use DIRECTIONAL aggressive and passive volume for proper exhaustion detection
+        let totalDirectionalAggressiveVolume = 0;
         let totalDirectionalPassiveVolume = 0;
 
         // Determine trade direction for exhaustion analysis
         const isBuyTrade = !event.buyerIsMaker;
 
         for (const zone of relevantZones) {
-            totalAggressiveVolume += zone.aggressiveVolume;
+            // CRITICAL FIX: Only count aggressive volume in the direction that exhausts the passive side
+            // Buy trades exhaust asks with aggressive buying, sell trades exhaust bids with aggressive selling
+            const directionalAggressive = isBuyTrade
+                ? (zone.aggressiveBuyVolume ?? 0) // Buy trades: Only aggressive buying exhausts asks
+                : (zone.aggressiveSellVolume ?? 0); // Sell trades: Only aggressive selling exhausts bids
+            totalDirectionalAggressiveVolume += directionalAggressive;
 
             // EXHAUSTION PRINCIPLE: Only directional passive volume matters
             // Buy trades exhaust ask liquidity, sell trades exhaust bid liquidity
@@ -547,7 +552,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 {
                     isBuyTrade,
                     zonesAnalyzed: relevantZones.length,
-                    totalAggressiveVolume,
+                    totalDirectionalAggressiveVolume,
                 }
             );
             this.logSignalRejection(
@@ -565,13 +570,13 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         // Use directional volumes for exhaustion calculation
         const totalAccumulatedVolume =
-            totalAggressiveVolume + totalDirectionalPassiveVolume;
+            totalDirectionalAggressiveVolume + totalDirectionalPassiveVolume;
 
         if (this.hotPathDebugEnabled) {
             this.logger.debug(
                 "ExhaustionDetectorEnhanced: Directional volume analysis",
                 {
-                    totalAggressiveVolume,
+                    totalDirectionalAggressiveVolume,
                     totalDirectionalPassiveVolume,
                     totalAccumulatedVolume,
                     exhaustionVolumeThreshold: this.exhaustionVolumeThreshold,
@@ -584,7 +589,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         // Calculate exhaustion ratio using directional volumes
         const accumulatedAggressiveRatio = FinancialMath.divideQuantities(
-            totalAggressiveVolume,
+            totalDirectionalAggressiveVolume,
             totalAccumulatedVolume
         );
         const accumulatedPassiveRatio = FinancialMath.divideQuantities(
@@ -611,7 +616,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         // ✅ CAPTURE ALL CALCULATED VALUES: Every computed value that gets checked against config
         const allCalculatedValues: ExhaustionCalculatedValues = {
             // Volume calculations (what gets checked against minAggVolume, depletionVolumeThreshold, etc.)
-            calculatedMinAggVolume: totalAggressiveVolume,
+            calculatedMinAggVolume: totalDirectionalAggressiveVolume,
 
             // Ratio calculations (what gets checked against thresholds)
             calculatedExhaustionThreshold: accumulatedAggressiveRatio,
@@ -624,10 +629,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
             calculatedMinEnhancedConfidenceThreshold: confidence,
             calculatedEnableDepletionAnalysis:
                 this.enhancementConfig.enableDepletionAnalysis,
-            calculatedDepletionVolumeThreshold: totalAggressiveVolume,
+            calculatedDepletionVolumeThreshold:
+                totalDirectionalAggressiveVolume,
             calculatedDepletionRatioThreshold:
                 totalDirectionalPassiveVolume > 0
-                    ? (totalAggressiveVolume - totalDirectionalPassiveVolume) /
+                    ? (totalDirectionalAggressiveVolume -
+                          totalDirectionalPassiveVolume) /
                       totalDirectionalPassiveVolume
                     : 0,
             calculatedPassiveVolumeExhaustionRatio: accumulatedPassiveRatio,
@@ -653,7 +660,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         const hasRelevantZones = relevantZones.length > 0;
         const hasAccumulatedVolume = totalAccumulatedVolume > 0;
         const passesVolumeThreshold =
-            totalAggressiveVolume >= this.exhaustionVolumeThreshold;
+            totalDirectionalAggressiveVolume >= this.exhaustionVolumeThreshold;
         const passesExhaustionRatios =
             accumulatedAggressiveRatio >= this.exhaustionRatioThreshold &&
             accumulatedPassiveRatio < this.passiveRatioBalanceThreshold;
@@ -711,7 +718,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 {
                     type: "accumulated_aggressive_volume",
                     threshold: this.exhaustionVolumeThreshold,
-                    actual: totalAggressiveVolume,
+                    actual: totalDirectionalAggressiveVolume,
                 },
                 allCalculatedValues
             );
@@ -800,7 +807,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             data: {
                 price: event.price,
                 side: signalSide,
-                aggressive: totalAggressiveVolume,
+                aggressive: totalDirectionalAggressiveVolume,
                 oppositeQty: totalDirectionalPassiveVolume,
                 avgLiquidity:
                     totalDirectionalPassiveVolume / relevantZones.length,
