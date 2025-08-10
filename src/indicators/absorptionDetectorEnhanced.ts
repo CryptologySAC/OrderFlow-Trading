@@ -181,7 +181,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
      */
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
         // Update current price for signal validation
-        this.validationLogger.updateCurrentPrice(event.price);
+        if (this.validationLogger && typeof this.validationLogger.updateCurrentPrice === 'function') {
+            this.validationLogger.updateCurrentPrice(event.price);
+        }
         // 🔍 DEBUG: Add comprehensive logging to diagnose signal issues
         const debugInfo = {
             useStandardizedZones: this.useStandardizedZones,
