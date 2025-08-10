@@ -1538,39 +1538,42 @@ export class SignalValidationLogger {
 
         let hitStopLoss = false;
         let hitTarget = false;
+        let hitStopLossFirst = false;
         let finalPrice: number | null = null;
 
         // Check price history from signal time to endTime
+        // Track BOTH: if TP was reached AND if SL was hit before TP
         for (const [timestamp, price] of this.priceHistory) {
             if (timestamp <= signalTimestamp) continue;
             if (timestamp > endTime) break;
 
             finalPrice = price;
 
-            // Check if stop loss was hit first
+            // Check for stop loss hit (only matters if TP not yet reached)
             if (!hitTarget) {
                 if (signalSide === "buy" && price <= stopLossPrice) {
                     hitStopLoss = true;
-                    break; // Stop checking once stop loss is hit
+                    hitStopLossFirst = true; // SL hit before TP
                 }
                 if (signalSide === "sell" && price >= stopLossPrice) {
                     hitStopLoss = true;
-                    break; // Stop checking once stop loss is hit
+                    hitStopLossFirst = true; // SL hit before TP
                 }
             }
 
-            // Check if target was hit
-            if (!hitStopLoss) {
-                if (signalSide === "buy" && price >= targetPrice) {
-                    hitTarget = true;
-                    break; // Stop checking once target is hit
-                }
-                if (signalSide === "sell" && price <= targetPrice) {
-                    hitTarget = true;
-                    break; // Stop checking once target is hit
-                }
+            // Check for target hit
+            if (signalSide === "buy" && price >= targetPrice) {
+                hitTarget = true;
+                // Don't break - continue to check full timeframe
+            }
+            if (signalSide === "sell" && price <= targetPrice) {
+                hitTarget = true;
+                // Don't break - continue to check full timeframe
             }
         }
+
+        // Return whether target was hit and if SL was hit BEFORE target
+        hitStopLoss = hitStopLossFirst;
 
         // If we don't have enough price history, use current price
         if (finalPrice === null) {
@@ -1656,17 +1659,33 @@ export class SignalValidationLogger {
                 record.maxMovement1hr = movement;
                 record.signalAccuracy1hr = isAccurate;
 
-                // Determine final TP/SL status
-                if (outcome.hitStopLoss) {
-                    record.tpSlStatus = "SL";
-                } else if (outcome.hitTarget) {
-                    record.tpSlStatus = "TP";
-                } else {
-                    record.tpSlStatus = "NEITHER";
-                }
+                // CRITICAL FIX: Proper success list categorization
+                // Only signals that reach 0.7% TP within 90 minutes go to success list
 
-                // Write final record with outcomes
-                this.writeSignalRecord(record, record.calculatedValues);
+                if (outcome.hitTarget) {
+                    // Signal reached 0.7% TP within timeframe - goes to success list
+                    if (outcome.hitStopLoss) {
+                        // Hit 0.35% SL BEFORE reaching TP (but still reached TP later)
+                        record.tpSlStatus = "SL";
+                    } else {
+                        // Reached TP directly without hitting SL first
+                        record.tpSlStatus = "TP";
+                    }
+                    // Write to success/validation file - this signal was successful (reached TP)
+                    this.writeSignalRecord(record, record.calculatedValues);
+                } else {
+                    // Signal did NOT reach 0.7% TP within timeframe
+                    // This is a FALSE signal - don't track it in success/validation
+                    // Simply don't write it anywhere - it failed to reach TP
+                    this.logger.debug(
+                        "Signal failed to reach TP within timeframe, not tracking",
+                        {
+                            signalId: record.signalId,
+                            price: record.price,
+                            maxMovement: record.maxMovement1hr,
+                        }
+                    );
+                }
                 break;
         }
 
