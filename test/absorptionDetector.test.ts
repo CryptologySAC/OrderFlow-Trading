@@ -10,9 +10,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
 import { Config } from "../src/core/config.js";
-import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 
-// Remove complex mock - use simple object casting like exhaustion detector
+// Use the mock from __mocks__ directory like other tests
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
@@ -50,9 +50,6 @@ const mockPreprocessor: IOrderflowPreprocessor = {
     getOrderBook: vi.fn(),
     getMarketState: vi.fn(),
 };
-
-// Use the existing mock from __mocks__ directory
-vi.mock("../src/utils/signalValidationLogger.js");
 
 const mockValidationLogger = new SignalValidationLogger(mockLogger, "test-output");
 
@@ -112,8 +109,14 @@ describe("AbsorptionDetectorEnhanced", () => {
         emittedSignals = [];
 
         // Clear mock calls but keep function implementations
-        vi.mocked(mockValidationLogger.updateCurrentPrice).mockClear();
-        vi.mocked(mockValidationLogger.logSignal).mockClear();
+        if (mockValidationLogger.updateCurrentPrice) {
+            vi.mocked(mockValidationLogger.updateCurrentPrice).mockClear();
+        }
+        if (mockValidationLogger.logSignal) {
+            vi.mocked(mockValidationLogger.logSignal).mockClear();
+        }
+
+        // Mock is properly configured from __mocks__ directory
 
         detector = new AbsorptionDetectorEnhanced(
             "test-absorption",
@@ -121,8 +124,8 @@ describe("AbsorptionDetectorEnhanced", () => {
             mockPreprocessor,
             mockLogger,
             mockMetrics,
-            mockSignalLogger,
-            mockValidationLogger
+            mockValidationLogger,
+            mockSignalLogger
         );
 
         // Capture emitted signals
@@ -364,8 +367,8 @@ describe("AbsorptionDetectorEnhanced", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalLogger,
-                mockValidationLogger
+                mockValidationLogger,
+                mockSignalLogger
             );
 
             const signals: SignalCandidate[] = [];
@@ -418,8 +421,8 @@ describe("AbsorptionDetectorEnhanced", () => {
                 mockPreprocessor,
                 mockLogger,
                 mockMetrics,
-                mockSignalLogger,
-                mockValidationLogger
+                mockValidationLogger,
+                mockSignalLogger
             );
 
             const signals: SignalCandidate[] = [];
