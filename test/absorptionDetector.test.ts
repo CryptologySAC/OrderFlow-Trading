@@ -11,6 +11,21 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
 import { Config } from "../src/core/config.js";
 import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
+
+// Mock the SignalValidationLogger module
+vi.mock("../src/utils/signalValidationLogger.js", () => ({
+    SignalValidationLogger: vi.fn().mockImplementation(() => ({
+        logSignal: vi.fn(),
+        logRejection: vi.fn(), 
+        updateCurrentPrice: vi.fn(),
+        logSuccessfulSignal: vi.fn(),
+        cleanup: vi.fn(),
+        // Add other required properties
+        signalsFilePath: "mock-signals.csv",
+        rejectionsFilePath: "mock-rejections.csv",
+        successfulSignalsFilePath: "mock-successful-signals.csv",
+    }))
+}));
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
@@ -49,28 +64,8 @@ const mockPreprocessor: IOrderflowPreprocessor = {
     getMarketState: vi.fn(),
 };
 
-// Create a full mock of SignalValidationLogger with all required methods
-class MockSignalValidationLogger {
-    logSignalValidation = vi.fn();
-    updateCurrentPrice = vi.fn();
-    logSignalRejection = vi.fn();
-    logSuccessfulSignal = vi.fn();
-    checkPendingValidations = vi.fn();
-    cleanup = vi.fn();
-    // Add file paths as they're public properties
-    absorptionSignalsFilePath = "";
-    absorptionRejectionsFilePath = "";
-    absorptionSuccessfulFilePath = "";
-    exhaustionSignalsFilePath = "";
-    exhaustionRejectionsFilePath = "";
-    exhaustionSuccessfulFilePath = "";
-    deltacvdSignalsFilePath = "";
-    deltacvdRejectionsFilePath = "";
-    deltacvdSuccessfulFilePath = "";
-}
-
-const mockValidationLogger =
-    new MockSignalValidationLogger() as unknown as SignalValidationLogger;
+// Create mock validation logger using the mocked constructor
+const mockValidationLogger = new SignalValidationLogger({} as any, "test-output");
 
 // Mock Config
 vi.mock("../src/core/config.js", () => ({
@@ -127,9 +122,7 @@ describe("AbsorptionDetectorEnhanced", () => {
         vi.clearAllMocks();
         emittedSignals = [];
 
-        // Reset the mock methods
-        mockValidationLogger.updateCurrentPrice = vi.fn();
-        mockValidationLogger.logSignalValidation = vi.fn();
+        // Reset the mock methods (the mock handles this automatically)
 
         detector = new AbsorptionDetectorEnhanced(
             "test-absorption",
