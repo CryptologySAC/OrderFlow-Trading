@@ -12,20 +12,27 @@ import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetector
 import { Config } from "../src/core/config.js";
 import { SignalValidationLogger } from "../src/utils/signalValidationLogger.js";
 
-// Mock the SignalValidationLogger module
-vi.mock("../src/utils/signalValidationLogger.js", () => ({
-    SignalValidationLogger: vi.fn().mockImplementation(() => ({
+// Mock the SignalValidationLogger - simpler approach using a function mock
+vi.mock("../src/utils/signalValidationLogger.js", () => {
+    const mockMethods = {
         logSignal: vi.fn(),
         logRejection: vi.fn(), 
         updateCurrentPrice: vi.fn(),
         logSuccessfulSignal: vi.fn(),
         cleanup: vi.fn(),
-        // Add other required properties
-        signalsFilePath: "mock-signals.csv",
-        rejectionsFilePath: "mock-rejections.csv",
-        successfulSignalsFilePath: "mock-successful-signals.csv",
-    }))
-}));
+        getValidationStats: vi.fn().mockReturnValue({
+            pendingValidations: 0,
+            totalLogged: 0,
+        }),
+        run90MinuteOptimization: vi.fn(),
+        setupSuccessfulSignalValidationTimers: vi.fn(),
+        validateSuccessfulSignal: vi.fn(),
+    };
+    
+    return {
+        SignalValidationLogger: vi.fn().mockImplementation(() => mockMethods)
+    };
+});
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
@@ -64,8 +71,7 @@ const mockPreprocessor: IOrderflowPreprocessor = {
     getMarketState: vi.fn(),
 };
 
-// Create mock validation logger using the mocked constructor
-const mockValidationLogger = new SignalValidationLogger({} as any, "test-output");
+// Remove this line - we'll use the mocked class directly
 
 // Mock Config
 vi.mock("../src/core/config.js", () => ({
@@ -123,6 +129,9 @@ describe("AbsorptionDetectorEnhanced", () => {
         emittedSignals = [];
 
         // Reset the mock methods (the mock handles this automatically)
+
+        // Create a fresh mock instance for each test
+        const mockValidationLogger = new SignalValidationLogger({} as any, "test-output");
 
         detector = new AbsorptionDetectorEnhanced(
             "test-absorption",
@@ -367,6 +376,8 @@ describe("AbsorptionDetectorEnhanced", () => {
                 minAbsorptionEvents: 2,
             };
 
+            const mockZoneValidationLogger = new SignalValidationLogger({} as any, "test-output");
+
             const zoneDetector = new AbsorptionDetectorEnhanced(
                 "test-zone",
                 zoneSettings,
@@ -374,7 +385,7 @@ describe("AbsorptionDetectorEnhanced", () => {
                 mockLogger,
                 mockMetrics,
                 mockSignalLogger,
-                mockValidationLogger
+                mockZoneValidationLogger
             );
 
             const signals: SignalCandidate[] = [];
@@ -421,6 +432,8 @@ describe("AbsorptionDetectorEnhanced", () => {
                 maxAbsorptionRatio: 0.3, // Very low ratio
             };
 
+            const mockStrictValidationLogger = new SignalValidationLogger({} as any, "test-output");
+
             const strictDetector = new AbsorptionDetectorEnhanced(
                 "test-strict",
                 strictSettings,
@@ -428,7 +441,7 @@ describe("AbsorptionDetectorEnhanced", () => {
                 mockLogger,
                 mockMetrics,
                 mockSignalLogger,
-                mockValidationLogger
+                mockStrictValidationLogger
             );
 
             const signals: SignalCandidate[] = [];
