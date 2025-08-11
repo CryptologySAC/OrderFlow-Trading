@@ -1171,7 +1171,13 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     ): void {
         try {
             // Determine signal side for DeltaCVD based on volume imbalance
-            const signalSide = this.determineCVDSignalSide(event) || "buy"; // Default to buy if undetermined
+            const signalSide = this.determineCVDSignalSide(event);
+
+            // Don't log rejection if we can't determine signal side
+            // No side = no meaningful signal to reject
+            if (signalSide === null) {
+                return;
+            }
 
             this.validationLogger.logRejection(
                 "deltacvd",
