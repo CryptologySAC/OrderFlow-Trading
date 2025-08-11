@@ -224,7 +224,7 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 1000,
+                "minAggVolume": 500,
                 "exhaustionThreshold": 0.6,
                 "minEnhancedConfidenceThreshold": 0.67,
 
@@ -250,7 +250,7 @@
                 "ratioBalanceCenterPoint": 0.5
             },
             "absorption": {
-                "minAggVolume": 8250,
+                "minAggVolume": 500,
                 "finalConfidenceRequired": 0.62,
                 "priceEfficiencyThreshold": 0.0037,
                 "minPassiveMultiplier": 25.0,

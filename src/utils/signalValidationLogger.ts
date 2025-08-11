@@ -312,10 +312,12 @@ export class SignalValidationLogger {
     private absorptionSignalsFilePath: string;
     private absorptionRejectionsFilePath: string;
     private absorptionSuccessfulFilePath: string;
+    private absorptionRejectedMissedFilePath!: string; // Rejected signals that would have been TP
 
     private exhaustionSignalsFilePath: string;
     private exhaustionRejectionsFilePath: string;
     private exhaustionSuccessfulFilePath: string;
+    private exhaustionRejectedMissedFilePath!: string; // Rejected signals that would have been TP
 
     private deltacvdSignalsFilePath: string;
     private deltacvdRejectionsFilePath: string;
@@ -338,10 +340,12 @@ export class SignalValidationLogger {
     private readonly absorptionSignalsBuffer: string[] = [];
     private readonly absorptionRejectionsBuffer: string[] = [];
     private readonly absorptionSuccessfulBuffer: string[] = [];
+    private readonly absorptionRejectedMissedBuffer: string[] = [];
 
     private readonly exhaustionSignalsBuffer: string[] = [];
     private readonly exhaustionRejectionsBuffer: string[] = [];
     private readonly exhaustionSuccessfulBuffer: string[] = [];
+    private readonly exhaustionRejectedMissedBuffer: string[] = [];
 
     private readonly deltacvdSignalsBuffer: string[] = [];
     private readonly deltacvdRejectionsBuffer: string[] = [];
@@ -414,6 +418,10 @@ export class SignalValidationLogger {
             this.outputDir,
             `absorption_successful_${this.currentDateString}.csv`
         );
+        this.absorptionRejectedMissedFilePath = path.join(
+            this.outputDir,
+            `absorption_rejected_missed_${this.currentDateString}.csv`
+        );
 
         // Exhaustion detector files
         this.exhaustionSignalsFilePath = path.join(
@@ -427,6 +435,10 @@ export class SignalValidationLogger {
         this.exhaustionSuccessfulFilePath = path.join(
             this.outputDir,
             `exhaustion_successful_${this.currentDateString}.csv`
+        );
+        this.exhaustionRejectedMissedFilePath = path.join(
+            this.outputDir,
+            `exhaustion_rejected_missed_${this.currentDateString}.csv`
         );
 
         // DeltaCVD detector files
@@ -449,7 +461,7 @@ export class SignalValidationLogger {
      */
     private getDetectorFilePath(
         detectorType: "exhaustion" | "absorption" | "deltacvd",
-        fileType: "signals" | "rejections" | "successful"
+        fileType: "signals" | "rejections" | "successful" | "rejected_missed"
     ): string {
         switch (detectorType) {
             case "absorption":
@@ -457,13 +469,17 @@ export class SignalValidationLogger {
                     ? this.absorptionSignalsFilePath
                     : fileType === "rejections"
                       ? this.absorptionRejectionsFilePath
-                      : this.absorptionSuccessfulFilePath;
+                      : fileType === "successful"
+                        ? this.absorptionSuccessfulFilePath
+                        : this.absorptionRejectedMissedFilePath;
             case "exhaustion":
                 return fileType === "signals"
                     ? this.exhaustionSignalsFilePath
                     : fileType === "rejections"
                       ? this.exhaustionRejectionsFilePath
-                      : this.exhaustionSuccessfulFilePath;
+                      : fileType === "successful"
+                        ? this.exhaustionSuccessfulFilePath
+                        : this.exhaustionRejectedMissedFilePath;
             case "deltacvd":
                 return fileType === "signals"
                     ? this.deltacvdSignalsFilePath
@@ -478,7 +494,7 @@ export class SignalValidationLogger {
      */
     private getDetectorBuffer(
         detectorType: "exhaustion" | "absorption" | "deltacvd",
-        fileType: "signals" | "rejections" | "successful"
+        fileType: "signals" | "rejections" | "successful" | "rejected_missed"
     ): string[] {
         switch (detectorType) {
             case "absorption":
@@ -486,13 +502,17 @@ export class SignalValidationLogger {
                     ? this.absorptionSignalsBuffer
                     : fileType === "rejections"
                       ? this.absorptionRejectionsBuffer
-                      : this.absorptionSuccessfulBuffer;
+                      : fileType === "successful"
+                        ? this.absorptionSuccessfulBuffer
+                        : this.absorptionRejectedMissedBuffer;
             case "exhaustion":
                 return fileType === "signals"
                     ? this.exhaustionSignalsBuffer
                     : fileType === "rejections"
                       ? this.exhaustionRejectionsBuffer
-                      : this.exhaustionSuccessfulBuffer;
+                      : fileType === "successful"
+                        ? this.exhaustionSuccessfulBuffer
+                        : this.exhaustionRejectedMissedBuffer;
             case "deltacvd":
                 return fileType === "signals"
                     ? this.deltacvdSignalsBuffer
@@ -878,6 +898,28 @@ export class SignalValidationLogger {
                         getDetectorSpecificSuccessfulHeader(detectorType);
                     await fs.writeFile(successfulPath, detectorSpecificHeader);
                 }
+
+                // Initialize rejected_missed file for absorption and exhaustion only
+                if (
+                    detectorType === "absorption" ||
+                    detectorType === "exhaustion"
+                ) {
+                    const rejectedMissedPath = this.getDetectorFilePath(
+                        detectorType,
+                        "rejected_missed"
+                    );
+                    try {
+                        await fs.access(rejectedMissedPath);
+                    } catch {
+                        // Use same header as rejections but will only contain signals that would have been TP
+                        const rejectedMissedHeader =
+                            getDetectorSpecificRejectionHeader(detectorType);
+                        await fs.writeFile(
+                            rejectedMissedPath,
+                            rejectedMissedHeader
+                        );
+                    }
+                }
             }
 
             this.logger.info(
@@ -968,6 +1010,26 @@ export class SignalValidationLogger {
                     successfulToFlush
                 );
             }
+
+            // Flush rejected_missed buffer (only for absorption and exhaustion)
+            if (
+                detectorType === "absorption" ||
+                detectorType === "exhaustion"
+            ) {
+                const rejectedMissedBuffer = this.getDetectorBuffer(
+                    detectorType,
+                    "rejected_missed"
+                );
+                if (rejectedMissedBuffer.length > 0) {
+                    const rejectedMissedToFlush =
+                        rejectedMissedBuffer.splice(0);
+                    void this.flushDetectorBuffer(
+                        detectorType,
+                        "rejected_missed",
+                        rejectedMissedToFlush
+                    );
+                }
+            }
         }
     }
 
@@ -976,7 +1038,7 @@ export class SignalValidationLogger {
      */
     private async flushDetectorBuffer(
         detectorType: "exhaustion" | "absorption" | "deltacvd",
-        fileType: "signals" | "rejections" | "successful",
+        fileType: "signals" | "rejections" | "successful" | "rejected_missed",
         records: string[]
     ): Promise<void> {
         try {
@@ -1459,10 +1521,27 @@ export class SignalValidationLogger {
         setTimeout(
             () => {
                 this.validateSuccessfulSignal(signalPrice, record, "90min");
-                this.writeSuccessfulSignalRecord(
-                    record,
-                    record.calculatedValues
-                );
+
+                // CRITICAL FIX: Only write to successful file if signal reached TP without hitting SL
+                // A signal is only truly successful if it reached the target profit
+                if (record.tpSlStatus === "TP") {
+                    this.writeSuccessfulSignalRecord(
+                        record,
+                        record.calculatedValues
+                    );
+                } else {
+                    // Signal hit SL or didn't reach TP - log but don't write to successful file
+                    this.logger.info(
+                        "Signal did not meet success criteria, not writing to successful file",
+                        {
+                            signalId: recordId,
+                            tpSlStatus: record.tpSlStatus,
+                            signalQuality: record.signalQuality,
+                            wasTopOrBottomSignal: record.wasTopOrBottomSignal,
+                        }
+                    );
+                }
+
                 this.successfulSignals.delete(recordId);
             },
             90 * 60 * 1000
@@ -1503,7 +1582,7 @@ export class SignalValidationLogger {
             15 * 60 * 1000
         );
 
-        // 1-hour validation and final write
+        // 1-hour validation
         setTimeout(
             () => {
                 this.validateRejection(
@@ -1514,6 +1593,21 @@ export class SignalValidationLogger {
                 );
             },
             60 * 60 * 1000
+        );
+
+        // 90-minute final validation for rejected_missed tracking
+        setTimeout(
+            () => {
+                this.validateRejection(
+                    rejectionId,
+                    rejectionPrice,
+                    record,
+                    "90min"
+                );
+                // Clean up after final validation
+                this.pendingRejections.delete(rejectionId);
+            },
+            90 * 60 * 1000
         );
     }
 
@@ -1774,7 +1868,7 @@ export class SignalValidationLogger {
         rejectionId: string,
         originalPrice: number,
         record: SignalRejectionRecord,
-        timeframe: "5min" | "15min" | "1hr"
+        timeframe: "5min" | "15min" | "1hr" | "90min"
     ): void {
         const currentPrice = this.currentPrice;
         if (currentPrice === null) return;
@@ -1793,15 +1887,20 @@ export class SignalValidationLogger {
                 break;
             case "1hr":
                 record.subsequentMovement1hr = movement;
+                // Write regular rejection record at 1hr
+                this.writeRejectionRecord(record);
+                break;
 
+            case "90min":
+                // Final validation to check if this was a missed opportunity
                 // Determine what would have happened if signal was not rejected
                 // Assume signal direction based on detector type
                 const expectedMovement =
                     record.detectorType === "absorption" ? "up" : "down";
                 const signalSide = expectedMovement === "up" ? "buy" : "sell";
 
-                // Check if it would have hit target or stop loss
-                const endTime = record.timestamp + 60 * 60 * 1000;
+                // Check if it would have hit target or stop loss within 90 minutes
+                const endTime = record.timestamp + 90 * 60 * 1000;
                 const outcome = this.checkSignalOutcome(
                     record.timestamp,
                     originalPrice,
@@ -1822,9 +1921,26 @@ export class SignalValidationLogger {
                     record.tpSlStatus = "NEITHER";
                 }
 
-                // Write final rejection record and clean up
-                this.writeRejectionRecord(record);
-                this.pendingRejections.delete(rejectionId);
+                // CRITICAL: Write to rejected_missed file if this would have been successful
+                // Only for absorption and exhaustion, and only if not rejected for minAggVolume
+                if (
+                    record.tpSlStatus === "TP" &&
+                    (record.detectorType === "absorption" ||
+                        record.detectorType === "exhaustion") &&
+                    record.rejectionReason !== "Insufficient aggregate volume"
+                ) {
+                    this.writeRejectedMissedRecord(record);
+                    this.logger.info(
+                        "Rejected signal would have been successful - logged to rejected_missed",
+                        {
+                            rejectionId,
+                            detectorType: record.detectorType,
+                            reason: record.rejectionReason,
+                            price: originalPrice,
+                            wouldHaveBeenTP: true,
+                        }
+                    );
+                }
                 break;
         }
     }
@@ -2236,6 +2352,51 @@ export class SignalValidationLogger {
             ...outcomeFields.map(String),
         ];
         return allFields.join(",") + "\n";
+    }
+
+    /**
+     * Write rejected_missed record to CSV (rejections that would have been TP)
+     * INSTITUTIONAL COMPLIANCE: Only for absorption/exhaustion, excluding minAggVolume rejections
+     */
+    private writeRejectedMissedRecord(record: SignalRejectionRecord): void {
+        try {
+            // Only for absorption and exhaustion detectors
+            if (
+                record.detectorType !== "absorption" &&
+                record.detectorType !== "exhaustion"
+            ) {
+                return;
+            }
+
+            // Use same CSV format as rejection records
+            const csvLine = this.formatDetectorSpecificRejectionCSV(
+                record,
+                record.calculatedValues
+            );
+
+            // Add to detector-specific rejected_missed buffer
+            const detectorBuffer = this.getDetectorBuffer(
+                record.detectorType,
+                "rejected_missed"
+            );
+            detectorBuffer.push(csvLine);
+
+            // Auto-flush if buffer is full
+            if (detectorBuffer.length >= this.maxBufferSize) {
+                this.flushBuffers();
+            }
+        } catch (error) {
+            this.logger.error(
+                "SignalValidationLogger: Failed to write rejected_missed record",
+                {
+                    timestamp: record.timestamp,
+                    detectorType: record.detectorType,
+                    reason: record.rejectionReason,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                }
+            );
+        }
     }
 
     /**
