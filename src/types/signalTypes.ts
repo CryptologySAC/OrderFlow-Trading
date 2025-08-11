@@ -182,7 +182,7 @@ export interface BaseSignalEvent {
 
 export interface DeltaCVDConfirmationResult {
     price: number;
-    side: "buy" | "sell" | "neutral";
+    side: "buy" | "sell";
     rateOfChange: number;
     windowVolume: number;
     tradesInWindow: number;
@@ -239,7 +239,7 @@ interface DeltaCVDConfirmationMetadata {
     cvdMovement: {
         totalCVD: number;
         normalizedCVD: number;
-        direction: "bullish" | "bearish" | "neutral";
+        direction: "bullish" | "bearish";
     };
     signalFrequency?: number;
     timeToLastSignal?: number;
@@ -276,7 +276,7 @@ export interface SignalQualityFlags {
 export interface SignalCandidate {
     id: string;
     type: SignalType;
-    side: "buy" | "sell" | "neutral";
+    side: "buy" | "sell";
     confidence: number;
     timestamp: number;
     data: DetectorResultType;
@@ -340,7 +340,7 @@ export interface AnomalyImpactFactors {
     marketVolatility: number;
     impactFactors: Array<{
         anomalyType: string;
-        impact: "positive" | "negative" | "neutral";
+        impact: "positive" | "negative";
         multiplier: number;
         decayedMultiplier: number;
         reasoning: string;

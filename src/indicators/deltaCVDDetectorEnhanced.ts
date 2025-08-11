@@ -1170,12 +1170,16 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         calculatedValues: DeltaCVDCalculatedValues
     ): void {
         try {
+            // Determine signal side for DeltaCVD based on volume imbalance
+            const signalSide = this.determineCVDSignalSide(event) || "buy"; // Default to buy if undetermined
+
             this.validationLogger.logRejection(
                 "deltacvd",
                 rejectionReason,
                 event,
                 thresholdDetails,
-                calculatedValues
+                calculatedValues,
+                signalSide
             );
         } catch (error) {
             this.logger.error(
@@ -1371,7 +1375,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 "deltacvd",
                 event,
                 calculatedValues,
-                validationMarketContext
+                validationMarketContext,
+                signal.side // Signal always has buy/sell
             );
         } catch (error) {
             this.logger.error(

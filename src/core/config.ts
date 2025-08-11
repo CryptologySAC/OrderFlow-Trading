@@ -123,7 +123,7 @@ export const ExhaustionDetectorSchema = z.object({
     // Enhancement control
     useStandardizedZones: z.boolean(),
     enhancementMode: z.enum(["disabled", "monitoring", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
+    minEnhancedConfidenceThreshold: z.number().min(0.01).max(2.0),
 
     // Enhanced depletion analysis
     depletionVolumeThreshold: z.number().min(10).max(100000),

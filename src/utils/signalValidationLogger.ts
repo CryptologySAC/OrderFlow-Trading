@@ -111,6 +111,7 @@ export interface SignalValidationRecord {
 export interface SignalRejectionRecord {
     timestamp: number;
     detectorType: "exhaustion" | "absorption" | "deltacvd";
+    signalSide: "buy" | "sell";
     rejectionReason: string;
     price: number;
 
@@ -207,6 +208,7 @@ export interface SignalRejectionRecord {
 export interface SuccessfulSignalRecord {
     timestamp: number;
     detectorType: "exhaustion" | "absorption" | "deltacvd";
+    signalSide: "buy" | "sell";
     price: number;
 
     // ALL 40+ parameter values from config that allowed this signal to pass
@@ -662,6 +664,7 @@ export class SignalValidationLogger {
                 const commonFields = [
                     "timestamp",
                     "detectorType",
+                    "signalSide",
                     "rejectionReason",
                     "price",
                     "thresholdType",
@@ -759,7 +762,12 @@ export class SignalValidationLogger {
             const getDetectorSpecificSuccessfulHeader = (
                 detectorType: "absorption" | "exhaustion" | "deltacvd"
             ): string => {
-                const commonFields = ["timestamp", "detectorType", "price"];
+                const commonFields = [
+                    "timestamp",
+                    "detectorType",
+                    "signalSide",
+                    "price",
+                ];
 
                 const outcomeFields = [
                     "confidence",
@@ -1198,7 +1206,7 @@ export class SignalValidationLogger {
                     | "exhaustion"
                     | "absorption"
                     | "deltacvd",
-                signalSide: signal.side as "buy" | "sell",
+                signalSide: signal.side,
                 confidence: signal.confidence,
 
                 // Market Context
@@ -1299,7 +1307,8 @@ export class SignalValidationLogger {
             marketVolume: number;
             marketSpread: number;
             marketVolatility: number;
-        }
+        },
+        signalSide: "buy" | "sell"
     ): void {
         try {
             // Check for daily rotation before logging
@@ -1312,6 +1321,7 @@ export class SignalValidationLogger {
             const record: SuccessfulSignalRecord = {
                 timestamp: event.timestamp,
                 detectorType,
+                signalSide, // Mandatory - a signal without side is useless
                 price: event.price,
                 parameterValues,
                 calculatedValues, // ✅ Store for CSV alignment
@@ -1367,7 +1377,8 @@ export class SignalValidationLogger {
         calculatedValues:
             | AbsorptionCalculatedValues
             | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues
+            | DeltaCVDCalculatedValues,
+        signalSide: "buy" | "sell"
     ): void {
         try {
             // Check for daily rotation before logging
@@ -1396,6 +1407,7 @@ export class SignalValidationLogger {
             const record: SignalRejectionRecord = {
                 timestamp: event.timestamp,
                 detectorType,
+                signalSide, // Mandatory - a rejection without side is useless for analysis
                 rejectionReason,
                 price: event.price,
 
@@ -1822,18 +1834,14 @@ export class SignalValidationLogger {
             case "90min":
                 record.subsequentMovement90min = movement;
 
-                // Determine signal side based on detector type and movement expectation
-                // This is a simplified assumption - you may need to store actual signal side
-                const expectedMovement =
-                    record.detectorType === "absorption" ? "up" : "down";
-                const signalSide = expectedMovement === "up" ? "buy" : "sell";
+                // signalSide is now mandatory - no need to check
 
                 // Check if stop loss or target was hit within 90 minutes
                 const endTime = record.timestamp + 90 * 60 * 1000;
                 const outcome = this.checkSignalOutcome(
                     record.timestamp,
                     originalPrice,
-                    signalSide,
+                    record.signalSide,
                     endTime
                 );
 
@@ -1894,17 +1902,15 @@ export class SignalValidationLogger {
             case "90min":
                 // Final validation to check if this was a missed opportunity
                 // Determine what would have happened if signal was not rejected
-                // Assume signal direction based on detector type
-                const expectedMovement =
-                    record.detectorType === "absorption" ? "up" : "down";
-                const signalSide = expectedMovement === "up" ? "buy" : "sell";
+
+                // signalSide is now mandatory - no need to check
 
                 // Check if it would have hit target or stop loss within 90 minutes
                 const endTime = record.timestamp + 90 * 60 * 1000;
                 const outcome = this.checkSignalOutcome(
                     record.timestamp,
                     originalPrice,
-                    signalSide,
+                    record.signalSide,
                     endTime
                 );
 
@@ -2095,9 +2101,24 @@ export class SignalValidationLogger {
             | ExhaustionCalculatedValues
             | DeltaCVDCalculatedValues
     ): string {
+        // Try to find signalSide from validation record with same timestamp
+        let signalSide = record.signalSide || "";
+        if (!signalSide) {
+            for (const [, validationRecord] of this.pendingValidations) {
+                if (
+                    validationRecord.timestamp === record.timestamp &&
+                    validationRecord.detectorType === record.detectorType
+                ) {
+                    signalSide = validationRecord.signalSide;
+                    break;
+                }
+            }
+        }
+
         const commonFields = [
             record.timestamp,
             record.detectorType,
+            signalSide,
             record.price,
         ];
 
@@ -2253,6 +2274,7 @@ export class SignalValidationLogger {
         const commonFields = [
             record.timestamp,
             record.detectorType,
+            record.signalSide || "",
             record.rejectionReason,
             record.price,
             record.thresholdType,

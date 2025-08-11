@@ -2036,12 +2036,17 @@ export class AbsorptionDetectorEnhanced extends Detector {
         allCalculatedValues: AbsorptionCalculatedValues
     ): void {
         try {
+            // Determine signal side based on trade direction
+            const isBuyTrade = !event.buyerIsMaker;
+            const signalSide = isBuyTrade ? "buy" : "sell";
+
             this.validationLogger.logRejection(
                 "absorption",
                 rejectionReason,
                 event,
                 thresholdDetails,
-                allCalculatedValues
+                allCalculatedValues,
+                signalSide
             );
         } catch (error) {
             this.logger.error(
@@ -2197,7 +2202,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 "absorption",
                 event,
                 calculatedValues,
-                marketContext
+                marketContext,
+                signal.side // Signal always has buy/sell
             );
         } catch (error) {
             this.logger.error(

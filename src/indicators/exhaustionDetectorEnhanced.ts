@@ -666,7 +666,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             accumulatedPassiveRatio < this.passiveRatioBalanceThreshold;
         const passesConfidenceThreshold =
             confidence >= this.exhaustionScoreThreshold;
-        const hasValidSignalSide = signalSide !== "neutral";
+        const hasValidSignalSide = signalSide !== null;
 
         // Comprehensive rejection with complete threshold data
         if (!hasRecentZones) {
@@ -771,10 +771,10 @@ export class ExhaustionDetectorEnhanced extends Detector {
             return null;
         }
 
-        if (!hasValidSignalSide) {
+        if (!hasValidSignalSide || signalSide === null) {
             this.logSignalRejection(
                 event,
-                "neutral_signal_side",
+                "no_signal_side",
                 {
                     type: "signal_side",
                     threshold: 1,
@@ -798,15 +798,17 @@ export class ExhaustionDetectorEnhanced extends Detector {
         }
 
         // Create core exhaustion signal using accumulated metrics
+        // At this point signalSide cannot be null due to the check above
+        const validSignalSide = signalSide; // Non-null assertion is safe here
         const signalCandidate: SignalCandidate = {
             id: `core-exhaustion-${event.timestamp}-${++this.signalCounter}`,
             type: "exhaustion" as SignalType,
-            side: signalSide,
+            side: validSignalSide,
             confidence: confidence, // Raw confidence, no capping
             timestamp: event.timestamp,
             data: {
                 price: event.price,
-                side: signalSide,
+                side: validSignalSide,
                 aggressive: totalDirectionalAggressiveVolume,
                 oppositeQty: totalDirectionalPassiveVolume,
                 avgLiquidity:
@@ -1141,8 +1143,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
      */
     private determineExhaustionSignalSide(
         event: EnrichedTradeEvent
-    ): "buy" | "sell" | "neutral" {
-        if (!event.zoneData) return "neutral";
+    ): "buy" | "sell" | null {
+        if (!event.zoneData) return null;
 
         // Use time-window filtered zones for signal direction
         const windowStartTime =
@@ -1213,14 +1215,14 @@ export class ExhaustionDetectorEnhanced extends Detector {
         }
 
         this.logger.info(
-            "ExhaustionDetectorEnhanced: Returning NEUTRAL (no directional exhaustion)",
+            "ExhaustionDetectorEnhanced: No directional exhaustion detected",
             {
                 relevantPassiveVolume,
                 oppositePassiveVolume,
                 tradeDirection: isBuyTrade ? "BUY" : "SELL",
             }
         );
-        return "neutral"; // No directional exhaustion
+        return null; // No directional exhaustion
     }
 
     /**
@@ -1622,7 +1624,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 "exhaustion",
                 event,
                 calculatedValues,
-                marketContext
+                marketContext,
+                signal.side // Signal always has buy/sell
             );
         } catch (error) {
             this.logger.error(
@@ -1664,12 +1667,20 @@ export class ExhaustionDetectorEnhanced extends Detector {
         calculatedValues: ExhaustionCalculatedValues
     ): void {
         try {
+            // Determine signal side based on exhaustion reversal logic
+            // Exhaustion signals are REVERSAL signals:
+            // - Buy trades exhaust asks → Price reverses DOWN → SELL signal
+            // - Sell trades exhaust bids → Price reverses UP → BUY signal
+            const isBuyTrade = !event.buyerIsMaker;
+            const signalSide = isBuyTrade ? "sell" : "buy";
+
             this.validationLogger.logRejection(
                 "exhaustion",
                 rejectionReason,
                 event,
                 thresholdDetails,
-                calculatedValues
+                calculatedValues,
+                signalSide
             );
         } catch (error) {
             this.logger.error(
