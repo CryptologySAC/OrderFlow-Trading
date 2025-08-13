@@ -29,7 +29,8 @@
         "test:coverage": "vitest run --coverage",
         "check:deps": "yarn install --check-cache",
         "typecheck": "tsc --noEmit",
-        "build:watch": "tsc -p tsconfig.build.json --watch"
+        "build:watch": "tsc -p tsconfig.build.json --watch",
+        "signals": "npx tsx analyze_success_with_price_reconstruction.ts"
     },
     "devDependencies": {
         "@types/better-sqlite3": "7.6.13",

@@ -225,8 +225,8 @@
             },
             "exhaustion": {
                 "minAggVolume": 500,
-                "exhaustionThreshold": 0.6,
-                "minEnhancedConfidenceThreshold": 0.96,
+                "exhaustionThreshold": 0.3,
+                "minEnhancedConfidenceThreshold": 0.6,
                 "depletionVolumeThreshold": 30000,
                 "depletionRatioThreshold": -0.7,
                 "alignmentNormalizationFactor": 0.4,
@@ -250,15 +250,15 @@
                 "ratioBalanceCenterPoint": 0.5
             },
             "absorption": {
-                "minAggVolume": 500,
+                "minAggVolume": 1828,
                 "finalConfidenceRequired": 0.62,
-                "priceEfficiencyThreshold": 0.0037,
-                "minPassiveMultiplier": 25.0,
+                "priceEfficiencyThreshold": 0.0046,
+                "minPassiveMultiplier": 15.0,
 
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
-                "maxAbsorptionRatio": 0.98,
-                "passiveAbsorptionThreshold": 0.5,
+                "maxAbsorptionRatio": 0.7,
+                "passiveAbsorptionThreshold": 0.71,
                 "expectedMovementScalingFactor": 10,
                 "liquidityGradientRange": 5,
                 "institutionalVolumeThreshold": 100,

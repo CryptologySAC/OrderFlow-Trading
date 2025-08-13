@@ -947,7 +947,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
             calculatedPriceEfficiencyThreshold: priceEfficiency ?? 0,
             calculatedMaxAbsorptionRatio: absorptionRatio ?? 0,
             calculatedMinPassiveMultiplier: actualPassiveMultiplier ?? 0,
-            calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+            calculatedPassiveAbsorptionThreshold:
+                totalPassiveVolume > 0
+                    ? totalPassiveVolume /
+                      (totalAggressiveVolume + totalPassiveVolume)
+                    : 0,
             calculatedExpectedMovementScalingFactor:
                 FinancialMath.divideQuantities(
                     FinancialMath.multiplyQuantities(
@@ -1920,8 +1924,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 totalPassiveVolume > 0
                     ? totalPassiveVolume / (totalAggVol + totalPassiveVolume)
                     : 0;
-            const passiveVolumeRatio =
-                totalAggVol > 0 ? totalPassiveVolume / totalAggVol : 0;
+
             const confluenceCount = relevantZones.length;
             const volumePressure = this.calculateVolumePressure(
                 event,
@@ -1938,7 +1941,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 calculatedMaxAbsorptionRatio: absorptionRatio,
                 calculatedMinPassiveMultiplier:
                     totalPassiveVolume / Math.max(totalAggVol, 1),
-                calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+                calculatedPassiveAbsorptionThreshold:
+                    totalPassiveVolume > 0
+                        ? totalPassiveVolume /
+                          (totalAggVol + totalPassiveVolume)
+                        : 0,
                 calculatedExpectedMovementScalingFactor:
                     FinancialMath.divideQuantities(
                         FinancialMath.multiplyQuantities(
@@ -2119,8 +2126,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 totalPassiveVolume > 0
                     ? totalPassiveVolume / (totalAggVol + totalPassiveVolume)
                     : 0;
-            const passiveVolumeRatio =
-                totalAggVol > 0 ? totalPassiveVolume / totalAggVol : 0;
 
             const calculatedValues: AbsorptionCalculatedValues = {
                 calculatedMinAggVolume: totalAggVol,
@@ -2132,7 +2137,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 calculatedMaxAbsorptionRatio: absorptionRatio ?? 0,
                 calculatedMinPassiveMultiplier:
                     totalPassiveVolume / Math.max(totalAggVol, 1),
-                calculatedPassiveAbsorptionThreshold: passiveVolumeRatio,
+                calculatedPassiveAbsorptionThreshold:
+                    totalPassiveVolume > 0
+                        ? totalPassiveVolume /
+                          (totalAggVol + totalPassiveVolume)
+                        : 0,
                 calculatedExpectedMovementScalingFactor:
                     FinancialMath.divideQuantities(
                         FinancialMath.multiplyQuantities(
