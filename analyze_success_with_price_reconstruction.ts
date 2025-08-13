@@ -88,133 +88,171 @@ interface SwingData {
 
 // Constants for phase detection
 const PHASE_DETECTION_CONFIG = {
-    CLUSTER_TIME_WINDOW: 5 * 60 * 1000,  // 5 minutes
-    CLUSTER_PRICE_PROXIMITY: 0.002,       // 0.2% price range
-    PHASE_GAP_THRESHOLD: 15 * 60 * 1000,  // 15 minutes between phases
-    RETRACEMENT_THRESHOLD: 0.003,         // 0.3% retracement starts new phase
-    TARGET_PERCENT: 0.007                 // 0.7% target
+    CLUSTER_TIME_WINDOW: 5 * 60 * 1000, // 5 minutes
+    CLUSTER_PRICE_PROXIMITY: 0.002, // 0.2% price range
+    PHASE_GAP_THRESHOLD: 15 * 60 * 1000, // 15 minutes between phases
+    RETRACEMENT_THRESHOLD: 0.003, // 0.3% retracement starts new phase
+    TARGET_PERCENT: 0.007, // 0.7% target
 };
 
 function identifySignalClusters(signals: SignalAnalysis[]): SignalCluster[] {
     if (signals.length === 0) return [];
-    
-    const sortedSignals = [...signals].sort((a, b) => a.signalTimestamp - b.signalTimestamp);
+
+    const sortedSignals = [...signals].sort(
+        (a, b) => a.signalTimestamp - b.signalTimestamp
+    );
     const clusters: SignalCluster[] = [];
     let clusterId = 1;
-    
+
     let currentCluster: SignalAnalysis[] = [sortedSignals[0]];
-    
+
     for (let i = 1; i < sortedSignals.length; i++) {
         const current = sortedSignals[i];
         const lastInCluster = currentCluster[currentCluster.length - 1];
-        
-        const timeDiff = current.signalTimestamp - lastInCluster.signalTimestamp;
-        const priceDiff = Math.abs(current.signalPrice - lastInCluster.signalPrice) / lastInCluster.signalPrice;
-        
+
+        const timeDiff =
+            current.signalTimestamp - lastInCluster.signalTimestamp;
+        const priceDiff =
+            Math.abs(current.signalPrice - lastInCluster.signalPrice) /
+            lastInCluster.signalPrice;
+
         // Check if signal belongs to current cluster
-        if (timeDiff <= PHASE_DETECTION_CONFIG.CLUSTER_TIME_WINDOW && 
+        if (
+            timeDiff <= PHASE_DETECTION_CONFIG.CLUSTER_TIME_WINDOW &&
             priceDiff <= PHASE_DETECTION_CONFIG.CLUSTER_PRICE_PROXIMITY &&
-            current.signalSide === lastInCluster.signalSide) {
+            current.signalSide === lastInCluster.signalSide
+        ) {
             currentCluster.push(current);
         } else {
             // Finalize current cluster and start new one
             if (currentCluster.length > 0) {
-                clusters.push(createClusterFromSignals(currentCluster, clusterId++));
+                clusters.push(
+                    createClusterFromSignals(currentCluster, clusterId++)
+                );
             }
             currentCluster = [current];
         }
     }
-    
+
     // Add final cluster
     if (currentCluster.length > 0) {
         clusters.push(createClusterFromSignals(currentCluster, clusterId++));
     }
-    
+
     return clusters;
 }
 
-function createClusterFromSignals(signals: SignalAnalysis[], id: number): SignalCluster {
-    const prices = signals.map(s => s.signalPrice);
+function createClusterFromSignals(
+    signals: SignalAnalysis[],
+    id: number
+): SignalCluster {
+    const prices = signals.map((s) => s.signalPrice);
     const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
     const priceRange = Math.max(...prices) - Math.min(...prices);
-    
+
     return {
         id,
         signals,
         avgPrice,
         priceRange,
-        startTime: Math.min(...signals.map(s => s.signalTimestamp)),
-        endTime: Math.max(...signals.map(s => s.signalTimestamp)),
+        startTime: Math.min(...signals.map((s) => s.signalTimestamp)),
+        endTime: Math.max(...signals.map((s) => s.signalTimestamp)),
         detector: signals[0].detectorType,
-        side: signals[0].signalSide
+        side: signals[0].signalSide,
     };
 }
 
-function identifyTradingPhases(clusters: SignalCluster[], allPrices: Map<number, number>): TradingPhase[] {
+function identifyTradingPhases(
+    clusters: SignalCluster[],
+    allPrices: Map<number, number>
+): TradingPhase[] {
     if (clusters.length === 0) return [];
-    
+
     const phases: TradingPhase[] = [];
     let phaseId = 1;
     let currentPhaseClusters: SignalCluster[] = [clusters[0]];
-    
+
     for (let i = 1; i < clusters.length; i++) {
         const current = clusters[i];
         const lastPhase = currentPhaseClusters[currentPhaseClusters.length - 1];
-        
+
         // Check if current cluster starts a new phase
         if (shouldStartNewPhase(current, lastPhase, allPrices)) {
             // Finalize current phase
-            phases.push(createPhaseFromClusters(currentPhaseClusters, phaseId++, allPrices));
+            phases.push(
+                createPhaseFromClusters(
+                    currentPhaseClusters,
+                    phaseId++,
+                    allPrices
+                )
+            );
             currentPhaseClusters = [current];
         } else {
             currentPhaseClusters.push(current);
         }
     }
-    
+
     // Add final phase
     if (currentPhaseClusters.length > 0) {
-        phases.push(createPhaseFromClusters(currentPhaseClusters, phaseId++, allPrices));
+        phases.push(
+            createPhaseFromClusters(currentPhaseClusters, phaseId++, allPrices)
+        );
     }
-    
+
     return phases;
 }
 
-function shouldStartNewPhase(currentCluster: SignalCluster, lastCluster: SignalCluster, allPrices: Map<number, number>): boolean {
+function shouldStartNewPhase(
+    currentCluster: SignalCluster,
+    lastCluster: SignalCluster,
+    allPrices: Map<number, number>
+): boolean {
     // Time gap check
     const timeGap = currentCluster.startTime - lastCluster.endTime;
     if (timeGap > PHASE_DETECTION_CONFIG.PHASE_GAP_THRESHOLD) {
         return true;
     }
-    
+
     // Price retracement check
-    const retracement = calculateRetracementBetweenClusters(lastCluster, currentCluster, allPrices);
+    const retracement = calculateRetracementBetweenClusters(
+        lastCluster,
+        currentCluster,
+        allPrices
+    );
     if (retracement > PHASE_DETECTION_CONFIG.RETRACEMENT_THRESHOLD) {
         return true;
     }
-    
+
     // Detector type change with significant price difference
-    const priceDiff = Math.abs(currentCluster.avgPrice - lastCluster.avgPrice) / lastCluster.avgPrice;
-    if (currentCluster.detector !== lastCluster.detector && priceDiff > PHASE_DETECTION_CONFIG.CLUSTER_PRICE_PROXIMITY * 2) {
+    const priceDiff =
+        Math.abs(currentCluster.avgPrice - lastCluster.avgPrice) /
+        lastCluster.avgPrice;
+    if (
+        currentCluster.detector !== lastCluster.detector &&
+        priceDiff > PHASE_DETECTION_CONFIG.CLUSTER_PRICE_PROXIMITY * 2
+    ) {
         return true;
     }
-    
+
     return false;
 }
 
 function calculateRetracementBetweenClusters(
-    cluster1: SignalCluster, 
-    cluster2: SignalCluster, 
+    cluster1: SignalCluster,
+    cluster2: SignalCluster,
     allPrices: Map<number, number>
 ): number {
     // Find price extremes between clusters
     const startTime = cluster1.endTime;
     const endTime = cluster2.startTime;
-    
+
     // If no price data available, use simple price difference
     if (allPrices.size === 0) {
-        return Math.abs(cluster2.avgPrice - cluster1.avgPrice) / cluster1.avgPrice;
+        return (
+            Math.abs(cluster2.avgPrice - cluster1.avgPrice) / cluster1.avgPrice
+        );
     }
-    
+
     let extremePrice = cluster1.avgPrice;
     for (const [timestamp, price] of allPrices) {
         if (timestamp > startTime && timestamp < endTime) {
@@ -227,50 +265,61 @@ function calculateRetracementBetweenClusters(
             }
         }
     }
-    
+
     // Calculate retracement percentage
-    const retracement = Math.abs(extremePrice - cluster1.avgPrice) / cluster1.avgPrice;
+    const retracement =
+        Math.abs(extremePrice - cluster1.avgPrice) / cluster1.avgPrice;
     return retracement;
 }
 
-function createPhaseFromClusters(clusters: SignalCluster[], id: number, allPrices: Map<number, number>): TradingPhase {
-    const allSignals = clusters.flatMap(c => c.signals);
+function createPhaseFromClusters(
+    clusters: SignalCluster[],
+    id: number,
+    allPrices: Map<number, number>
+): TradingPhase {
+    const allSignals = clusters.flatMap((c) => c.signals);
     if (allSignals.length === 0) {
-        throw new Error('Cannot create phase from empty signal clusters');
+        throw new Error("Cannot create phase from empty signal clusters");
     }
-    
+
     // Get the time range of all signals
-    const startTime = Math.min(...clusters.map(c => c.startTime));
-    const endTime = Math.max(...clusters.map(c => c.endTime));
-    
+    const startTime = Math.min(...clusters.map((c) => c.startTime));
+    const endTime = Math.max(...clusters.map((c) => c.endTime));
+
     // For phase start price: Use the HIGHEST signal entry price (where market was when signals fired)
-    const signalPrices = allSignals.map(s => s.signalPrice);
+    const signalPrices = allSignals.map((s) => s.signalPrice);
     const firstSignal = allSignals[0];
-    
+
     let startPrice: number;
     let endPrice: number;
-    
+
     if (firstSignal.signalSide === "sell") {
         // For sell signals: phase starts at highest entry, ends at lowest reached
         startPrice = Math.max(...signalPrices); // Highest entry price
-        endPrice = Math.min(...allSignals.map(s => s.actualMaxPrice)); // Lowest price reached
+        endPrice = Math.min(...allSignals.map((s) => s.actualMaxPrice)); // Lowest price reached
     } else {
         // For buy signals: phase starts at lowest entry, ends at highest reached
         startPrice = Math.min(...signalPrices); // Lowest entry price
-        endPrice = Math.max(...allSignals.map(s => s.actualMaxPrice)); // Highest price reached
+        endPrice = Math.max(...allSignals.map((s) => s.actualMaxPrice)); // Highest price reached
     }
-    
+
     // Use FinancialMath for accurate percentage calculation
-    const sizePercent = Math.abs(FinancialMath.calculatePercentageChange(startPrice, endPrice, 0)) / 100;
-    
+    const sizePercent =
+        Math.abs(
+            FinancialMath.calculatePercentageChange(startPrice, endPrice, 0)
+        ) / 100;
+
     // Calculate TP level based on first signal
-    const tpLevel = firstSignal.signalSide === "buy" 
-        ? firstSignal.signalPrice * (1 + PHASE_DETECTION_CONFIG.TARGET_PERCENT)
-        : firstSignal.signalPrice * (1 - PHASE_DETECTION_CONFIG.TARGET_PERCENT);
-    
+    const tpLevel =
+        firstSignal.signalSide === "buy"
+            ? firstSignal.signalPrice *
+              (1 + PHASE_DETECTION_CONFIG.TARGET_PERCENT)
+            : firstSignal.signalPrice *
+              (1 - PHASE_DETECTION_CONFIG.TARGET_PERCENT);
+
     const direction = firstSignal.signalSide === "buy" ? "UP" : "DOWN";
-    const allSuccessful = allSignals.every(s => s.reachedTarget);
-    
+    const allSuccessful = allSignals.every((s) => s.reachedTarget);
+
     return {
         id,
         clusters,
@@ -281,17 +330,20 @@ function createPhaseFromClusters(clusters: SignalCluster[], id: number, allPrice
         endTime,
         sizePercent,
         tpLevel,
-        allSignalsSuccessful: allSuccessful
+        allSignalsSuccessful: allSuccessful,
     };
 }
 
-function identifySwings(allPrices: Map<number, number>, signals: SignalAnalysis[]): SwingData[] {
+function identifySwings(
+    allPrices: Map<number, number>,
+    signals: SignalAnalysis[]
+): SwingData[] {
     // New phase-based approach
     const clusters = identifySignalClusters(signals);
     const phases = identifyTradingPhases(clusters, allPrices);
-    
+
     // Convert phases to legacy SwingData format for compatibility
-    return phases.map(phase => ({
+    return phases.map((phase) => ({
         id: phase.id,
         direction: phase.direction,
         startPrice: phase.startPrice,
@@ -299,7 +351,7 @@ function identifySwings(allPrices: Map<number, number>, signals: SignalAnalysis[
         startTime: phase.startTime,
         endTime: phase.endTime,
         sizePercent: phase.sizePercent,
-        signals: phase.clusters.flatMap(c => c.signals)
+        signals: phase.clusters.flatMap((c) => c.signals),
     }));
 }
 
@@ -509,7 +561,10 @@ async function analyzeSignals(): Promise<void> {
                     targetWasHit = true;
                     break;
                 }
-                if (signal.signalSide === "sell" && point.price <= targetPrice) {
+                if (
+                    signal.signalSide === "sell" &&
+                    point.price <= targetPrice
+                ) {
                     targetWasHit = true;
                     break;
                 }
@@ -517,15 +572,41 @@ async function analyzeSignals(): Promise<void> {
 
             // Calculate the ACTUAL maximum movement achieved (not capped at 0.7%)
             // Use FinancialMath for accurate calculation
-            const actualTPPercent = signal.signalSide === "buy"
-                ? Math.abs(FinancialMath.calculatePercentageChange(signal.price, bestPrice, 0)) / 100
-                : Math.abs(FinancialMath.calculatePercentageChange(signal.price, bestPrice, 0)) / 100;
+            const actualTPPercent =
+                signal.signalSide === "buy"
+                    ? Math.abs(
+                          FinancialMath.calculatePercentageChange(
+                              signal.price,
+                              bestPrice,
+                              0
+                          )
+                      ) / 100
+                    : Math.abs(
+                          FinancialMath.calculatePercentageChange(
+                              signal.price,
+                              bestPrice,
+                              0
+                          )
+                      ) / 100;
 
             // Calculate max adverse movement (drawdown)
             // Use FinancialMath for accurate calculation
-            const maxAdversePercent = signal.signalSide === "buy"
-                ? Math.abs(FinancialMath.calculatePercentageChange(signal.price, worstPriceBeforeTP, 0)) / 100
-                : Math.abs(FinancialMath.calculatePercentageChange(signal.price, worstPriceBeforeTP, 0)) / 100;
+            const maxAdversePercent =
+                signal.signalSide === "buy"
+                    ? Math.abs(
+                          FinancialMath.calculatePercentageChange(
+                              signal.price,
+                              worstPriceBeforeTP,
+                              0
+                          )
+                      ) / 100
+                    : Math.abs(
+                          FinancialMath.calculatePercentageChange(
+                              signal.price,
+                              worstPriceBeforeTP,
+                              0
+                          )
+                      ) / 100;
 
             // Calculate minutes to best price
             const minutesToTP =
@@ -550,7 +631,7 @@ async function analyzeSignals(): Promise<void> {
 
     // Identify swings and group signals
     const swings = identifySwings(allPrices, results);
-    
+
     // Generate HTML report with phase grouping
     await generateHTMLReport(results, swings);
 
@@ -558,7 +639,10 @@ async function analyzeSignals(): Promise<void> {
     printSwingSummary(swings);
 }
 
-async function generateHTMLReport(results: SignalAnalysis[], swings: SwingData[]): Promise<void> {
+async function generateHTMLReport(
+    results: SignalAnalysis[],
+    swings: SwingData[]
+): Promise<void> {
     const html = `
 <!DOCTYPE html>
 <html>
@@ -636,15 +720,22 @@ async function generateHTMLReport(results: SignalAnalysis[], swings: SwingData[]
         <p><strong>Analysis:</strong> Signals grouped by trading phases with cluster detection. Phases separated by 15+ min gaps or 0.3%+ retracements.</p>
     </div>
     
-    ${swings.length > 0 ? swings.map(swing => {
-        const clusters = identifySignalClusters(swing.signals);
-        return `
-    <h2>Phase #${swing.id}: ${swing.direction} ${swing.direction === 'UP' ? '↑' : '↓'} $${swing.startPrice.toFixed(2)} → $${swing.endPrice.toFixed(2)} (${(swing.sizePercent * 100).toFixed(2)}%)</h2>
+    ${
+        swings.length > 0
+            ? swings
+                  .map((swing) => {
+                      const clusters = identifySignalClusters(swing.signals);
+                      return `
+    <h2>Phase #${swing.id}: ${swing.direction} ${swing.direction === "UP" ? "↑" : "↓"} $${swing.startPrice.toFixed(2)} → $${swing.endPrice.toFixed(2)} (${(swing.sizePercent * 100).toFixed(2)}%)</h2>
     <p><strong>Duration:</strong> ${convertToLimaTime(swing.startTime)} → ${convertToLimaTime(swing.endTime)} | <strong>Signals:</strong> ${swing.signals.length} | <strong>Clusters:</strong> ${clusters.length}</p>
     
-    ${clusters.map(cluster => `
+    ${clusters
+        .map(
+            (cluster) => `
     <h3 style="color: #FFA726; margin-left: 20px;">📊 Cluster ${cluster.id}: ${cluster.detector.toUpperCase()} (${cluster.signals.length} signals)</h3>
-    <p style="margin-left: 20px; color: #CCC;"><strong>Price Range:</strong> $${Math.min(...cluster.signals.map(s => s.signalPrice)).toFixed(2)} - $${Math.max(...cluster.signals.map(s => s.signalPrice)).toFixed(2)} | <strong>Time:</strong> ${convertToLimaTime(cluster.startTime)} → ${convertToLimaTime(cluster.endTime)}</p>`).join('')}
+    <p style="margin-left: 20px; color: #CCC;"><strong>Price Range:</strong> $${Math.min(...cluster.signals.map((s) => s.signalPrice)).toFixed(2)} - $${Math.max(...cluster.signals.map((s) => s.signalPrice)).toFixed(2)} | <strong>Time:</strong> ${convertToLimaTime(cluster.startTime)} → ${convertToLimaTime(cluster.endTime)}</p>`
+        )
+        .join("")}
     
     <table>
         <tr>
@@ -660,7 +751,8 @@ async function generateHTMLReport(results: SignalAnalysis[], swings: SwingData[]
         </tr>
         ${swing.signals
             .sort((a, b) => a.signalTimestamp - b.signalTimestamp)
-            .map(signal => `
+            .map(
+                (signal) => `
         <tr>
             <td>${signal.detectorType.toUpperCase()}</td>
             <td>${signal.signalTimeLima}</td>
@@ -671,12 +763,16 @@ async function generateHTMLReport(results: SignalAnalysis[], swings: SwingData[]
             <td class="percent ${signal.reachedTarget ? "success" : "failure"}">${(signal.actualTPPercent * 100).toFixed(3)}%</td>
             <td>${signal.minutesToTP.toFixed(1)} min</td>
             <td class="${signal.reachedTarget ? "success" : "failure"}">${signal.reachedTarget ? "✅ YES" : "❌ NO"}</td>
-        </tr>`)
+        </tr>`
+            )
             .join("")}
     </table>
-    <p><strong>Phase Result:</strong> ${swing.signals.filter(s => s.reachedTarget).length}/${swing.signals.length} signals successful (${((swing.signals.filter(s => s.reachedTarget).length / swing.signals.length) * 100).toFixed(1)}%) | <strong>Avg Cluster Size:</strong> ${(swing.signals.length / clusters.length).toFixed(1)} signals</p>
+    <p><strong>Phase Result:</strong> ${swing.signals.filter((s) => s.reachedTarget).length}/${swing.signals.length} signals successful (${((swing.signals.filter((s) => s.reachedTarget).length / swing.signals.length) * 100).toFixed(1)}%) | <strong>Avg Cluster Size:</strong> ${(swing.signals.length / clusters.length).toFixed(1)} signals</p>
     `;
-    }).join('') : '<p>No phases identified with signals.</p>'}
+                  })
+                  .join("")
+            : "<p>No phases identified with signals.</p>"
+    }
     
     <div class="summary">
         <h2>Summary</h2>
@@ -711,53 +807,94 @@ function printSwingSummary(phases: SwingData[]): void {
 
     for (const phase of phases) {
         const clusters = identifySignalClusters(phase.signals);
-        const successful = phase.signals.filter(s => s.reachedTarget);
-        const successRate = ((successful.length / phase.signals.length) * 100).toFixed(1);
-        
-        console.log(`\nPHASE #${phase.id}: ${phase.direction} ${phase.direction === 'UP' ? '↑' : '↓'} $${phase.startPrice.toFixed(2)} → $${phase.endPrice.toFixed(2)} (${(phase.sizePercent * 100).toFixed(2)}%)`);
-        console.log(`Duration: ${convertToLimaTime(phase.startTime)} → ${convertToLimaTime(phase.endTime)}`);
-        console.log(`Signals: ${phase.signals.length} | Clusters: ${clusters.length} | Successful: ${successful.length} (${successRate}%)`);
-        console.log(`Avg cluster size: ${(phase.signals.length / clusters.length).toFixed(1)} signals`);
-        
+        const successful = phase.signals.filter((s) => s.reachedTarget);
+        const successRate = (
+            (successful.length / phase.signals.length) *
+            100
+        ).toFixed(1);
+
+        console.log(
+            `\nPHASE #${phase.id}: ${phase.direction} ${phase.direction === "UP" ? "↑" : "↓"} $${phase.startPrice.toFixed(2)} → $${phase.endPrice.toFixed(2)} (${(phase.sizePercent * 100).toFixed(2)}%)`
+        );
+        console.log(
+            `Duration: ${convertToLimaTime(phase.startTime)} → ${convertToLimaTime(phase.endTime)}`
+        );
+        console.log(
+            `Signals: ${phase.signals.length} | Clusters: ${clusters.length} | Successful: ${successful.length} (${successRate}%)`
+        );
+        console.log(
+            `Avg cluster size: ${(phase.signals.length / clusters.length).toFixed(1)} signals`
+        );
+
         // Show clusters
         for (const cluster of clusters) {
-            const clusterSuccess = cluster.signals.filter(s => s.reachedTarget).length;
-            const clusterRate = ((clusterSuccess / cluster.signals.length) * 100).toFixed(1);
-            
-            console.log(`\n  📊 CLUSTER ${cluster.id}: ${cluster.detector.toUpperCase()} (${cluster.signals.length} signals, ${clusterRate}% success)`);
-            console.log(`     Price range: $${Math.min(...cluster.signals.map(s => s.signalPrice)).toFixed(2)} - $${Math.max(...cluster.signals.map(s => s.signalPrice)).toFixed(2)}`);
-            console.log(`     Time: ${convertToLimaTime(cluster.startTime)} → ${convertToLimaTime(cluster.endTime)} (${Math.round((cluster.endTime - cluster.startTime) / (60 * 1000))} min)`);
-            
+            const clusterSuccess = cluster.signals.filter(
+                (s) => s.reachedTarget
+            ).length;
+            const clusterRate = (
+                (clusterSuccess / cluster.signals.length) *
+                100
+            ).toFixed(1);
+
+            console.log(
+                `\n  📊 CLUSTER ${cluster.id}: ${cluster.detector.toUpperCase()} (${cluster.signals.length} signals, ${clusterRate}% success)`
+            );
+            console.log(
+                `     Price range: $${Math.min(...cluster.signals.map((s) => s.signalPrice)).toFixed(2)} - $${Math.max(...cluster.signals.map((s) => s.signalPrice)).toFixed(2)}`
+            );
+            console.log(
+                `     Time: ${convertToLimaTime(cluster.startTime)} → ${convertToLimaTime(cluster.endTime)} (${Math.round((cluster.endTime - cluster.startTime) / (60 * 1000))} min)`
+            );
+
             // Show first few signals in cluster
             const displaySignals = cluster.signals.slice(0, 3);
             for (const signal of displaySignals) {
                 const result = signal.reachedTarget ? "✅ TP" : "❌ Failed";
-                console.log(`     [${signal.detectorType.toUpperCase()}] ${convertToLimaTime(signal.signalTimestamp).slice(-8)} @ $${signal.signalPrice.toFixed(2)} → ${result} (${(signal.actualTPPercent * 100).toFixed(3)}%)`);
+                console.log(
+                    `     [${signal.detectorType.toUpperCase()}] ${convertToLimaTime(signal.signalTimestamp).slice(-8)} @ $${signal.signalPrice.toFixed(2)} → ${result} (${(signal.actualTPPercent * 100).toFixed(3)}%)`
+                );
             }
             if (cluster.signals.length > 3) {
-                console.log(`     ... and ${cluster.signals.length - 3} more signals`);
+                console.log(
+                    `     ... and ${cluster.signals.length - 3} more signals`
+                );
             }
         }
-        
+
         console.log(""); // Add space between phases
     }
 
     console.log("\n" + "=".repeat(80));
-    
+
     // Overall summary
     const totalSignals = phases.reduce((sum, p) => sum + p.signals.length, 0);
-    const totalSuccessful = phases.reduce((sum, p) => sum + p.signals.filter(s => s.reachedTarget).length, 0);
-    const totalClusters = phases.reduce((sum, p) => sum + identifySignalClusters(p.signals).length, 0);
-    const overallRate = totalSignals > 0 ? ((totalSuccessful / totalSignals) * 100).toFixed(1) : '0';
-    
+    const totalSuccessful = phases.reduce(
+        (sum, p) => sum + p.signals.filter((s) => s.reachedTarget).length,
+        0
+    );
+    const totalClusters = phases.reduce(
+        (sum, p) => sum + identifySignalClusters(p.signals).length,
+        0
+    );
+    const overallRate =
+        totalSignals > 0
+            ? ((totalSuccessful / totalSignals) * 100).toFixed(1)
+            : "0";
+
     console.log(`\n📈 PHASE ANALYSIS SUMMARY:`);
     console.log(`   Total Phases: ${phases.length}`);
     console.log(`   Total Clusters: ${totalClusters}`);
     console.log(`   Total Signals: ${totalSignals}`);
     console.log(`   Successful Signals: ${totalSuccessful} (${overallRate}%)`);
-    console.log(`   Avg Signals per Phase: ${(totalSignals / phases.length).toFixed(1)}`);
-    console.log(`   Avg Clusters per Phase: ${(totalClusters / phases.length).toFixed(1)}`);
-    console.log(`   Avg Signals per Cluster: ${(totalSignals / totalClusters).toFixed(1)}`);
+    console.log(
+        `   Avg Signals per Phase: ${(totalSignals / phases.length).toFixed(1)}`
+    );
+    console.log(
+        `   Avg Clusters per Phase: ${(totalClusters / phases.length).toFixed(1)}`
+    );
+    console.log(
+        `   Avg Signals per Cluster: ${(totalSignals / totalClusters).toFixed(1)}`
+    );
 }
 
 // Removed old printSummary function - replaced with phase-based analysis

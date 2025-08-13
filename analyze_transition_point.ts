@@ -37,17 +37,21 @@ const priceGap = exhaustionTPLevel - absorptionSignalPrice;
 
 console.log("Critical Analysis:");
 console.log(`- Time gap: ${timeDiffMinutes} minutes`);
-console.log(`- Price gap: $${Math.abs(priceGap).toFixed(2)} (Absorption ${priceGap > 0 ? 'BELOW' : 'ABOVE'} exhaustion TP)`);
+console.log(
+    `- Price gap: $${Math.abs(priceGap).toFixed(2)} (Absorption ${priceGap > 0 ? "BELOW" : "ABOVE"} exhaustion TP)`
+);
 console.log();
 
-if (Math.abs(priceGap) < 0.10 && timeDiffMinutes < 10) {
+if (Math.abs(priceGap) < 0.1 && timeDiffMinutes < 10) {
     console.log("🟢 LIKELY SAME SWING: Small price gap and short time window");
     console.log("   - Absorption signal too close to exhaustion TP");
     console.log("   - Suggests system should have waited for more separation");
-} else if (Math.abs(priceGap) > 0.30 || timeDiffMinutes > 20) {
-    console.log("🟡 LIKELY SEPARATE PHASES: Significant separation in time/price");
+} else if (Math.abs(priceGap) > 0.3 || timeDiffMinutes > 20) {
+    console.log(
+        "🟡 LIKELY SEPARATE PHASES: Significant separation in time/price"
+    );
     console.log("   - Exhaustion caught initial drop");
-    console.log("   - Market consolidated/bounced");  
+    console.log("   - Market consolidated/bounced");
     console.log("   - Absorption caught continuation");
 } else {
     console.log("🟠 BORDERLINE CASE: Moderate separation");
@@ -69,8 +73,12 @@ If price action 19:18-19:48 showed:
 `);
 
 console.log("Current evidence:");
-console.log(`- Absorption signaled at $130.89 (${(priceGap * -1).toFixed(2)} ABOVE exhaustion TP)`);
-console.log("- This suggests price BOUNCED after exhaustion TP");  
+console.log(
+    `- Absorption signaled at $130.89 (${(priceGap * -1).toFixed(2)} ABOVE exhaustion TP)`
+);
+console.log("- This suggests price BOUNCED after exhaustion TP");
 console.log("- If true, absorption caught a legitimate new leg down");
 console.log();
-console.log("CONCLUSION: Price gap suggests TWO PHASES, not one continuous swing");
+console.log(
+    "CONCLUSION: Price gap suggests TWO PHASES, not one continuous swing"
+);
