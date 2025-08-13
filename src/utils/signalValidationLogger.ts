@@ -187,9 +187,10 @@ export interface SignalRejectionRecord {
         | DeltaCVDCalculatedValues;
 
     // Post-rejection analysis (filled later)
-    subsequentMovement5min?: number;
-    subsequentMovement15min?: number;
-    subsequentMovement1hr?: number;
+    actualTPPrice?: number; // The price where TP would have been hit (if reached)
+    actualSLPrice?: number; // The price where SL would have been hit (if reached)
+    maxFavorableMove?: number; // The best price reached in favorable direction
+    timeToTP?: number; // Minutes until TP would have been reached (if reached)
     wasValidSignal?: boolean; // True if significant movement occurred despite rejection
     tpSlStatus?: "TP" | "SL" | "NEITHER"; // Would have hit target or stop loss
 
@@ -289,9 +290,10 @@ export interface SuccessfulSignalRecord {
     marketVolatility: number;
 
     // Post-signal analysis (filled later)
-    subsequentMovement5min?: number;
-    subsequentMovement15min?: number;
-    subsequentMovement90min?: number;
+    actualTPPrice?: number; // The price where TP was hit (if reached)
+    actualSLPrice?: number; // The price where SL was hit (if reached)
+    maxFavorableMove?: number; // The best price reached in favorable direction
+    timeToTP?: number; // Minutes until TP was reached (if reached)
     wasTopOrBottomSignal?: boolean;
     signalQuality?: "top" | "bottom" | "noise";
     tpSlStatus?: "TP" | "SL" | "NEITHER"; // Target reached or stop loss hit
@@ -674,9 +676,10 @@ export class SignalValidationLogger {
 
                 const outcomeFields = [
                     "confidence",
-                    "subsequentMovement5min",
-                    "subsequentMovement15min",
-                    "subsequentMovement1hr",
+                    "actualTPPrice",
+                    "actualSLPrice",
+                    "maxFavorableMove",
+                    "timeToTP",
                     "wasValidSignal",
                     "TP_SL",
                     "crossTimeframe",
@@ -771,9 +774,10 @@ export class SignalValidationLogger {
 
                 const outcomeFields = [
                     "confidence",
-                    "subsequentMovement5min",
-                    "subsequentMovement15min",
-                    "subsequentMovement1hr",
+                    "actualTPPrice",
+                    "actualSLPrice",
+                    "maxFavorableMove",
+                    "timeToTP",
                     "wasValidSignal",
                     "TP_SL",
                     "crossTimeframe",
@@ -1631,7 +1635,15 @@ export class SignalValidationLogger {
         signalPrice: number,
         signalSide: "buy" | "sell",
         endTime: number
-    ): { hitStopLoss: boolean; hitTarget: boolean; finalPrice: number | null } {
+    ): {
+        hitStopLoss: boolean;
+        hitTarget: boolean;
+        finalPrice: number | null;
+        actualTPPrice: number | null;
+        actualSLPrice: number | null;
+        maxFavorableMove: number | null;
+        timeToTP: number | null;
+    } {
         const stopLossPrice =
             signalSide === "buy"
                 ? signalPrice * (1 - this.STOP_LOSS_THRESHOLD) // Buy signal: stop loss below entry
@@ -1647,34 +1659,64 @@ export class SignalValidationLogger {
         let hitStopLossFirst = false;
         let finalPrice: number | null = null;
 
+        // Track actual prices and timing
+        let actualTPPrice: number | null = null;
+        let actualSLPrice: number | null = null;
+        let maxFavorableMove: number | null = null;
+        let timeToTP: number | null = null;
+
+        // Initialize max favorable move tracking
+        let bestPriceSoFar = signalPrice;
+
         // Check price history from signal time to endTime
-        // Track BOTH: if TP was reached AND if SL was hit before TP
         for (const [timestamp, price] of this.priceHistory) {
             if (timestamp <= signalTimestamp) continue;
             if (timestamp > endTime) break;
 
             finalPrice = price;
 
+            // Track max favorable move (best price in the direction we want)
+            if (signalSide === "buy" && price > bestPriceSoFar) {
+                bestPriceSoFar = price;
+                maxFavorableMove = FinancialMath.divideQuantities(
+                    price - signalPrice,
+                    signalPrice
+                );
+            }
+            if (signalSide === "sell" && price < bestPriceSoFar) {
+                bestPriceSoFar = price;
+                maxFavorableMove = FinancialMath.divideQuantities(
+                    signalPrice - price,
+                    signalPrice
+                );
+            }
+
             // Check for stop loss hit (only matters if TP not yet reached)
             if (!hitTarget) {
                 if (signalSide === "buy" && price <= stopLossPrice) {
                     hitStopLoss = true;
-                    hitStopLossFirst = true; // SL hit before TP
+                    hitStopLossFirst = true;
+                    actualSLPrice = price;
                 }
                 if (signalSide === "sell" && price >= stopLossPrice) {
                     hitStopLoss = true;
-                    hitStopLossFirst = true; // SL hit before TP
+                    hitStopLossFirst = true;
+                    actualSLPrice = price;
                 }
             }
 
             // Check for target hit
-            if (signalSide === "buy" && price >= targetPrice) {
-                hitTarget = true;
-                // Don't break - continue to check full timeframe
-            }
-            if (signalSide === "sell" && price <= targetPrice) {
-                hitTarget = true;
-                // Don't break - continue to check full timeframe
+            if (!hitTarget) {
+                if (signalSide === "buy" && price >= targetPrice) {
+                    hitTarget = true;
+                    actualTPPrice = price;
+                    timeToTP = (timestamp - signalTimestamp) / (1000 * 60); // Convert to minutes
+                }
+                if (signalSide === "sell" && price <= targetPrice) {
+                    hitTarget = true;
+                    actualTPPrice = price;
+                    timeToTP = (timestamp - signalTimestamp) / (1000 * 60); // Convert to minutes
+                }
             }
         }
 
@@ -1686,7 +1728,15 @@ export class SignalValidationLogger {
             finalPrice = this.currentPrice;
         }
 
-        return { hitStopLoss, hitTarget, finalPrice };
+        return {
+            hitStopLoss,
+            hitTarget,
+            finalPrice,
+            actualTPPrice,
+            actualSLPrice,
+            maxFavorableMove,
+            timeToTP,
+        };
     }
 
     /**
@@ -1819,23 +1869,12 @@ export class SignalValidationLogger {
         const currentPrice = this.currentPrice;
         if (currentPrice === null) return;
 
-        const movement = FinancialMath.divideQuantities(
-            currentPrice - originalPrice,
-            originalPrice
-        );
-
         switch (timeframe) {
             case "5min":
-                record.subsequentMovement5min = movement;
-                break;
             case "15min":
-                record.subsequentMovement15min = movement;
+                // Skip these timeframes - we only validate at 90min
                 break;
             case "90min":
-                record.subsequentMovement90min = movement;
-
-                // signalSide is now mandatory - no need to check
-
                 // Check if stop loss or target was hit within 90 minutes
                 const endTime = record.timestamp + 90 * 60 * 1000;
                 const outcome = this.checkSignalOutcome(
@@ -1844,6 +1883,16 @@ export class SignalValidationLogger {
                     record.signalSide,
                     endTime
                 );
+
+                // Store the actual price and timing data
+                if (outcome.actualTPPrice !== null)
+                    record.actualTPPrice = outcome.actualTPPrice;
+                if (outcome.actualSLPrice !== null)
+                    record.actualSLPrice = outcome.actualSLPrice;
+                if (outcome.maxFavorableMove !== null)
+                    record.maxFavorableMove = outcome.maxFavorableMove;
+                if (outcome.timeToTP !== null)
+                    record.timeToTP = outcome.timeToTP;
 
                 // Signal is only successful if it reached target WITHOUT hitting stop loss
                 record.wasTopOrBottomSignal =
@@ -1855,11 +1904,18 @@ export class SignalValidationLogger {
                     record.signalQuality = "noise"; // Stop loss hit = failed signal
                 } else if (outcome.hitTarget) {
                     record.tpSlStatus = "TP";
-                    // Determine if top or bottom signal based on movement
-                    if (movement >= this.TARGET_THRESHOLD) {
-                        record.signalQuality = "bottom"; // Price went up = bottom signal
-                    } else if (movement <= -this.TARGET_THRESHOLD) {
-                        record.signalQuality = "top"; // Price went down = top signal
+                    // Determine if top or bottom signal based on max favorable move
+                    if (
+                        outcome.maxFavorableMove &&
+                        outcome.maxFavorableMove >= this.TARGET_THRESHOLD
+                    ) {
+                        if (record.signalSide === "buy") {
+                            record.signalQuality = "bottom"; // Buy signal that went up = bottom signal
+                        } else {
+                            record.signalQuality = "top"; // Sell signal that went down = top signal
+                        }
+                    } else {
+                        record.signalQuality = "noise"; // Didn't reach significant movement
                     }
                 } else {
                     record.tpSlStatus = "NEITHER";
@@ -1881,20 +1937,12 @@ export class SignalValidationLogger {
         const currentPrice = this.currentPrice;
         if (currentPrice === null) return;
 
-        const movement = FinancialMath.divideQuantities(
-            currentPrice - originalPrice,
-            originalPrice
-        );
-
         switch (timeframe) {
             case "5min":
-                record.subsequentMovement5min = movement;
-                break;
             case "15min":
-                record.subsequentMovement15min = movement;
+                // Skip these timeframes - we only validate meaningfully at 1hr and 90min
                 break;
             case "1hr":
-                record.subsequentMovement1hr = movement;
                 // Write regular rejection record at 1hr
                 this.writeRejectionRecord(record);
                 break;
@@ -1902,8 +1950,6 @@ export class SignalValidationLogger {
             case "90min":
                 // Final validation to check if this was a missed opportunity
                 // Determine what would have happened if signal was not rejected
-
-                // signalSide is now mandatory - no need to check
 
                 // Check if it would have hit target or stop loss within 90 minutes
                 const endTime = record.timestamp + 90 * 60 * 1000;
@@ -1913,6 +1959,16 @@ export class SignalValidationLogger {
                     record.signalSide,
                     endTime
                 );
+
+                // Store the actual price and timing data
+                if (outcome.actualTPPrice !== null)
+                    record.actualTPPrice = outcome.actualTPPrice;
+                if (outcome.actualSLPrice !== null)
+                    record.actualSLPrice = outcome.actualSLPrice;
+                if (outcome.maxFavorableMove !== null)
+                    record.maxFavorableMove = outcome.maxFavorableMove;
+                if (outcome.timeToTP !== null)
+                    record.timeToTP = outcome.timeToTP;
 
                 // Signal was a missed opportunity if it would have hit target without stop loss
                 record.wasValidSignal =
@@ -2124,12 +2180,13 @@ export class SignalValidationLogger {
 
         const outcomeFields = [
             record.parameterValues.confidence || "",
-            record.subsequentMovement5min || "",
-            record.subsequentMovement15min || "",
-            record.subsequentMovement90min || "", // Map 90min to 1hr header for compatibility
+            record.actualTPPrice || "",
+            record.actualSLPrice || "",
+            record.maxFavorableMove || "",
+            record.timeToTP || "",
             record.wasTopOrBottomSignal !== undefined
                 ? record.wasTopOrBottomSignal
-                : "", // Map to wasValidSignal header for compatibility
+                : "",
             record.tpSlStatus || "",
             record.crossTimeframe || false,
             record.institutionalVolume || false,
@@ -2284,9 +2341,10 @@ export class SignalValidationLogger {
 
         const outcomeFields = [
             record.confidence,
-            record.subsequentMovement5min || "",
-            record.subsequentMovement15min || "",
-            record.subsequentMovement1hr || "",
+            record.actualTPPrice || "",
+            record.actualSLPrice || "",
+            record.maxFavorableMove || "",
+            record.timeToTP || "",
             record.wasValidSignal !== undefined ? record.wasValidSignal : "",
             record.tpSlStatus || "",
             record.crossTimeframe || false,

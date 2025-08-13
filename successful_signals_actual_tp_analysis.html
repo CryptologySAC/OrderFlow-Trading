@@ -1,636 +1,623 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html>
-    <head>
-        <title>Successful Signals - Actual Price Movement Analysis</title>
-        <style>
-            body {
-                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-                margin: 20px;
-                background-color: #1a1a1a;
-                color: #e0e0e0;
-            }
-            h1 {
-                color: #4caf50;
-                border-bottom: 3px solid #4caf50;
-                padding-bottom: 10px;
-            }
-            table {
-                border-collapse: collapse;
-                width: 100%;
-                background-color: #2a2a2a;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-                margin: 20px 0;
-            }
-            th {
-                background-color: #4caf50;
-                color: white;
-                padding: 12px;
-                text-align: left;
-                font-weight: bold;
-                position: sticky;
-                top: 0;
-            }
-            td {
-                padding: 10px;
-                border-bottom: 1px solid #444;
-            }
-            tr:hover {
-                background-color: #333;
-            }
-            .success {
-                color: #4caf50;
-                font-weight: bold;
-            }
-            .failure {
-                color: #f44336;
-                font-weight: bold;
-            }
-            .buy {
-                color: #4caf50;
-            }
-            .sell {
-                color: #f44336;
-            }
-            .price {
-                font-family: "Courier New", monospace;
-                color: #ffa726;
-            }
-            .percent {
-                font-weight: bold;
-            }
-            .summary {
-                background-color: #2a2a2a;
-                padding: 20px;
-                border-radius: 5px;
-                margin-bottom: 30px;
-                border: 1px solid #444;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>
-            Successful Signals - Actual Maximum Price Movement Within 90 Minutes
-        </h1>
-        <div class="summary">
-            <p>
-                <strong>Target Movement:</strong> 0.7% |
-                <strong>Time Window:</strong> 90 minutes |
-                <strong>Timezone:</strong> Lima (UTC-5)
-            </p>
-            <p>
-                <strong>Analysis:</strong> For each signal marked as
-                "successful", showing the ACTUAL maximum favorable price reached
-                within 90 minutes
-            </p>
-        </div>
-
-        <table>
-            <tr>
-                <th>Signal Type</th>
-                <th>Signal Timestamp</th>
-                <th>Signal Time (Lima)</th>
-                <th>Signal Price</th>
-                <th>Signal Side</th>
-                <th>Target TP Price (0.7%)</th>
-                <th>Actual Max/Min Price</th>
-                <th>Actual TP %</th>
-                <th>Max SL Price Before TP</th>
-                <th>Max SL % Before TP</th>
-                <th>Minutes to Max/Min</th>
-                <th>Reached 0.7%?</th>
-            </tr>
-
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754966268734</td>
-                <td>08/11/2025, 21:37:48</td>
-                <td class="price">$121.29</td>
-                <td class="sell">SELL</td>
-                <td class="price">$120.44</td>
-                <td class="price">$119.28</td>
-                <td class="percent success">1.657%</td>
-                <td class="price">$121.47</td>
-                <td class="percent">0.148%</td>
-                <td>68.2 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754967065347</td>
-                <td>08/11/2025, 21:51:05</td>
-                <td class="price">$120.59</td>
-                <td class="sell">SELL</td>
-                <td class="price">$119.75</td>
-                <td class="price">$119.28</td>
-                <td class="percent success">1.086%</td>
-                <td class="price">$120.70</td>
-                <td class="percent">0.091%</td>
-                <td>54.9 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754967116044</td>
-                <td>08/11/2025, 21:51:56</td>
-                <td class="price">$120.50</td>
-                <td class="sell">SELL</td>
-                <td class="price">$119.66</td>
-                <td class="price">$119.28</td>
-                <td class="percent success">1.012%</td>
-                <td class="price">$120.62</td>
-                <td class="percent">0.100%</td>
-                <td>54.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754967117049</td>
-                <td>08/11/2025, 21:51:57</td>
-                <td class="price">$120.44</td>
-                <td class="sell">SELL</td>
-                <td class="price">$119.60</td>
-                <td class="price">$119.28</td>
-                <td class="percent success">0.963%</td>
-                <td class="price">$120.62</td>
-                <td class="percent">0.149%</td>
-                <td>54.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754967119933</td>
-                <td>08/11/2025, 21:51:59</td>
-                <td class="price">$120.46</td>
-                <td class="sell">SELL</td>
-                <td class="price">$119.62</td>
-                <td class="price">$119.28</td>
-                <td class="percent success">0.980%</td>
-                <td class="price">$120.62</td>
-                <td class="percent">0.133%</td>
-                <td>54.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754976780587</td>
-                <td>08/12/2025, 00:33:00</td>
-                <td class="price">$119.50</td>
-                <td class="sell">SELL</td>
-                <td class="price">$118.66</td>
-                <td class="price">$118.44</td>
-                <td class="percent success">0.887%</td>
-                <td class="price">$119.76</td>
-                <td class="percent">0.218%</td>
-                <td>6.7 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977053279</td>
-                <td>08/12/2025, 00:37:33</td>
-                <td class="price">$119.49</td>
-                <td class="sell">SELL</td>
-                <td class="price">$118.65</td>
-                <td class="price">$118.44</td>
-                <td class="percent success">0.879%</td>
-                <td class="price">$119.49</td>
-                <td class="percent">0.000%</td>
-                <td>2.2 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977297436</td>
-                <td>08/12/2025, 00:41:37</td>
-                <td class="price">$118.74</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.57</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.162%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.143%</td>
-                <td>48.1 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977298710</td>
-                <td>08/12/2025, 00:41:38</td>
-                <td class="price">$118.72</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.55</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.179%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.126%</td>
-                <td>48.1 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977301178</td>
-                <td>08/12/2025, 00:41:41</td>
-                <td class="price">$118.71</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.54</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.188%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.118%</td>
-                <td>48.1 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977302328</td>
-                <td>08/12/2025, 00:41:42</td>
-                <td class="price">$118.67</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.50</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.222%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.084%</td>
-                <td>48.1 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977303590</td>
-                <td>08/12/2025, 00:41:43</td>
-                <td class="price">$118.67</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.50</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.222%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.084%</td>
-                <td>48.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977305044</td>
-                <td>08/12/2025, 00:41:45</td>
-                <td class="price">$118.70</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.53</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.196%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.110%</td>
-                <td>48.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977306097</td>
-                <td>08/12/2025, 00:41:46</td>
-                <td class="price">$118.69</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.52</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.205%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.101%</td>
-                <td>48.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977308612</td>
-                <td>08/12/2025, 00:41:48</td>
-                <td class="price">$118.67</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.50</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.222%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.084%</td>
-                <td>48.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977313027</td>
-                <td>08/12/2025, 00:41:53</td>
-                <td class="price">$118.66</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.49</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.230%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.076%</td>
-                <td>47.9 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977316094</td>
-                <td>08/12/2025, 00:41:56</td>
-                <td class="price">$118.64</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.47</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.247%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.059%</td>
-                <td>47.8 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977319700</td>
-                <td>08/12/2025, 00:41:59</td>
-                <td class="price">$118.64</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.47</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.247%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.059%</td>
-                <td>47.8 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977321207</td>
-                <td>08/12/2025, 00:42:01</td>
-                <td class="price">$118.64</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.47</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.247%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.059%</td>
-                <td>47.8 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754977322230</td>
-                <td>08/12/2025, 00:42:02</td>
-                <td class="price">$118.63</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.46</td>
-                <td class="price">$120.12</td>
-                <td class="percent success">1.256%</td>
-                <td class="price">$118.57</td>
-                <td class="percent">0.051%</td>
-                <td>47.7 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984852665</td>
-                <td>08/12/2025, 02:47:32</td>
-                <td class="price">$119.02</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.85</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">0.991%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.235%</td>
-                <td>59.2 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984853879</td>
-                <td>08/12/2025, 02:47:33</td>
-                <td class="price">$118.99</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.82</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.017%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.210%</td>
-                <td>59.2 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984856609</td>
-                <td>08/12/2025, 02:47:36</td>
-                <td class="price">$118.92</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.75</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.076%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.151%</td>
-                <td>59.1 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984858680</td>
-                <td>08/12/2025, 02:47:38</td>
-                <td class="price">$118.93</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.76</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.068%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.160%</td>
-                <td>59.1 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984859704</td>
-                <td>08/12/2025, 02:47:39</td>
-                <td class="price">$118.95</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.78</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.051%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.177%</td>
-                <td>59.1 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984862337</td>
-                <td>08/12/2025, 02:47:42</td>
-                <td class="price">$118.95</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.78</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.051%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.177%</td>
-                <td>59.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984868402</td>
-                <td>08/12/2025, 02:47:48</td>
-                <td class="price">$118.99</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.82</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.017%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.210%</td>
-                <td>58.9 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984869923</td>
-                <td>08/12/2025, 02:47:49</td>
-                <td class="price">$119.01</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.84</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.000%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.227%</td>
-                <td>58.9 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984873590</td>
-                <td>08/12/2025, 02:47:53</td>
-                <td class="price">$119.01</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.84</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.000%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.227%</td>
-                <td>58.9 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984875855</td>
-                <td>08/12/2025, 02:47:55</td>
-                <td class="price">$119.01</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.84</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">1.000%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.227%</td>
-                <td>58.8 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984877344</td>
-                <td>08/12/2025, 02:47:57</td>
-                <td class="price">$119.02</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.85</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">0.991%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.235%</td>
-                <td>58.8 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984888622</td>
-                <td>08/12/2025, 02:48:08</td>
-                <td class="price">$119.03</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.86</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">0.983%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.244%</td>
-                <td>58.6 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1754984919564</td>
-                <td>08/12/2025, 02:48:39</td>
-                <td class="price">$119.03</td>
-                <td class="buy">BUY</td>
-                <td class="price">$119.86</td>
-                <td class="price">$120.20</td>
-                <td class="percent success">0.983%</td>
-                <td class="price">$118.74</td>
-                <td class="percent">0.244%</td>
-                <td>58.1 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1755000850513</td>
-                <td>08/12/2025, 07:14:10</td>
-                <td class="price">$119.40</td>
-                <td class="buy">BUY</td>
-                <td class="price">$120.24</td>
-                <td class="price">$121.55</td>
-                <td class="percent success">1.801%</td>
-                <td class="price">$119.04</td>
-                <td class="percent">0.302%</td>
-                <td>20.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>ABSORPTION</td>
-                <td>1755000851850</td>
-                <td>08/12/2025, 07:14:11</td>
-                <td class="price">$119.42</td>
-                <td class="buy">BUY</td>
-                <td class="price">$120.26</td>
-                <td class="price">$121.55</td>
-                <td class="percent success">1.784%</td>
-                <td class="price">$119.04</td>
-                <td class="percent">0.318%</td>
-                <td>20.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>DELTACVD</td>
-                <td>1754967117043</td>
-                <td>08/11/2025, 21:51:57</td>
-                <td class="price">$120.45</td>
-                <td class="sell">SELL</td>
-                <td class="price">$119.61</td>
-                <td class="price">$119.28</td>
-                <td class="percent success">0.971%</td>
-                <td class="price">$120.62</td>
-                <td class="percent">0.141%</td>
-                <td>54.0 min</td>
-                <td class="success">✅ YES</td>
-            </tr>
-            <tr>
-                <td>DELTACVD</td>
-                <td>1754988460618</td>
-                <td>08/12/2025, 03:47:40</td>
-                <td class="price">$119.90</td>
-                <td class="sell">SELL</td>
-                <td class="price">$119.06</td>
-                <td class="price">$119.23</td>
-                <td class="percent failure">0.559%</td>
-                <td class="price">$120.20</td>
-                <td class="percent">0.250%</td>
-                <td>56.6 min</td>
-                <td class="failure">❌ NO</td>
-            </tr>
-        </table>
-
-        <div class="summary">
-            <h2>Summary</h2>
-            <p>Total Signals in "Successful" Logs: <strong>37</strong></p>
-            <p>Actually Reached 0.7% Target: <strong>36</strong></p>
-            <p>Failed to Reach Target: <strong>1</strong></p>
-            <p>Success Rate: <strong>97.3%</strong></p>
-        </div>
-
-        <p style="margin-top: 40px; color: #888; font-size: 12px">
-            Generated: 2025-08-12T17:22:16.954Z<br />
-            Price data source: Reconstructed from rejected_missed log files
-        </p>
-    </body>
+<head>
+    <title>Successful Signals - Actual Price Movement Analysis</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        h1 {
+            color: #4CAF50;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background-color: #2a2a2a;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            margin: 20px 0;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #444;
+        }
+        tr:hover {
+            background-color: #333;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .failure {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .buy {
+            color: #4CAF50;
+        }
+        .sell {
+            color: #f44336;
+        }
+        .price {
+            font-family: 'Courier New', monospace;
+            color: #ffa726;
+        }
+        .percent {
+            font-weight: bold;
+        }
+        .summary {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+            border: 1px solid #444;
+        }
+    </style>
+</head>
+<body>
+    <h1>Successful Signals - Grouped By Market Swings</h1>
+    <div class="summary">
+        <p><strong>Target Movement:</strong> 0.7% | <strong>Time Window:</strong> 90 minutes | <strong>Timezone:</strong> Lima (UTC-5)</p>
+        <p><strong>Analysis:</strong> Signals grouped by market structure swings, showing which signals captured the same price movement</p>
+    </div>
+    
+    
+    <h2>Swing #3: UP ↑ $130.33 → $131.54 (0.93%)</h2>
+    <p><strong>Duration:</strong> 08/12/2025, 18:57:06 → 08/12/2025, 19:15:35 | <strong>Signals:</strong> 1</p>
+    
+    <table>
+        <tr>
+            <th>Signal Type</th>
+            <th>Signal Time</th>
+            <th>Signal Price</th>
+            <th>Side</th>
+            <th>Target TP</th>
+            <th>Max Price</th>
+            <th>Actual TP %</th>
+            <th>Minutes to TP</th>
+            <th>Reached 0.7%?</th>
+        </tr>
+        
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:15:05</td>
+            <td class="price">$131.26</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.34</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.716%</td>
+            <td>69.3 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+    </table>
+    <p><strong>Swing Result:</strong> 1/1 signals successful (100.0%)</p>
+    
+    <h2>Swing #4: DOWN ↓ $131.54 → $129.59 (1.48%)</h2>
+    <p><strong>Duration:</strong> 08/12/2025, 19:15:35 → 08/12/2025, 20:24:23 | <strong>Signals:</strong> 38</p>
+    
+    <table>
+        <tr>
+            <th>Signal Type</th>
+            <th>Signal Time</th>
+            <th>Signal Price</th>
+            <th>Side</th>
+            <th>Target TP</th>
+            <th>Max Price</th>
+            <th>Actual TP %</th>
+            <th>Minutes to TP</th>
+            <th>Reached 0.7%?</th>
+        </tr>
+        
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:15:52</td>
+            <td class="price">$131.29</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.37</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>68.5 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:15:55</td>
+            <td class="price">$131.27</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.35</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.724%</td>
+            <td>68.5 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:15:56</td>
+            <td class="price">$131.25</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.33</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.709%</td>
+            <td>68.4 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:15:57</td>
+            <td class="price">$131.25</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.33</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.709%</td>
+            <td>68.4 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:01</td>
+            <td class="price">$131.26</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.34</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.716%</td>
+            <td>68.4 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:09</td>
+            <td class="price">$131.19</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.27</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>68.2 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:14</td>
+            <td class="price">$131.26</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.34</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.716%</td>
+            <td>68.2 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:16</td>
+            <td class="price">$131.30</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.38</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>68.1 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:17</td>
+            <td class="price">$131.33</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.41</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>68.1 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:19</td>
+            <td class="price">$131.35</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.43</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.700%</td>
+            <td>68.1 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:22</td>
+            <td class="price">$131.36</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.44</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.700%</td>
+            <td>68.0 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:24</td>
+            <td class="price">$131.38</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.46</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.708%</td>
+            <td>68.0 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:26</td>
+            <td class="price">$131.39</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.47</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.715%</td>
+            <td>68.0 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:32</td>
+            <td class="price">$131.37</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.45</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.700%</td>
+            <td>67.8 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:34</td>
+            <td class="price">$131.37</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.45</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.700%</td>
+            <td>67.8 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:35</td>
+            <td class="price">$131.38</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.46</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.708%</td>
+            <td>67.8 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:43</td>
+            <td class="price">$131.30</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.38</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>67.7 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:16:54</td>
+            <td class="price">$131.30</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.38</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>67.5 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:01</td>
+            <td class="price">$131.18</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.26</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>67.4 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:05</td>
+            <td class="price">$131.20</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.28</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>67.3 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:06</td>
+            <td class="price">$131.25</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.33</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.709%</td>
+            <td>67.3 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:08</td>
+            <td class="price">$131.26</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.34</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.716%</td>
+            <td>67.3 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:09</td>
+            <td class="price">$131.27</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.35</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.724%</td>
+            <td>67.2 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:12</td>
+            <td class="price">$131.29</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.37</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>67.2 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:14</td>
+            <td class="price">$131.32</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.40</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>67.1 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:23</td>
+            <td class="price">$131.30</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.38</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>67.0 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:24</td>
+            <td class="price">$131.30</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.38</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>67.0 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:26</td>
+            <td class="price">$131.35</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.43</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.700%</td>
+            <td>67.0 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:27</td>
+            <td class="price">$131.35</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.43</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.700%</td>
+            <td>66.9 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:29</td>
+            <td class="price">$131.32</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.40</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>66.9 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:36</td>
+            <td class="price">$131.30</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.38</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.701%</td>
+            <td>66.8 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:49</td>
+            <td class="price">$131.25</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.33</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.709%</td>
+            <td>66.6 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:50</td>
+            <td class="price">$131.25</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.33</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.709%</td>
+            <td>66.5 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:53</td>
+            <td class="price">$131.25</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.33</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.709%</td>
+            <td>66.5 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:17:54</td>
+            <td class="price">$131.27</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.35</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.724%</td>
+            <td>66.5 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 19:18:00</td>
+            <td class="price">$131.26</td>
+            <td class="sell">SELL</td>
+            <td class="price">$130.34</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.716%</td>
+            <td>66.4 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>ABSORPTION</td>
+            <td>08/12/2025, 19:48:14</td>
+            <td class="price">$130.89</td>
+            <td class="sell">SELL</td>
+            <td class="price">$129.97</td>
+            <td class="price">$129.59</td>
+            <td class="percent success">0.749%</td>
+            <td>36.2 min</td>
+            <td class="success">✅ YES</td>
+        </tr>
+        <tr>
+            <td>ABSORPTION</td>
+            <td>08/12/2025, 20:23:26</td>
+            <td class="price">$130.00</td>
+            <td class="sell">SELL</td>
+            <td class="price">$129.09</td>
+            <td class="price">$129.59</td>
+            <td class="percent failure">0.315%</td>
+            <td>0.9 min</td>
+            <td class="failure">❌ NO</td>
+        </tr>
+    </table>
+    <p><strong>Swing Result:</strong> 37/38 signals successful (97.4%)</p>
+    
+    <h2>Swing #5: UP ↑ $129.59 → $133.22 (2.80%)</h2>
+    <p><strong>Duration:</strong> 08/12/2025, 20:24:23 → 08/13/2025, 06:12:27 | <strong>Signals:</strong> 4</p>
+    
+    <table>
+        <tr>
+            <th>Signal Type</th>
+            <th>Signal Time</th>
+            <th>Signal Price</th>
+            <th>Side</th>
+            <th>Target TP</th>
+            <th>Max Price</th>
+            <th>Actual TP %</th>
+            <th>Minutes to TP</th>
+            <th>Reached 0.7%?</th>
+        </tr>
+        
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 20:26:39</td>
+            <td class="price">$129.77</td>
+            <td class="sell">SELL</td>
+            <td class="price">$128.86</td>
+            <td class="price">$129.64</td>
+            <td class="percent failure">0.100%</td>
+            <td>1.1 min</td>
+            <td class="failure">❌ NO</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 20:26:44</td>
+            <td class="price">$129.74</td>
+            <td class="sell">SELL</td>
+            <td class="price">$128.83</td>
+            <td class="price">$129.64</td>
+            <td class="percent failure">0.077%</td>
+            <td>1.0 min</td>
+            <td class="failure">❌ NO</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 20:26:51</td>
+            <td class="price">$129.75</td>
+            <td class="sell">SELL</td>
+            <td class="price">$128.84</td>
+            <td class="price">$129.64</td>
+            <td class="percent failure">0.085%</td>
+            <td>0.9 min</td>
+            <td class="failure">❌ NO</td>
+        </tr>
+        <tr>
+            <td>EXHAUSTION</td>
+            <td>08/12/2025, 20:26:56</td>
+            <td class="price">$129.75</td>
+            <td class="sell">SELL</td>
+            <td class="price">$128.84</td>
+            <td class="price">$129.64</td>
+            <td class="percent failure">0.085%</td>
+            <td>0.8 min</td>
+            <td class="failure">❌ NO</td>
+        </tr>
+    </table>
+    <p><strong>Swing Result:</strong> 0/4 signals successful (0.0%)</p>
+    
+    
+    <div class="summary">
+        <h2>Summary</h2>
+        <p>Total Signals in "Successful" Logs: <strong>44</strong></p>
+        <p>Actually Reached 0.7% Target: <strong>38</strong></p>
+        <p>Failed to Reach Target: <strong>6</strong></p>
+        <p>Success Rate: <strong>86.4%</strong></p>
+    </div>
+    
+    <p style="margin-top: 40px; color: #888; font-size: 12px;">
+        Generated: 2025-08-13T14:31:35.235Z<br>
+        Price data source: Reconstructed from rejected_missed log files
+    </p>
+</body>
 </html>
