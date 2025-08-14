@@ -112,7 +112,6 @@ export class DetectorFactory {
             {
                 id,
                 settings: productionSettings,
-                enhancementMode: productionSettings.enhancementMode,
             }
         );
 

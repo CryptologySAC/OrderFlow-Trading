@@ -120,34 +120,13 @@ export const ExhaustionDetectorSchema = z.object({
     exhaustionThreshold: z.number().min(0.01).max(1.0),
     eventCooldownMs: z.number().int().min(1000).max(300000),
 
-    // Enhancement control
-    useStandardizedZones: z.boolean(),
-    enhancementMode: z.enum(["disabled", "monitoring", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(2.0),
-
-    // Enhanced depletion analysis
-    depletionVolumeThreshold: z.number().min(10).max(100000),
-    depletionRatioThreshold: z.number().min(-1.0).max(0),
-    enableDepletionAnalysis: z.boolean(),
-
     // Dynamic zone tracking for true exhaustion detection
-    enableDynamicZoneTracking: z.boolean(),
     maxZonesPerSide: z.number().int().min(1).max(10),
     zoneDepletionThreshold: z.number().min(0.5).max(0.95),
     gapDetectionTicks: z.number().int().min(1).max(10),
 
-    // Cross-timeframe calculations
-    varianceReductionFactor: z.number().min(0.5).max(3.0),
-    alignmentNormalizationFactor: z.number().min(0.2).max(3.0),
-    passiveVolumeExhaustionRatio: z.number().min(0.3).max(2.0),
-    aggressiveVolumeExhaustionThreshold: z.number().min(0.001).max(0.5),
-    aggressiveVolumeReductionFactor: z.number().min(0.3).max(0.8),
-
     // Additional configurable thresholds to replace magic numbers
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.7), // Replace hardcoded 0.5
-    premiumConfidenceThreshold: z.number().min(0.6).max(0.9), // Replace hardcoded 0.7
-    variancePenaltyFactor: z.number().min(0.5).max(1.5), // Replace hardcoded variance calculation
-    ratioBalanceCenterPoint: z.number().min(0.4).max(0.6), // Replace hardcoded 0.5 center points
 });
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain
@@ -168,15 +147,10 @@ export const AbsorptionDetectorSchema = z.object({
 
     // Confidence and scoring
     minAbsorptionScore: z.number().min(0.3).max(0.99),
-    finalConfidenceRequired: z.number().min(0.1).max(3.0),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
 
     // Balance detection threshold
     balanceThreshold: z.number().min(0.01).max(0.75),
-
-    // Zone confluence parameters (CLAUDE.md compliance - no magic numbers)
-    confluenceMinZones: z.number().int().min(1).max(10),
-    confluenceMaxDistance: z.number().int().min(1).max(20),
 
     // Zone tracking configuration for dynamic absorption detection
     maxZonesPerSide: z.number().int().min(3).max(10),

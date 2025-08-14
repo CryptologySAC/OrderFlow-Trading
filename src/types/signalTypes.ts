@@ -563,11 +563,8 @@ export interface AbsorptionThresholdChecks {
     passiveAbsorptionThreshold: ThresholdCheck<number>;
     expectedMovementScalingFactor: ThresholdCheck<number>;
     minAbsorptionScore: ThresholdCheck<number>;
-    finalConfidenceRequired: ThresholdCheck<number>;
     maxZoneCountForScoring: ThresholdCheck<number>;
     balanceThreshold: ThresholdCheck<number>;
-    confluenceMinZones: ThresholdCheck<number>;
-    confluenceMaxDistance: ThresholdCheck<number>;
     maxZonesPerSide: ThresholdCheck<number>;
     zoneHistoryWindowMs: ThresholdCheck<number>;
     absorptionZoneThreshold: ThresholdCheck<number>;
@@ -582,27 +579,12 @@ export interface AbsorptionThresholdChecks {
 export interface ExhaustionThresholdChecks {
     minAggVolume: ThresholdCheck<number>;
     exhaustionThreshold: ThresholdCheck<number>;
-    minEnhancedConfidenceThreshold: ThresholdCheck<number>;
-    depletionVolumeThreshold: ThresholdCheck<number>;
-    depletionRatioThreshold: ThresholdCheck<number>;
-    alignmentNormalizationFactor: ThresholdCheck<number>;
     timeWindowIndex: ThresholdCheck<number>;
     eventCooldownMs: ThresholdCheck<number>;
-    useStandardizedZones: ThresholdCheck<boolean>;
-    enhancementMode: ThresholdCheck<string>;
-    enableDepletionAnalysis: ThresholdCheck<boolean>;
-    enableDynamicZoneTracking: ThresholdCheck<boolean>;
     maxZonesPerSide: ThresholdCheck<number>;
     zoneDepletionThreshold: ThresholdCheck<number>;
     gapDetectionTicks: ThresholdCheck<number>;
-    passiveVolumeExhaustionRatio: ThresholdCheck<number>;
-    varianceReductionFactor: ThresholdCheck<number>;
-    aggressiveVolumeExhaustionThreshold: ThresholdCheck<number>;
-    aggressiveVolumeReductionFactor: ThresholdCheck<number>;
     passiveRatioBalanceThreshold: ThresholdCheck<number>;
-    premiumConfidenceThreshold: ThresholdCheck<number>;
-    variancePenaltyFactor: ThresholdCheck<number>;
-    ratioBalanceCenterPoint: ThresholdCheck<number>;
 }
 
 /**

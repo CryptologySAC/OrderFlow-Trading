@@ -620,11 +620,8 @@ export class AutomaticParameterOptimizer {
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
                 minAbsorptionScore: config.minAbsorptionScore,
-                finalConfidenceRequired: config.finalConfidenceRequired,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
                 balanceThreshold: config.balanceThreshold,
-                confluenceMinZones: config.confluenceMinZones,
-                confluenceMaxDistance: config.confluenceMaxDistance,
             };
             return mapping[parameterName] || 0;
         } else if (success.detectorType === "exhaustion") {
@@ -634,22 +631,8 @@ export class AutomaticParameterOptimizer {
                 timeWindowIndex: config.timeWindowIndex,
                 exhaustionThreshold: config.exhaustionThreshold,
                 eventCooldownMs: config.eventCooldownMs,
-                depletionVolumeThreshold: config.depletionVolumeThreshold,
-                depletionRatioThreshold: config.depletionRatioThreshold,
-                passiveVolumeExhaustionRatio:
-                    config.passiveVolumeExhaustionRatio,
-                varianceReductionFactor: config.varianceReductionFactor,
-                alignmentNormalizationFactor:
-                    config.alignmentNormalizationFactor,
-                aggressiveVolumeExhaustionThreshold:
-                    config.aggressiveVolumeExhaustionThreshold,
-                aggressiveVolumeReductionFactor:
-                    config.aggressiveVolumeReductionFactor,
                 passiveRatioBalanceThreshold:
                     config.passiveRatioBalanceThreshold,
-                premiumConfidenceThreshold: config.premiumConfidenceThreshold,
-                variancePenaltyFactor: config.variancePenaltyFactor,
-                ratioBalanceCenterPoint: config.ratioBalanceCenterPoint,
             };
             return mapping[parameterName] || 0;
         }
@@ -676,11 +659,8 @@ export class AutomaticParameterOptimizer {
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
                 minAbsorptionScore: config.minAbsorptionScore,
-                finalConfidenceRequired: config.finalConfidenceRequired,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
                 balanceThreshold: config.balanceThreshold,
-                confluenceMinZones: config.confluenceMinZones,
-                confluenceMaxDistance: config.confluenceMaxDistance,
             };
             return mapping[parameterName] || 0;
         } else if (detectorType === "exhaustion") {
@@ -690,22 +670,8 @@ export class AutomaticParameterOptimizer {
                 timeWindowIndex: config.timeWindowIndex,
                 exhaustionThreshold: config.exhaustionThreshold,
                 eventCooldownMs: config.eventCooldownMs,
-                depletionVolumeThreshold: config.depletionVolumeThreshold,
-                depletionRatioThreshold: config.depletionRatioThreshold,
-                passiveVolumeExhaustionRatio:
-                    config.passiveVolumeExhaustionRatio,
-                varianceReductionFactor: config.varianceReductionFactor,
-                alignmentNormalizationFactor:
-                    config.alignmentNormalizationFactor,
-                aggressiveVolumeExhaustionThreshold:
-                    config.aggressiveVolumeExhaustionThreshold,
-                aggressiveVolumeReductionFactor:
-                    config.aggressiveVolumeReductionFactor,
                 passiveRatioBalanceThreshold:
                     config.passiveRatioBalanceThreshold,
-                premiumConfidenceThreshold: config.premiumConfidenceThreshold,
-                variancePenaltyFactor: config.variancePenaltyFactor,
-                ratioBalanceCenterPoint: config.ratioBalanceCenterPoint,
             };
             return mapping[parameterName] || 0;
         }

@@ -124,7 +124,6 @@ export interface SignalRejectionRecord {
     aggressiveVolume: number;
     passiveVolume: number;
     priceEfficiency: number | null;
-    confidence: number;
 
     // EXHAUSTION: All 20 parameters
     exhaustion_minAggVolume?: number;
@@ -1404,13 +1403,6 @@ export class SignalValidationLogger {
                           thresholdChecks.priceEfficiencyThreshold?.calculated
                       ) || 0
                     : 0;
-            const confidence =
-                "minEnhancedConfidenceThreshold" in thresholdChecks
-                    ? Number(
-                          thresholdChecks.minEnhancedConfidenceThreshold
-                              ?.calculated
-                      ) || 0
-                    : 0;
 
             const record: SignalRejectionRecord = {
                 timestamp: event.timestamp,
@@ -1428,7 +1420,6 @@ export class SignalValidationLogger {
                 aggressiveVolume,
                 passiveVolume,
                 priceEfficiency,
-                confidence,
 
                 // ✅ ALL THRESHOLD CHECKS: Every threshold and calculation the detector made
                 thresholdChecks: allThresholdChecks,
@@ -2054,44 +2045,9 @@ export class SignalValidationLogger {
                         JSON.stringify(exhaustionChecks.exhaustionThreshold),
                         JSON.stringify(exhaustionChecks.timeWindowIndex),
                         JSON.stringify(exhaustionChecks.eventCooldownMs),
-                        JSON.stringify(exhaustionChecks.useStandardizedZones),
-                        JSON.stringify(exhaustionChecks.enhancementMode),
-                        JSON.stringify(
-                            exhaustionChecks.minEnhancedConfidenceThreshold
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.enableDepletionAnalysis
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.depletionVolumeThreshold
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.depletionRatioThreshold
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.passiveVolumeExhaustionRatio
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.varianceReductionFactor
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.alignmentNormalizationFactor
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.aggressiveVolumeExhaustionThreshold
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.aggressiveVolumeReductionFactor
-                        ),
+
                         JSON.stringify(
                             exhaustionChecks.passiveRatioBalanceThreshold
-                        ),
-                        JSON.stringify(
-                            exhaustionChecks.premiumConfidenceThreshold
-                        ),
-                        JSON.stringify(exhaustionChecks.variancePenaltyFactor),
-                        JSON.stringify(
-                            exhaustionChecks.ratioBalanceCenterPoint
                         ),
                     ];
                     break;
@@ -2115,13 +2071,9 @@ export class SignalValidationLogger {
                         ),
 
                         JSON.stringify(absorptionChecks.minAbsorptionScore),
-                        JSON.stringify(
-                            absorptionChecks.finalConfidenceRequired
-                        ),
+
                         JSON.stringify(absorptionChecks.maxZoneCountForScoring),
                         JSON.stringify(absorptionChecks.balanceThreshold),
-                        JSON.stringify(absorptionChecks.confluenceMinZones),
-                        JSON.stringify(absorptionChecks.confluenceMaxDistance),
                     ];
                     break;
             }
@@ -2237,34 +2189,10 @@ export class SignalValidationLogger {
                     JSON.stringify(exhaustionChecks.exhaustionThreshold),
                     JSON.stringify(exhaustionChecks.timeWindowIndex),
                     JSON.stringify(exhaustionChecks.eventCooldownMs),
-                    JSON.stringify(exhaustionChecks.useStandardizedZones),
-                    JSON.stringify(exhaustionChecks.enhancementMode),
-                    JSON.stringify(
-                        exhaustionChecks.minEnhancedConfidenceThreshold
-                    ),
-                    JSON.stringify(exhaustionChecks.enableDepletionAnalysis),
-                    JSON.stringify(exhaustionChecks.depletionVolumeThreshold),
-                    JSON.stringify(exhaustionChecks.depletionRatioThreshold),
-                    JSON.stringify(
-                        exhaustionChecks.passiveVolumeExhaustionRatio
-                    ),
-                    JSON.stringify(exhaustionChecks.varianceReductionFactor),
-                    JSON.stringify(
-                        exhaustionChecks.alignmentNormalizationFactor
-                    ),
-                    JSON.stringify(
-                        exhaustionChecks.aggressiveVolumeExhaustionThreshold
-                    ),
-                    JSON.stringify(
-                        exhaustionChecks.aggressiveVolumeReductionFactor
-                    ),
+
                     JSON.stringify(
                         exhaustionChecks.passiveRatioBalanceThreshold
                     ),
-                    JSON.stringify(exhaustionChecks.premiumConfidenceThreshold),
-                    JSON.stringify(exhaustionChecks.variancePenaltyFactor),
-                    JSON.stringify(exhaustionChecks.ratioBalanceCenterPoint),
-                    JSON.stringify(exhaustionChecks.enableDynamicZoneTracking),
                     JSON.stringify(exhaustionChecks.maxZonesPerSide),
                     JSON.stringify(exhaustionChecks.zoneDepletionThreshold),
                     JSON.stringify(exhaustionChecks.gapDetectionTicks),
@@ -2285,11 +2213,8 @@ export class SignalValidationLogger {
                         absorptionChecks.expectedMovementScalingFactor
                     ),
                     JSON.stringify(absorptionChecks.minAbsorptionScore),
-                    JSON.stringify(absorptionChecks.finalConfidenceRequired),
                     JSON.stringify(absorptionChecks.maxZoneCountForScoring),
                     JSON.stringify(absorptionChecks.balanceThreshold),
-                    JSON.stringify(absorptionChecks.confluenceMinZones),
-                    JSON.stringify(absorptionChecks.confluenceMaxDistance),
                     JSON.stringify(absorptionChecks.maxZonesPerSide),
                     JSON.stringify(absorptionChecks.zoneHistoryWindowMs),
                     JSON.stringify(absorptionChecks.absorptionZoneThreshold),
@@ -2387,7 +2312,6 @@ export class SignalValidationLogger {
         ];
 
         const outcomeFields = [
-            record.confidence,
             record.actualTPPrice || "",
             record.actualSLPrice || "",
             record.maxFavorableMove || "",
@@ -2413,34 +2337,10 @@ export class SignalValidationLogger {
                     JSON.stringify(exhaustionChecks.exhaustionThreshold),
                     JSON.stringify(exhaustionChecks.timeWindowIndex),
                     JSON.stringify(exhaustionChecks.eventCooldownMs),
-                    JSON.stringify(exhaustionChecks.useStandardizedZones),
-                    JSON.stringify(exhaustionChecks.enhancementMode),
-                    JSON.stringify(
-                        exhaustionChecks.minEnhancedConfidenceThreshold
-                    ),
-                    JSON.stringify(exhaustionChecks.enableDepletionAnalysis),
-                    JSON.stringify(exhaustionChecks.depletionVolumeThreshold),
-                    JSON.stringify(exhaustionChecks.depletionRatioThreshold),
-                    JSON.stringify(
-                        exhaustionChecks.passiveVolumeExhaustionRatio
-                    ),
-                    JSON.stringify(exhaustionChecks.varianceReductionFactor),
-                    JSON.stringify(
-                        exhaustionChecks.alignmentNormalizationFactor
-                    ),
-                    JSON.stringify(
-                        exhaustionChecks.aggressiveVolumeExhaustionThreshold
-                    ),
-                    JSON.stringify(
-                        exhaustionChecks.aggressiveVolumeReductionFactor
-                    ),
+
                     JSON.stringify(
                         exhaustionChecks.passiveRatioBalanceThreshold
                     ),
-                    JSON.stringify(exhaustionChecks.premiumConfidenceThreshold),
-                    JSON.stringify(exhaustionChecks.variancePenaltyFactor),
-                    JSON.stringify(exhaustionChecks.ratioBalanceCenterPoint),
-                    JSON.stringify(exhaustionChecks.enableDynamicZoneTracking),
                     JSON.stringify(exhaustionChecks.maxZonesPerSide),
                     JSON.stringify(exhaustionChecks.zoneDepletionThreshold),
                     JSON.stringify(exhaustionChecks.gapDetectionTicks),
@@ -2461,11 +2361,8 @@ export class SignalValidationLogger {
                         absorptionChecks.expectedMovementScalingFactor
                     ),
                     JSON.stringify(absorptionChecks.minAbsorptionScore),
-                    JSON.stringify(absorptionChecks.finalConfidenceRequired),
                     JSON.stringify(absorptionChecks.maxZoneCountForScoring),
                     JSON.stringify(absorptionChecks.balanceThreshold),
-                    JSON.stringify(absorptionChecks.confluenceMinZones),
-                    JSON.stringify(absorptionChecks.confluenceMaxDistance),
                     JSON.stringify(absorptionChecks.maxZonesPerSide),
                     JSON.stringify(absorptionChecks.zoneHistoryWindowMs),
                     JSON.stringify(absorptionChecks.absorptionZoneThreshold),
@@ -2677,44 +2574,14 @@ export class SignalValidationLogger {
                 result.enhancementMode =
                     thresholdChecks.enhancementMode.calculated;
             }
-            if ("minEnhancedConfidenceThreshold" in thresholdChecks) {
-                result.minEnhancedConfidenceThreshold =
-                    thresholdChecks.minEnhancedConfidenceThreshold.calculated;
-                result.confidence =
-                    thresholdChecks.minEnhancedConfidenceThreshold.calculated;
-            }
 
             // Handle Exhaustion-specific fields
             if ("exhaustionThreshold" in thresholdChecks) {
                 const exhaustionChecks = thresholdChecks;
                 result.exhaustionThreshold =
                     exhaustionChecks.exhaustionThreshold.calculated;
-                result.useStandardizedZones =
-                    exhaustionChecks.useStandardizedZones.calculated;
-                result.enableDepletionAnalysis =
-                    exhaustionChecks.enableDepletionAnalysis.calculated;
-                result.depletionVolumeThreshold =
-                    exhaustionChecks.depletionVolumeThreshold.calculated;
-                result.depletionRatioThreshold =
-                    exhaustionChecks.depletionRatioThreshold.calculated;
-                result.passiveVolumeExhaustionRatio =
-                    exhaustionChecks.passiveVolumeExhaustionRatio.calculated;
-                result.varianceReductionFactor =
-                    exhaustionChecks.varianceReductionFactor.calculated;
-                result.alignmentNormalizationFactor =
-                    exhaustionChecks.alignmentNormalizationFactor.calculated;
-                result.aggressiveVolumeExhaustionThreshold =
-                    exhaustionChecks.aggressiveVolumeExhaustionThreshold.calculated;
-                result.aggressiveVolumeReductionFactor =
-                    exhaustionChecks.aggressiveVolumeReductionFactor.calculated;
                 result.passiveRatioBalanceThreshold =
                     exhaustionChecks.passiveRatioBalanceThreshold.calculated;
-                result.premiumConfidenceThreshold =
-                    exhaustionChecks.premiumConfidenceThreshold.calculated;
-                result.variancePenaltyFactor =
-                    exhaustionChecks.variancePenaltyFactor.calculated;
-                result.ratioBalanceCenterPoint =
-                    exhaustionChecks.ratioBalanceCenterPoint.calculated;
             }
 
             // Handle Absorption-specific fields
@@ -2732,16 +2599,11 @@ export class SignalValidationLogger {
                     absorptionChecks.expectedMovementScalingFactor.calculated;
                 result.minAbsorptionScore =
                     absorptionChecks.minAbsorptionScore.calculated;
-                result.finalConfidenceRequired =
-                    absorptionChecks.finalConfidenceRequired.calculated;
+
                 result.maxZoneCountForScoring =
                     absorptionChecks.maxZoneCountForScoring.calculated;
                 result.balanceThreshold =
                     absorptionChecks.balanceThreshold.calculated;
-                result.confluenceMinZones =
-                    absorptionChecks.confluenceMinZones.calculated;
-                result.confluenceMaxDistance =
-                    absorptionChecks.confluenceMaxDistance.calculated;
                 result.absorptionThreshold =
                     absorptionChecks.maxAbsorptionRatio.calculated;
 

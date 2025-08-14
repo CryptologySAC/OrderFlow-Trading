@@ -282,18 +282,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const passesThreshold_minPassiveMultiplier =
             actualPassiveMultiplier >= this.settings.minPassiveMultiplier;
 
-        // Calculate final confidence using statistical analysis
-        // finalConfidenceRequired:  Check: confidence >= this.enhancementConfig.finalConfidenceRequired
-        const confidence = this.calculateAbsorptionConfidence(
-            priceEfficiency,
-            absorptionRatio,
-            volumePressure.pressureRatio,
-            relevantZones
-        );
-        const passesThreshold_finalConfidenceRequired =
-            confidence !== null &&
-            confidence >= this.settings.finalConfidenceRequired;
-
         // Calculate absorption Score
         const absorptionScore =
             volumePressure.directionalPassiveVolume > 0
@@ -337,7 +325,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
             passesThreshold_priceEfficiencyThreshold &&
             passesThreshold_maxAbsorptionRatio &&
             passesThreshold_minPassiveMultiplier &&
-            passesThreshold_finalConfidenceRequired &&
             passesThreshold_minAbsorptionScore &&
             passesThreshold_balanceThreshold &&
             passesThreshold_priceStabilityTicks &&
@@ -370,11 +357,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 calculated: actualPassiveMultiplier,
                 op: "EQL", // Check: actualPassiveMultiplier >= threshold
             },
-            finalConfidenceRequired: {
-                threshold: this.settings.finalConfidenceRequired,
-                calculated: confidence ?? -1,
-                op: "EQL",
-            },
+
             minAbsorptionScore: {
                 threshold: this.settings.minAbsorptionScore,
                 calculated: absorptionScore,
@@ -409,16 +392,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 threshold: this.settings.maxZoneCountForScoring,
                 calculated: this.settings.maxZoneCountForScoring,
                 op: "NONE", // Used for scoring calculation, not checked
-            },
-            confluenceMinZones: {
-                threshold: this.settings.confluenceMinZones,
-                calculated: this.settings.confluenceMinZones,
-                op: "NONE", // Zone confluence is evaluated differently
-            },
-            confluenceMaxDistance: {
-                threshold: this.settings.confluenceMaxDistance,
-                calculated: this.settings.confluenceMaxDistance,
-                op: "NONE",
             },
             maxZonesPerSide: {
                 threshold: this.settings.maxZonesPerSide,
@@ -481,8 +454,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 id: `absorption-${this.getId()}-${event.timestamp}`,
                 type: "absorption" as SignalType,
                 side: dominantSide, // Follow institutional flow direction
-                confidence,
                 timestamp: event.timestamp,
+                confidence: 1, //todo
                 data: {
                     price: event.price,
                     zone:
@@ -493,7 +466,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     aggressive: volumePressure.directionalAggressiveVolume,
                     passive: volumePressure.directionalPassiveVolume,
                     refilled: false, // Will be determined later
-                    confidence,
                     absorptionScore: absorptionRatio,
                     passiveMultiplier: actualPassiveMultiplier,
                     priceEfficiency,
@@ -569,11 +541,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 thresholdType = "passive_multiplier";
                 thresholdValue = this.settings.minPassiveMultiplier;
                 actualValue = actualPassiveMultiplier;
-            } else if (!passesThreshold_finalConfidenceRequired) {
-                rejectionReason = "confidence_below_threshold";
-                thresholdType = "confidence_threshold";
-                thresholdValue = this.settings.finalConfidenceRequired;
-                actualValue = confidence ?? 0;
             } else if (!passesThreshold_minAbsorptionScore) {
                 rejectionReason = "absorption_score_too_low";
                 thresholdType = "absorption_score_threshold";
@@ -723,7 +690,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const relevantZones = this.preprocessor.findZonesNearPrice(
             recentZones,
             price,
-            this.settings.confluenceMaxDistance
+            Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance
         );
         if (relevantZones.length === 0) return null;
 
@@ -774,8 +741,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
         confluenceZones: number;
         confluenceStrength: number;
     } {
-        const minConfluenceZones = this.settings.confluenceMinZones;
-        const maxDistance = this.settings.confluenceMaxDistance;
+        const minConfluenceZones =
+            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount;
+        const maxDistance =
+            Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance;
 
         // Find zones that overlap around the current price
         const relevantZones: ZoneSnapshot[] = [];
@@ -986,64 +955,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate final absorption confidence using statistical analysis
-     */
-    private calculateAbsorptionConfidence(
-        priceEfficiency: number,
-        absorptionRatio: number | null,
-        pressureRatio: number,
-        relevantZones: ZoneSnapshot[]
-    ): number {
-        // Validate inputs before creating confidence factors
-        if (
-            !FinancialMath.isValidFinancialNumber(priceEfficiency) ||
-            !absorptionRatio ||
-            !FinancialMath.isValidFinancialNumber(absorptionRatio) ||
-            !FinancialMath.isValidFinancialNumber(pressureRatio)
-        ) {
-            return 0; // Cannot calculate confidence with invalid inputs
-        }
-
-        // Calculate confidence factors using FinancialMath (CLAUDE.md compliance - no bounds forcing)
-        const efficiencyFactor = 1 - priceEfficiency; // Higher efficiency = higher confidence
-        const absorptionFactor = 1 - absorptionRatio; // Lower absorption ratio = higher confidence
-        const pressureFactor = FinancialMath.divideQuantities(pressureRatio, 2); // Pressure component
-        const zoneFactor = FinancialMath.divideQuantities(
-            relevantZones.length,
-            this.settings.maxZoneCountForScoring
-        ); // Zone count component
-
-        // Validate all factors before proceeding (CLAUDE.md compliance - return null for invalid calculations)
-        if (
-            !FinancialMath.isValidFinancialNumber(efficiencyFactor) ||
-            !FinancialMath.isValidFinancialNumber(absorptionFactor) ||
-            !FinancialMath.isValidFinancialNumber(pressureFactor) ||
-            !FinancialMath.isValidFinancialNumber(zoneFactor) ||
-            efficiencyFactor < 0 ||
-            absorptionFactor < 0 ||
-            pressureFactor < 0 ||
-            zoneFactor < 0
-        ) {
-            return 0; // Cannot calculate confidence with invalid factor inputs
-        }
-
-        const confidenceFactors = [
-            efficiencyFactor,
-            absorptionFactor,
-            pressureFactor,
-            zoneFactor,
-        ];
-
-        // Use FinancialMath.calculateMean for statistical precision
-        const confidence = FinancialMath.calculateMean(confidenceFactors);
-
-        if (confidence === null) return 0; // CLAUDE.md compliance: cannot calculate confidence with invalid data
-
-        // Return the calculated confidence without scaling
-        return confidence;
-    }
-
-    /**
      * Calculate price efficiency using FinancialMath (institutional compliance)
      */
     private calculatePriceEfficiency(
@@ -1150,7 +1061,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const relevantZones = this.preprocessor.findZonesNearPrice(
             recentZones,
             event.price,
-            this.settings.confluenceMaxDistance
+            Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance
         );
         if (relevantZones.length === 0) {
             return null;
