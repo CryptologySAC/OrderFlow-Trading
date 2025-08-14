@@ -1,122 +1,126 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-    <title>Threshold Optimization Results - 2025-08-13</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 20px;
-            background: #f5f5f5;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: #333;
-            border-bottom: 3px solid #4CAF50;
-            padding-bottom: 10px;
-        }
-        .detector-section {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .detector-title {
-            color: #2196F3;
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin: 20px 0;
-        }
-        .metrics-box {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 15px;
-        }
-        .metrics-box h3 {
-            margin-top: 0;
-            color: #555;
-        }
-        .threshold-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        .threshold-table th,
-        .threshold-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        .threshold-table th {
-            background: #f8f9fa;
-            font-weight: 600;
-        }
-        .increased {
-            color: #4CAF50;
-            font-weight: bold;
-        }
-        .unchanged {
-            color: #999;
-        }
-        .metric {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-        }
-        .metric-label {
-            color: #666;
-        }
-        .metric-value {
-            font-weight: 600;
-        }
-        .positive {
-            color: #4CAF50;
-        }
-        .negative {
-            color: #f44336;
-        }
-        .neutral {
-            color: #FF9800;
-        }
-        .summary-box {
-            background: #e3f2fd;
-            border-left: 4px solid #2196F3;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .harmless-breakdown {
-            background: #fff3e0;
-            border-radius: 4px;
-            padding: 10px;
-            margin: 10px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🎯 Threshold Optimization Results</h1>
-        <p><strong>Date:</strong> 2025-08-13</p>
-        <p><strong>Objective:</strong> Raise thresholds to eliminate false positives while keeping at least 1 successful signal per phase</p>
-        
-        
+    <head>
+        <title>Threshold Optimization Results - 2025-08-13</title>
+        <style>
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    sans-serif;
+                margin: 20px;
+                background: #f5f5f5;
+            }
+            .container {
+                max-width: 1400px;
+                margin: 0 auto;
+            }
+            h1 {
+                color: #333;
+                border-bottom: 3px solid #4caf50;
+                padding-bottom: 10px;
+            }
+            .detector-section {
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 20px 0;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            .detector-title {
+                color: #2196f3;
+                font-size: 24px;
+                margin-bottom: 20px;
+            }
+            .metrics-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                margin: 20px 0;
+            }
+            .metrics-box {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 15px;
+            }
+            .metrics-box h3 {
+                margin-top: 0;
+                color: #555;
+            }
+            .threshold-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+            }
+            .threshold-table th,
+            .threshold-table td {
+                padding: 10px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+            }
+            .threshold-table th {
+                background: #f8f9fa;
+                font-weight: 600;
+            }
+            .increased {
+                color: #4caf50;
+                font-weight: bold;
+            }
+            .unchanged {
+                color: #999;
+            }
+            .metric {
+                display: flex;
+                justify-content: space-between;
+                padding: 5px 0;
+            }
+            .metric-label {
+                color: #666;
+            }
+            .metric-value {
+                font-weight: 600;
+            }
+            .positive {
+                color: #4caf50;
+            }
+            .negative {
+                color: #f44336;
+            }
+            .neutral {
+                color: #ff9800;
+            }
+            .summary-box {
+                background: #e3f2fd;
+                border-left: 4px solid #2196f3;
+                padding: 15px;
+                margin: 20px 0;
+            }
+            .harmless-breakdown {
+                background: #fff3e0;
+                border-radius: 4px;
+                padding: 10px;
+                margin: 10px 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🎯 Threshold Optimization Results</h1>
+            <p><strong>Date:</strong> 2025-08-13</p>
+            <p>
+                <strong>Objective:</strong> Raise thresholds to eliminate false
+                positives while keeping at least 1 successful signal per phase
+            </p>
+
             <div class="detector-section">
                 <h2 class="detector-title">📊 ABSORPTION Detector</h2>
-                
+
                 <div class="summary-box">
-                    <strong>Optimization Summary:</strong><br>
-                    ✅ Kept 0/13 successful signals<br>
-                    🚫 Eliminated 57 false positives<br>
+                    <strong>Optimization Summary:</strong><br />
+                    ✅ Kept 0/13 successful signals<br />
+                    🚫 Eliminated 57 false positives<br />
                     📈 Maintained 0/3 phases with signals
                 </div>
-                
+
                 <h3>Threshold Adjustments</h3>
                 <table class="threshold-table">
                     <thead>
@@ -128,206 +132,216 @@
                         </tr>
                     </thead>
                     <tbody>
-                        
-                                <tr>
-                                    <td><strong>minAggVolume</strong></td>
-                                    <td>1828.0000</td>
-                                    <td class="unchanged">1828.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>timeWindowIndex</strong></td>
-                                    <td>0.0000</td>
-                                    <td class="unchanged">0.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>eventCooldownMs</strong></td>
-                                    <td>1000.0000</td>
-                                    <td class="unchanged">1000.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>priceEfficiencyThreshold</strong></td>
-                                    <td>0.0046</td>
-                                    <td class="unchanged">0.0046</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>maxAbsorptionRatio</strong></td>
-                                    <td>0.7000</td>
-                                    <td class="unchanged">0.7000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>minPassiveMultiplier</strong></td>
-                                    <td>15.0000</td>
-                                    <td class="unchanged">15.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>passiveAbsorptionThreshold</strong></td>
-                                    <td>0.7100</td>
-                                    <td class="unchanged">0.7100</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>expectedMovementScalingFactor</strong></td>
-                                    <td>10.0000</td>
-                                    <td class="unchanged">10.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>liquidityGradientRange</strong></td>
-                                    <td>5.0000</td>
-                                    <td class="unchanged">5.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>institutionalVolumeThreshold</strong></td>
-                                    <td>100.0000</td>
-                                    <td class="unchanged">100.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>institutionalVolumeRatioThreshold</strong></td>
-                                    <td>12.0000</td>
-                                    <td class="unchanged">12.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>enableInstitutionalVolumeFilter</strong></td>
-                                    <td>true</td>
-                                    <td class="unchanged">true</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>minAbsorptionScore</strong></td>
-                                    <td>0.9200</td>
-                                    <td class="unchanged">0.9200</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>finalConfidenceRequired</strong></td>
-                                    <td>0.6200</td>
-                                    <td class="unchanged">0.6200</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>maxZoneCountForScoring</strong></td>
-                                    <td>5.0000</td>
-                                    <td class="unchanged">5.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>minEnhancedConfidenceThreshold</strong></td>
-                                    <td>0.5000</td>
-                                    <td class="unchanged">0.5000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>useStandardizedZones</strong></td>
-                                    <td>true</td>
-                                    <td class="unchanged">true</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>enhancementMode</strong></td>
-                                    <td>production</td>
-                                    <td class="unchanged">production</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>balanceThreshold</strong></td>
-                                    <td>0.4400</td>
-                                    <td class="unchanged">0.4400</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>confluenceMinZones</strong></td>
-                                    <td>2.0000</td>
-                                    <td class="unchanged">2.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>confluenceMaxDistance</strong></td>
-                                    <td>5.0000</td>
-                                    <td class="unchanged">5.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>enableDynamicZoneTracking</strong></td>
-                                    <td>true</td>
-                                    <td class="unchanged">true</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>maxZonesPerSide</strong></td>
-                                    <td>5.0000</td>
-                                    <td class="unchanged">5.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>zoneHistoryWindowMs</strong></td>
-                                    <td>60000.0000</td>
-                                    <td class="unchanged">60000.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>absorptionZoneThreshold</strong></td>
-                                    <td>1.5000</td>
-                                    <td class="unchanged">1.5000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>minPassiveVolumeForZone</strong></td>
-                                    <td>50.0000</td>
-                                    <td class="unchanged">50.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>priceStabilityTicks</strong></td>
-                                    <td>2.0000</td>
-                                    <td class="unchanged">2.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>minAbsorptionEvents</strong></td>
-                                    <td>2.0000</td>
-                                    <td class="unchanged">2.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
+                        <tr>
+                            <td><strong>minAggVolume</strong></td>
+                            <td>1828.0000</td>
+                            <td class="unchanged">1828.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>timeWindowIndex</strong></td>
+                            <td>0.0000</td>
+                            <td class="unchanged">0.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>eventCooldownMs</strong></td>
+                            <td>1000.0000</td>
+                            <td class="unchanged">1000.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>priceEfficiencyThreshold</strong></td>
+                            <td>0.0046</td>
+                            <td class="unchanged">0.0046</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>maxAbsorptionRatio</strong></td>
+                            <td>0.7000</td>
+                            <td class="unchanged">0.7000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>minPassiveMultiplier</strong></td>
+                            <td>15.0000</td>
+                            <td class="unchanged">15.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>passiveAbsorptionThreshold</strong></td>
+                            <td>0.7100</td>
+                            <td class="unchanged">0.7100</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>expectedMovementScalingFactor</strong>
+                            </td>
+                            <td>10.0000</td>
+                            <td class="unchanged">10.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>liquidityGradientRange</strong></td>
+                            <td>5.0000</td>
+                            <td class="unchanged">5.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>institutionalVolumeThreshold</strong>
+                            </td>
+                            <td>100.0000</td>
+                            <td class="unchanged">100.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong
+                                    >institutionalVolumeRatioThreshold</strong
+                                >
+                            </td>
+                            <td>12.0000</td>
+                            <td class="unchanged">12.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>enableInstitutionalVolumeFilter</strong>
+                            </td>
+                            <td>true</td>
+                            <td class="unchanged">true</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>minAbsorptionScore</strong></td>
+                            <td>0.9200</td>
+                            <td class="unchanged">0.9200</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>finalConfidenceRequired</strong></td>
+                            <td>0.6200</td>
+                            <td class="unchanged">0.6200</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>maxZoneCountForScoring</strong></td>
+                            <td>5.0000</td>
+                            <td class="unchanged">5.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>minEnhancedConfidenceThreshold</strong>
+                            </td>
+                            <td>0.5000</td>
+                            <td class="unchanged">0.5000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>useStandardizedZones</strong></td>
+                            <td>true</td>
+                            <td class="unchanged">true</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>enhancementMode</strong></td>
+                            <td>production</td>
+                            <td class="unchanged">production</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>balanceThreshold</strong></td>
+                            <td>0.4400</td>
+                            <td class="unchanged">0.4400</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>confluenceMinZones</strong></td>
+                            <td>2.0000</td>
+                            <td class="unchanged">2.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>confluenceMaxDistance</strong></td>
+                            <td>5.0000</td>
+                            <td class="unchanged">5.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>enableDynamicZoneTracking</strong></td>
+                            <td>true</td>
+                            <td class="unchanged">true</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>maxZonesPerSide</strong></td>
+                            <td>5.0000</td>
+                            <td class="unchanged">5.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>zoneHistoryWindowMs</strong></td>
+                            <td>60000.0000</td>
+                            <td class="unchanged">60000.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>absorptionZoneThreshold</strong></td>
+                            <td>1.5000</td>
+                            <td class="unchanged">1.5000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>minPassiveVolumeForZone</strong></td>
+                            <td>50.0000</td>
+                            <td class="unchanged">50.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>priceStabilityTicks</strong></td>
+                            <td>2.0000</td>
+                            <td class="unchanged">2.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>minAbsorptionEvents</strong></td>
+                            <td>2.0000</td>
+                            <td class="unchanged">2.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
                     </tbody>
                 </table>
-                
+
                 <div class="metrics-grid">
                     <div class="metrics-box">
                         <h3>📊 Before Optimization</h3>
@@ -352,7 +366,7 @@
                             <span class="metric-value">3/32</span>
                         </div>
                     </div>
-                    
+
                     <div class="metrics-box">
                         <h3>✨ After Optimization</h3>
                         <div class="metric">
@@ -377,30 +391,34 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="harmless-breakdown">
-                    <strong>🟡 Harmless Signal Breakdown:</strong><br>
-                    • Redundant (same-side with position): 0<br>
-                    • Small TP (0.4%+): 0<br>
+                    <strong>🟡 Harmless Signal Breakdown:</strong><br />
+                    • Redundant (same-side with position): 0<br />
+                    • Small TP (0.4%+): 0<br />
                     • Break Even (0.2%+): 0
                 </div>
-                
-                <div class="summary-box" style="background: #e8f5e9; border-color: #4CAF50;">
-                    <strong>💡 Recommendation:</strong><br>
-                    Apply these optimized thresholds to eliminate 57 false positives while maintaining 0.0% of successful signals.
+
+                <div
+                    class="summary-box"
+                    style="background: #e8f5e9; border-color: #4caf50"
+                >
+                    <strong>💡 Recommendation:</strong><br />
+                    Apply these optimized thresholds to eliminate 57 false
+                    positives while maintaining 0.0% of successful signals.
                 </div>
             </div>
-        
+
             <div class="detector-section">
                 <h2 class="detector-title">📊 EXHAUSTION Detector</h2>
-                
+
                 <div class="summary-box">
-                    <strong>Optimization Summary:</strong><br>
-                    ✅ Kept 0/43 successful signals<br>
-                    🚫 Eliminated 161 false positives<br>
+                    <strong>Optimization Summary:</strong><br />
+                    ✅ Kept 0/43 successful signals<br />
+                    🚫 Eliminated 161 false positives<br />
                     📈 Maintained 0/3 phases with signals
                 </div>
-                
+
                 <h3>Threshold Adjustments</h3>
                 <table class="threshold-table">
                     <thead>
@@ -412,171 +430,183 @@
                         </tr>
                     </thead>
                     <tbody>
-                        
-                                <tr>
-                                    <td><strong>minAggVolume</strong></td>
-                                    <td>500.0000</td>
-                                    <td class="unchanged">500.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>timeWindowIndex</strong></td>
-                                    <td>0.0000</td>
-                                    <td class="unchanged">0.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>exhaustionThreshold</strong></td>
-                                    <td>0.3000</td>
-                                    <td class="unchanged">0.3000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>eventCooldownMs</strong></td>
-                                    <td>1000.0000</td>
-                                    <td class="unchanged">1000.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>useStandardizedZones</strong></td>
-                                    <td>true</td>
-                                    <td class="unchanged">true</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>enhancementMode</strong></td>
-                                    <td>production</td>
-                                    <td class="unchanged">production</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>minEnhancedConfidenceThreshold</strong></td>
-                                    <td>0.6000</td>
-                                    <td class="unchanged">0.6000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>depletionVolumeThreshold</strong></td>
-                                    <td>30000.0000</td>
-                                    <td class="unchanged">30000.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>depletionRatioThreshold</strong></td>
-                                    <td>-0.7000</td>
-                                    <td class="unchanged">-0.7000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>enableDepletionAnalysis</strong></td>
-                                    <td>true</td>
-                                    <td class="unchanged">true</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>enableDynamicZoneTracking</strong></td>
-                                    <td>true</td>
-                                    <td class="unchanged">true</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>maxZonesPerSide</strong></td>
-                                    <td>5.0000</td>
-                                    <td class="unchanged">5.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>zoneDepletionThreshold</strong></td>
-                                    <td>0.7000</td>
-                                    <td class="unchanged">0.7000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>gapDetectionTicks</strong></td>
-                                    <td>3.0000</td>
-                                    <td class="unchanged">3.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>varianceReductionFactor</strong></td>
-                                    <td>1.0000</td>
-                                    <td class="unchanged">1.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>alignmentNormalizationFactor</strong></td>
-                                    <td>0.4000</td>
-                                    <td class="unchanged">0.4000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>passiveVolumeExhaustionRatio</strong></td>
-                                    <td>1.0000</td>
-                                    <td class="unchanged">1.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>aggressiveVolumeExhaustionThreshold</strong></td>
-                                    <td>0.2400</td>
-                                    <td class="unchanged">0.2400</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>aggressiveVolumeReductionFactor</strong></td>
-                                    <td>0.5000</td>
-                                    <td class="unchanged">0.5000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>passiveRatioBalanceThreshold</strong></td>
-                                    <td>0.5000</td>
-                                    <td class="unchanged">0.5000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>premiumConfidenceThreshold</strong></td>
-                                    <td>0.8000</td>
-                                    <td class="unchanged">0.8000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>variancePenaltyFactor</strong></td>
-                                    <td>1.0000</td>
-                                    <td class="unchanged">1.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>ratioBalanceCenterPoint</strong></td>
-                                    <td>0.5000</td>
-                                    <td class="unchanged">0.5000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
+                        <tr>
+                            <td><strong>minAggVolume</strong></td>
+                            <td>500.0000</td>
+                            <td class="unchanged">500.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>timeWindowIndex</strong></td>
+                            <td>0.0000</td>
+                            <td class="unchanged">0.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>exhaustionThreshold</strong></td>
+                            <td>0.3000</td>
+                            <td class="unchanged">0.3000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>eventCooldownMs</strong></td>
+                            <td>1000.0000</td>
+                            <td class="unchanged">1000.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>useStandardizedZones</strong></td>
+                            <td>true</td>
+                            <td class="unchanged">true</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>enhancementMode</strong></td>
+                            <td>production</td>
+                            <td class="unchanged">production</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>minEnhancedConfidenceThreshold</strong>
+                            </td>
+                            <td>0.6000</td>
+                            <td class="unchanged">0.6000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>depletionVolumeThreshold</strong></td>
+                            <td>30000.0000</td>
+                            <td class="unchanged">30000.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>depletionRatioThreshold</strong></td>
+                            <td>-0.7000</td>
+                            <td class="unchanged">-0.7000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>enableDepletionAnalysis</strong></td>
+                            <td>true</td>
+                            <td class="unchanged">true</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>enableDynamicZoneTracking</strong></td>
+                            <td>true</td>
+                            <td class="unchanged">true</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>maxZonesPerSide</strong></td>
+                            <td>5.0000</td>
+                            <td class="unchanged">5.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>zoneDepletionThreshold</strong></td>
+                            <td>0.7000</td>
+                            <td class="unchanged">0.7000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>gapDetectionTicks</strong></td>
+                            <td>3.0000</td>
+                            <td class="unchanged">3.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>varianceReductionFactor</strong></td>
+                            <td>1.0000</td>
+                            <td class="unchanged">1.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>alignmentNormalizationFactor</strong>
+                            </td>
+                            <td>0.4000</td>
+                            <td class="unchanged">0.4000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>passiveVolumeExhaustionRatio</strong>
+                            </td>
+                            <td>1.0000</td>
+                            <td class="unchanged">1.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong
+                                    >aggressiveVolumeExhaustionThreshold</strong
+                                >
+                            </td>
+                            <td>0.2400</td>
+                            <td class="unchanged">0.2400</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>aggressiveVolumeReductionFactor</strong>
+                            </td>
+                            <td>0.5000</td>
+                            <td class="unchanged">0.5000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td>
+                                <strong>passiveRatioBalanceThreshold</strong>
+                            </td>
+                            <td>0.5000</td>
+                            <td class="unchanged">0.5000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>premiumConfidenceThreshold</strong></td>
+                            <td>0.8000</td>
+                            <td class="unchanged">0.8000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>variancePenaltyFactor</strong></td>
+                            <td>1.0000</td>
+                            <td class="unchanged">1.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>ratioBalanceCenterPoint</strong></td>
+                            <td>0.5000</td>
+                            <td class="unchanged">0.5000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
                     </tbody>
                 </table>
-                
+
                 <div class="metrics-grid">
                     <div class="metrics-box">
                         <h3>📊 Before Optimization</h3>
@@ -601,7 +631,7 @@
                             <span class="metric-value">3/10</span>
                         </div>
                     </div>
-                    
+
                     <div class="metrics-box">
                         <h3>✨ After Optimization</h3>
                         <div class="metric">
@@ -626,30 +656,34 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="harmless-breakdown">
-                    <strong>🟡 Harmless Signal Breakdown:</strong><br>
-                    • Redundant (same-side with position): 0<br>
-                    • Small TP (0.4%+): 0<br>
+                    <strong>🟡 Harmless Signal Breakdown:</strong><br />
+                    • Redundant (same-side with position): 0<br />
+                    • Small TP (0.4%+): 0<br />
                     • Break Even (0.2%+): 0
                 </div>
-                
-                <div class="summary-box" style="background: #e8f5e9; border-color: #4CAF50;">
-                    <strong>💡 Recommendation:</strong><br>
-                    Apply these optimized thresholds to eliminate 161 false positives while maintaining 0.0% of successful signals.
+
+                <div
+                    class="summary-box"
+                    style="background: #e8f5e9; border-color: #4caf50"
+                >
+                    <strong>💡 Recommendation:</strong><br />
+                    Apply these optimized thresholds to eliminate 161 false
+                    positives while maintaining 0.0% of successful signals.
                 </div>
             </div>
-        
+
             <div class="detector-section">
                 <h2 class="detector-title">📊 DELTACVD Detector</h2>
-                
+
                 <div class="summary-box">
-                    <strong>Optimization Summary:</strong><br>
-                    ✅ Kept 0/5 successful signals<br>
-                    🚫 Eliminated 18 false positives<br>
+                    <strong>Optimization Summary:</strong><br />
+                    ✅ Kept 0/5 successful signals<br />
+                    🚫 Eliminated 18 false positives<br />
                     📈 Maintained 0/5 phases with signals
                 </div>
-                
+
                 <h3>Threshold Adjustments</h3>
                 <table class="threshold-table">
                     <thead>
@@ -661,73 +695,71 @@
                         </tr>
                     </thead>
                     <tbody>
-                        
-                                <tr>
-                                    <td><strong>minTradesPerSec</strong></td>
-                                    <td>3.0000</td>
-                                    <td class="unchanged">3.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>minVolPerSec</strong></td>
-                                    <td>13.0000</td>
-                                    <td class="unchanged">13.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>signalThreshold</strong></td>
-                                    <td>0.5000</td>
-                                    <td class="unchanged">0.5000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>eventCooldownMs</strong></td>
-                                    <td>1200000.0000</td>
-                                    <td class="unchanged">1200000.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>timeWindowIndex</strong></td>
-                                    <td>0.0000</td>
-                                    <td class="unchanged">0.0000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>enhancementMode</strong></td>
-                                    <td>production</td>
-                                    <td class="unchanged">production</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>cvdImbalanceThreshold</strong></td>
-                                    <td>0.1800</td>
-                                    <td class="unchanged">0.1800</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>institutionalThreshold</strong></td>
-                                    <td>0.0500</td>
-                                    <td class="unchanged">0.0500</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
-                                <tr>
-                                    <td><strong>volumeEfficiencyThreshold</strong></td>
-                                    <td>0.3000</td>
-                                    <td class="unchanged">0.3000</td>
-                                    <td class="unchanged">No change</td>
-                                </tr>
-                            
+                        <tr>
+                            <td><strong>minTradesPerSec</strong></td>
+                            <td>3.0000</td>
+                            <td class="unchanged">3.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>minVolPerSec</strong></td>
+                            <td>13.0000</td>
+                            <td class="unchanged">13.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>signalThreshold</strong></td>
+                            <td>0.5000</td>
+                            <td class="unchanged">0.5000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>eventCooldownMs</strong></td>
+                            <td>1200000.0000</td>
+                            <td class="unchanged">1200000.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>timeWindowIndex</strong></td>
+                            <td>0.0000</td>
+                            <td class="unchanged">0.0000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>enhancementMode</strong></td>
+                            <td>production</td>
+                            <td class="unchanged">production</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>cvdImbalanceThreshold</strong></td>
+                            <td>0.1800</td>
+                            <td class="unchanged">0.1800</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>institutionalThreshold</strong></td>
+                            <td>0.0500</td>
+                            <td class="unchanged">0.0500</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
+
+                        <tr>
+                            <td><strong>volumeEfficiencyThreshold</strong></td>
+                            <td>0.3000</td>
+                            <td class="unchanged">0.3000</td>
+                            <td class="unchanged">No change</td>
+                        </tr>
                     </tbody>
                 </table>
-                
+
                 <div class="metrics-grid">
                     <div class="metrics-box">
                         <h3>📊 Before Optimization</h3>
@@ -752,7 +784,7 @@
                             <span class="metric-value">5/28</span>
                         </div>
                     </div>
-                    
+
                     <div class="metrics-box">
                         <h3>✨ After Optimization</h3>
                         <div class="metric">
@@ -777,20 +809,23 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="harmless-breakdown">
-                    <strong>🟡 Harmless Signal Breakdown:</strong><br>
-                    • Redundant (same-side with position): 0<br>
-                    • Small TP (0.4%+): 0<br>
+                    <strong>🟡 Harmless Signal Breakdown:</strong><br />
+                    • Redundant (same-side with position): 0<br />
+                    • Small TP (0.4%+): 0<br />
                     • Break Even (0.2%+): 0
                 </div>
-                
-                <div class="summary-box" style="background: #e8f5e9; border-color: #4CAF50;">
-                    <strong>💡 Recommendation:</strong><br>
-                    Apply these optimized thresholds to eliminate 18 false positives while maintaining 0.0% of successful signals.
+
+                <div
+                    class="summary-box"
+                    style="background: #e8f5e9; border-color: #4caf50"
+                >
+                    <strong>💡 Recommendation:</strong><br />
+                    Apply these optimized thresholds to eliminate 18 false
+                    positives while maintaining 0.0% of successful signals.
                 </div>
             </div>
-        
-    </div>
-</body>
+        </div>
+    </body>
 </html>

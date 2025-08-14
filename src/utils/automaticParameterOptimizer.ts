@@ -619,11 +619,6 @@ export class AutomaticParameterOptimizer {
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
-                liquidityGradientRange: config.liquidityGradientRange,
-                institutionalVolumeThreshold:
-                    config.institutionalVolumeThreshold,
-                institutionalVolumeRatioThreshold:
-                    config.institutionalVolumeRatioThreshold,
                 minAbsorptionScore: config.minAbsorptionScore,
                 finalConfidenceRequired: config.finalConfidenceRequired,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
@@ -680,11 +675,6 @@ export class AutomaticParameterOptimizer {
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
-                liquidityGradientRange: config.liquidityGradientRange,
-                institutionalVolumeThreshold:
-                    config.institutionalVolumeThreshold,
-                institutionalVolumeRatioThreshold:
-                    config.institutionalVolumeRatioThreshold,
                 minAbsorptionScore: config.minAbsorptionScore,
                 finalConfidenceRequired: config.finalConfidenceRequired,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,

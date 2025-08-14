@@ -75,8 +75,6 @@ export class DetectorFactory {
             `[DetectorFactory] Created Standalone AbsorptionDetectorEnhanced`,
             {
                 id,
-                enhancementMode: productionSettings.enhancementMode,
-                useStandardizedZones: productionSettings.useStandardizedZones,
             }
         );
 

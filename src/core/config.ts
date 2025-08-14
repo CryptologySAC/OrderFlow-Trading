@@ -165,22 +165,11 @@ export const AbsorptionDetectorSchema = z.object({
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
-    liquidityGradientRange: z.number().int().min(1).max(20),
-
-    // Institutional analysis
-    institutionalVolumeThreshold: z.number().min(100).max(100000),
-    institutionalVolumeRatioThreshold: z.number().min(1).max(50),
-    enableInstitutionalVolumeFilter: z.boolean(),
 
     // Confidence and scoring
     minAbsorptionScore: z.number().min(0.3).max(0.99),
     finalConfidenceRequired: z.number().min(0.1).max(3.0),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
-
-    // Enhancement control
-    useStandardizedZones: z.boolean(),
-    enhancementMode: z.enum(["disabled", "testing", "production"]),
 
     // Balance detection threshold
     balanceThreshold: z.number().min(0.01).max(0.75),
@@ -190,7 +179,6 @@ export const AbsorptionDetectorSchema = z.object({
     confluenceMaxDistance: z.number().int().min(1).max(20),
 
     // Zone tracking configuration for dynamic absorption detection
-    enableDynamicZoneTracking: z.boolean(),
     maxZonesPerSide: z.number().int().min(3).max(10),
     zoneHistoryWindowMs: z.number().int().min(30000).max(300000),
     absorptionZoneThreshold: z.number().min(1.2).max(3.0), // Passive/aggressive ratio

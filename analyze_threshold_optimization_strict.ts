@@ -26,20 +26,25 @@ interface Signal {
     signalSide: "buy" | "sell";
     price: number;
     thresholds: Map<string, number>;
-    
+
     // Classification
     isSuccessful: boolean; // From successful log
     isValidation: boolean; // From validation log
-    
+
     // Price movement (for validation signals)
     maxFavorableMove?: number;
     maxAdverseMove?: number;
     potentialTP?: number;
-    
+
     // Analysis results
-    category?: "TRUE_POSITIVE" | "FALSE_POSITIVE" | "HARMLESS_REDUNDANT" | "HARMLESS_BE" | "HARMLESS_SMALL_TP";
+    category?:
+        | "TRUE_POSITIVE"
+        | "FALSE_POSITIVE"
+        | "HARMLESS_REDUNDANT"
+        | "HARMLESS_BE"
+        | "HARMLESS_SMALL_TP";
     harmlessReason?: string;
-    
+
     // Phase assignment
     phaseId?: number;
     isFirstInPhase?: boolean;
@@ -70,7 +75,7 @@ interface OptimizationResult {
     detector: string;
     originalThresholds: ThresholdConfig;
     optimizedThresholds: ThresholdConfig;
-    
+
     // Metrics before optimization
     beforeMetrics: {
         totalSignals: number;
@@ -80,7 +85,7 @@ interface OptimizationResult {
         phasesWithSuccess: number;
         totalPhases: number;
     };
-    
+
     // Metrics after optimization
     afterMetrics: {
         totalSignals: number;
@@ -92,7 +97,7 @@ interface OptimizationResult {
         phasesWithSuccess: number;
         lostPhases: number;
     };
-    
+
     // Detailed harmless breakdown
     harmlessBreakdown: {
         redundant: number;
@@ -107,36 +112,49 @@ async function loadCurrentThresholds(): Promise<DetectorThresholds> {
     const thresholds: DetectorThresholds = {
         absorption: {},
         exhaustion: {},
-        deltacvd: {}
+        deltacvd: {},
     };
-    
+
     // Get ALL thresholds from each detector using the static getters
     thresholds.absorption = { ...Config.ABSORPTION_DETECTOR };
     thresholds.exhaustion = { ...Config.EXHAUSTION_DETECTOR };
     thresholds.deltacvd = { ...Config.DELTACVD_DETECTOR };
-    
+
     console.log("📋 Current thresholds from config:");
-    console.log("Absorption:", Object.keys(thresholds.absorption).length, "thresholds");
-    console.log("Exhaustion:", Object.keys(thresholds.exhaustion).length, "thresholds");
-    console.log("DeltaCVD:", Object.keys(thresholds.deltacvd).length, "thresholds");
-    
+    console.log(
+        "Absorption:",
+        Object.keys(thresholds.absorption).length,
+        "thresholds"
+    );
+    console.log(
+        "Exhaustion:",
+        Object.keys(thresholds.exhaustion).length,
+        "thresholds"
+    );
+    console.log(
+        "DeltaCVD:",
+        Object.keys(thresholds.deltacvd).length,
+        "thresholds"
+    );
+
     // Show first few thresholds for each detector
     console.log("\nSample absorption thresholds:", {
         minAggVolume: thresholds.absorption.minAggVolume,
         minPassiveMultiplier: thresholds.absorption.minPassiveMultiplier,
-        passiveAbsorptionThreshold: thresholds.absorption.passiveAbsorptionThreshold
+        passiveAbsorptionThreshold:
+            thresholds.absorption.passiveAbsorptionThreshold,
     });
-    
+
     return thresholds;
 }
 
 async function loadSignals(date: string): Promise<Map<string, Signal[]>> {
     const signalsByDetector = new Map<string, Signal[]>();
     const detectors = ["absorption", "exhaustion", "deltacvd"];
-    
+
     for (const detector of detectors) {
         const signals: Signal[] = [];
-        
+
         // Load successful signals
         try {
             const successPath = `logs/signal_validation/${detector}_successful_${date}.csv`;
@@ -144,21 +162,25 @@ async function loadSignals(date: string): Promise<Map<string, Signal[]>> {
             const lines = content.trim().split("\n");
             if (lines.length > 1) {
                 const headers = lines[0].split(",");
-                
+
                 for (let i = 1; i < lines.length; i++) {
                     const values = lines[i].split(",");
                     if (values.length < 4) continue;
-                    
+
                     const signal: Signal = {
-                        timestamp: parseInt(values[headers.indexOf("timestamp")]),
+                        timestamp: parseInt(
+                            values[headers.indexOf("timestamp")]
+                        ),
                         detectorType: detector,
-                        signalSide: values[headers.indexOf("signalSide")] as "buy" | "sell",
+                        signalSide: values[headers.indexOf("signalSide")] as
+                            | "buy"
+                            | "sell",
                         price: parseFloat(values[headers.indexOf("price")]),
                         thresholds: new Map(),
                         isSuccessful: true,
-                        isValidation: false
+                        isValidation: false,
                     };
-                    
+
                     // Extract all threshold values
                     extractThresholds(headers, values, signal.thresholds);
                     signals.push(signal);
@@ -167,7 +189,7 @@ async function loadSignals(date: string): Promise<Map<string, Signal[]>> {
         } catch (error) {
             console.log(`No successful signals for ${detector}`);
         }
-        
+
         // Load validation signals (false positives)
         try {
             const validationPath = `logs/signal_validation/${detector}_validation_${date}.csv`;
@@ -175,21 +197,25 @@ async function loadSignals(date: string): Promise<Map<string, Signal[]>> {
             const lines = content.trim().split("\n");
             if (lines.length > 1) {
                 const headers = lines[0].split(",");
-                
+
                 for (let i = 1; i < lines.length; i++) {
                     const values = lines[i].split(",");
                     if (values.length < 4) continue;
-                    
+
                     const signal: Signal = {
-                        timestamp: parseInt(values[headers.indexOf("timestamp")]),
+                        timestamp: parseInt(
+                            values[headers.indexOf("timestamp")]
+                        ),
                         detectorType: detector,
-                        signalSide: values[headers.indexOf("signalSide")] as "buy" | "sell",
+                        signalSide: values[headers.indexOf("signalSide")] as
+                            | "buy"
+                            | "sell",
                         price: parseFloat(values[headers.indexOf("price")]),
                         thresholds: new Map(),
                         isSuccessful: false,
-                        isValidation: true
+                        isValidation: true,
                     };
-                    
+
                     // Extract all threshold values
                     extractThresholds(headers, values, signal.thresholds);
                     signals.push(signal);
@@ -198,45 +224,54 @@ async function loadSignals(date: string): Promise<Map<string, Signal[]>> {
         } catch (error) {
             console.log(`No validation signals for ${detector}`);
         }
-        
+
         if (signals.length > 0) {
-            signalsByDetector.set(detector, signals.sort((a, b) => a.timestamp - b.timestamp));
+            signalsByDetector.set(
+                detector,
+                signals.sort((a, b) => a.timestamp - b.timestamp)
+            );
         }
     }
-    
+
     return signalsByDetector;
 }
 
-function extractThresholds(headers: string[], values: string[], thresholds: Map<string, number>): void {
+function extractThresholds(
+    headers: string[],
+    values: string[],
+    thresholds: Map<string, number>
+): void {
     // Extract ALL possible threshold columns from the CSV
     // We need to get every single value that could be a threshold
     for (let i = 0; i < headers.length; i++) {
         const header = headers[i];
         const value = values[i];
-        
+
         // Skip non-threshold columns
-        if (header === 'timestamp' || 
-            header === 'detectorType' || 
-            header === 'signalSide' || 
-            header === 'price' ||
-            header === 'confidence' ||
-            header === 'subsequentMovement5min' ||
-            header === 'subsequentMovement15min' ||
-            header === 'subsequentMovement1hr' ||
-            header === 'wasValidSignal' ||
-            header === 'TP_SL' ||
-            header === 'crossTimeframe' ||
-            header === 'institutionalVolume' ||
-            header === 'zoneConfluence' ||
-            header === 'exhaustionGap' ||
-            header === 'priceEfficiencyHigh' ||
-            header === 'enhancementMode' ||
-            header === 'eventCooldownMs' ||
-            header === 'timeWindowIndex' ||
-            header === 'useStandardizedZones') {
+        if (
+            header === "timestamp" ||
+            header === "detectorType" ||
+            header === "signalSide" ||
+            header === "price" ||
+            header === "confidence" ||
+            header === "subsequentMovement5min" ||
+            header === "subsequentMovement15min" ||
+            header === "subsequentMovement1hr" ||
+            header === "wasValidSignal" ||
+            header === "TP_SL" ||
+            header === "crossTimeframe" ||
+            header === "institutionalVolume" ||
+            header === "zoneConfluence" ||
+            header === "exhaustionGap" ||
+            header === "priceEfficiencyHigh" ||
+            header === "enhancementMode" ||
+            header === "eventCooldownMs" ||
+            header === "timeWindowIndex" ||
+            header === "useStandardizedZones"
+        ) {
             continue;
         }
-        
+
         // Parse the value as a number
         const numValue = parseFloat(value);
         if (!isNaN(numValue)) {
@@ -247,7 +282,7 @@ function extractThresholds(headers: string[], values: string[], thresholds: Map<
 
 async function loadPriceData(date: string): Promise<Map<number, number>> {
     const priceMap = new Map<number, number>();
-    
+
     // Load from rejected_missed logs for complete price data
     for (const detector of ["absorption", "exhaustion"]) {
         try {
@@ -255,16 +290,16 @@ async function loadPriceData(date: string): Promise<Map<number, number>> {
             const content = await fs.readFile(filePath, "utf-8");
             const lines = content.trim().split("\n");
             if (lines.length < 2) continue;
-            
+
             const headers = lines[0].split(",");
             const timestampIdx = headers.indexOf("timestamp");
             const priceIdx = headers.indexOf("price");
-            
+
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(",");
                 const timestamp = parseInt(values[timestampIdx]);
                 const price = parseFloat(values[priceIdx]);
-                
+
                 if (!isNaN(timestamp) && !isNaN(price)) {
                     priceMap.set(timestamp, price);
                 }
@@ -273,30 +308,33 @@ async function loadPriceData(date: string): Promise<Map<number, number>> {
             continue;
         }
     }
-    
+
     return priceMap;
 }
 
-function calculatePriceMovements(signals: Signal[], priceData: Map<number, number>): void {
+function calculatePriceMovements(
+    signals: Signal[],
+    priceData: Map<number, number>
+): void {
     for (const signal of signals) {
         if (signal.isSuccessful) {
             signal.maxFavorableMove = TARGET_TP;
             signal.potentialTP = TARGET_TP;
             continue;
         }
-        
+
         const endTime = signal.timestamp + 90 * 60 * 1000;
         let maxPrice = signal.price;
         let minPrice = signal.price;
-        
+
         for (const [timestamp, price] of priceData) {
             if (timestamp < signal.timestamp) continue;
             if (timestamp > endTime) break;
-            
+
             maxPrice = Math.max(maxPrice, price);
             minPrice = Math.min(minPrice, price);
         }
-        
+
         if (signal.signalSide === "buy") {
             signal.maxFavorableMove = (maxPrice - signal.price) / signal.price;
             signal.maxAdverseMove = (signal.price - minPrice) / signal.price;
@@ -304,7 +342,7 @@ function calculatePriceMovements(signals: Signal[], priceData: Map<number, numbe
             signal.maxFavorableMove = (signal.price - minPrice) / signal.price;
             signal.maxAdverseMove = (maxPrice - signal.price) / signal.price;
         }
-        
+
         signal.potentialTP = signal.maxFavorableMove;
     }
 }
@@ -313,13 +351,14 @@ function createPhases(signals: Signal[]): Phase[] {
     const phases: Phase[] = [];
     let phaseId = 1;
     let currentPhase: Phase | null = null;
-    
+
     for (const signal of signals) {
-        if (!currentPhase || 
+        if (
+            !currentPhase ||
             signal.timestamp - currentPhase.endTime > PHASE_GAP ||
             (currentPhase.direction === "UP" && signal.signalSide === "sell") ||
-            (currentPhase.direction === "DOWN" && signal.signalSide === "buy")) {
-            
+            (currentPhase.direction === "DOWN" && signal.signalSide === "buy")
+        ) {
             currentPhase = {
                 id: phaseId++,
                 startTime: signal.timestamp,
@@ -327,34 +366,34 @@ function createPhases(signals: Signal[]): Phase[] {
                 direction: signal.signalSide === "buy" ? "UP" : "DOWN",
                 signals: [],
                 successfulSignals: [],
-                validationSignals: []
+                validationSignals: [],
             };
             phases.push(currentPhase);
         }
-        
+
         signal.phaseId = currentPhase.id;
         signal.isFirstInPhase = currentPhase.signals.length === 0;
-        
+
         currentPhase.signals.push(signal);
         currentPhase.endTime = signal.timestamp;
-        
+
         if (signal.isSuccessful) {
             currentPhase.successfulSignals.push(signal);
         } else {
             currentPhase.validationSignals.push(signal);
         }
     }
-    
+
     return phases;
 }
 
 function categorizeSignals(phases: Phase[]): void {
     for (const phase of phases) {
         let hasActivePosition = false;
-        
+
         for (const signal of phase.signals) {
             signal.hasActivePosition = hasActivePosition;
-            
+
             if (signal.isSuccessful) {
                 signal.category = "TRUE_POSITIVE";
                 if (!hasActivePosition) {
@@ -362,20 +401,35 @@ function categorizeSignals(phases: Phase[]): void {
                 }
             } else {
                 // Validation signal - determine if harmless
-                if (hasActivePosition && 
-                    ((phase.direction === "UP" && signal.signalSide === "buy") ||
-                     (phase.direction === "DOWN" && signal.signalSide === "sell"))) {
+                if (
+                    hasActivePosition &&
+                    ((phase.direction === "UP" &&
+                        signal.signalSide === "buy") ||
+                        (phase.direction === "DOWN" &&
+                            signal.signalSide === "sell"))
+                ) {
                     signal.category = "HARMLESS_REDUNDANT";
-                    signal.harmlessReason = "Same-side signal with active position";
-                } else if (signal.maxFavorableMove && signal.maxFavorableMove >= SMALL_TP) {
+                    signal.harmlessReason =
+                        "Same-side signal with active position";
+                } else if (
+                    signal.maxFavorableMove &&
+                    signal.maxFavorableMove >= SMALL_TP
+                ) {
                     signal.category = "HARMLESS_SMALL_TP";
                     signal.harmlessReason = `Could reach ${(signal.maxFavorableMove * 100).toFixed(2)}% TP`;
-                } else if (signal.maxFavorableMove && signal.maxFavorableMove >= BREAK_EVEN) {
+                } else if (
+                    signal.maxFavorableMove &&
+                    signal.maxFavorableMove >= BREAK_EVEN
+                ) {
                     signal.category = "HARMLESS_BE";
                     signal.harmlessReason = "Could reach break-even";
                 } else {
                     signal.category = "FALSE_POSITIVE";
-                    if (!hasActivePosition && signal.maxAdverseMove && signal.maxAdverseMove >= STOP_LOSS) {
+                    if (
+                        !hasActivePosition &&
+                        signal.maxAdverseMove &&
+                        signal.maxAdverseMove >= STOP_LOSS
+                    ) {
                         hasActivePosition = true; // Would open position and hit SL
                     }
                 }
@@ -388,25 +442,31 @@ function testThresholdCombination(
     signals: Signal[],
     thresholds: ThresholdConfig,
     phases: Phase[]
-): { kept: Signal[], eliminated: Signal[], phasesWithSuccess: number } {
+): { kept: Signal[]; eliminated: Signal[]; phasesWithSuccess: number } {
     const kept: Signal[] = [];
     const eliminated: Signal[] = [];
-    
+
     for (const signal of signals) {
         let passes = true;
-        
+
         // Check if signal passes ALL thresholds
         for (const [name, requiredValue] of Object.entries(thresholds)) {
             const signalValue = signal.thresholds.get(name);
-            
+
             // Skip non-numeric comparisons for non-threshold fields
-            if (typeof requiredValue === 'boolean' || typeof requiredValue === 'string') {
+            if (
+                typeof requiredValue === "boolean" ||
+                typeof requiredValue === "string"
+            ) {
                 // For booleans and strings, they must match exactly
-                if (signalValue !== requiredValue && signalValue !== undefined) {
+                if (
+                    signalValue !== requiredValue &&
+                    signalValue !== undefined
+                ) {
                     passes = false;
                     break;
                 }
-            } else if (typeof requiredValue === 'number') {
+            } else if (typeof requiredValue === "number") {
                 // For numeric thresholds, signal value must be >= required
                 if (signalValue === undefined || signalValue < requiredValue) {
                     passes = false;
@@ -414,19 +474,19 @@ function testThresholdCombination(
                 }
             }
         }
-        
+
         if (passes) {
             kept.push(signal);
         } else {
             eliminated.push(signal);
         }
     }
-    
+
     // Count phases that still have successful signals
     const phasesWithSuccess = new Set(
-        kept.filter(s => s.isSuccessful).map(s => s.phaseId)
+        kept.filter((s) => s.isSuccessful).map((s) => s.phaseId)
     ).size;
-    
+
     return { kept, eliminated, phasesWithSuccess };
 }
 
@@ -437,119 +497,168 @@ function findOptimalThresholds(
     currentThresholds: ThresholdConfig
 ): OptimizationResult {
     // Calculate before metrics
-    const successfulSignals = signals.filter(s => s.isSuccessful);
-    const validationSignals = signals.filter(s => s.isValidation);
-    const falsePositives = validationSignals.filter(s => s.category === "FALSE_POSITIVE");
-    const harmlessSignals = validationSignals.filter(s => s.category?.startsWith("HARMLESS"));
-    
+    const successfulSignals = signals.filter((s) => s.isSuccessful);
+    const validationSignals = signals.filter((s) => s.isValidation);
+    const falsePositives = validationSignals.filter(
+        (s) => s.category === "FALSE_POSITIVE"
+    );
+    const harmlessSignals = validationSignals.filter((s) =>
+        s.category?.startsWith("HARMLESS")
+    );
+
     const beforeMetrics = {
         totalSignals: signals.length,
         truePositives: successfulSignals.length,
         falsePositives: falsePositives.length,
         harmlessSignals: harmlessSignals.length,
-        phasesWithSuccess: new Set(successfulSignals.map(s => s.phaseId)).size,
-        totalPhases: phases.length
+        phasesWithSuccess: new Set(successfulSignals.map((s) => s.phaseId))
+            .size,
+        totalPhases: phases.length,
     };
-    
-    console.log(`  Before optimization: ${beforeMetrics.truePositives} successful, ${beforeMetrics.falsePositives} false positives`);
-    
+
+    console.log(
+        `  Before optimization: ${beforeMetrics.truePositives} successful, ${beforeMetrics.falsePositives} false positives`
+    );
+
     // Start with current thresholds (will be replaced by optimization)
     let workingThresholds = { ...currentThresholds };
-    
+
     // Only optimize NUMERIC thresholds
     const numericThresholds = Object.entries(currentThresholds)
-        .filter(([key, value]) => typeof value === 'number')
+        .filter(([key, value]) => typeof value === "number")
         .map(([key]) => key);
-    
+
     // Try different combinations to find optimal thresholds
     let bestCombination = { ...currentThresholds };
     let bestScore = 0;
     let bestMetrics = { eliminatedFP: 0, keptSuccess: 0, phasesWithSuccess: 0 };
-    
+
     // For each numeric threshold, try to optimize
     for (const thresholdName of numericThresholds) {
         // Get all values for this threshold from HARMFUL validation signals
-        const harmfulValidation = validationSignals.filter(s => s.category === "FALSE_POSITIVE");
+        const harmfulValidation = validationSignals.filter(
+            (s) => s.category === "FALSE_POSITIVE"
+        );
         const harmfulValues = harmfulValidation
-            .map(s => s.thresholds.get(thresholdName))
-            .filter(v => v !== undefined && typeof v === 'number') as number[];
-        
+            .map((s) => s.thresholds.get(thresholdName))
+            .filter(
+                (v) => v !== undefined && typeof v === "number"
+            ) as number[];
+
         if (harmfulValues.length === 0) continue;
-        
+
         // Get values from successful signals to ensure we don't lose them
         const successValues = successfulSignals
-            .map(s => s.thresholds.get(thresholdName))
-            .filter(v => v !== undefined && typeof v === 'number') as number[];
-        
+            .map((s) => s.thresholds.get(thresholdName))
+            .filter(
+                (v) => v !== undefined && typeof v === "number"
+            ) as number[];
+
         if (successValues.length === 0) continue;
-        
+
         const minSuccessful = Math.min(...successValues);
-        
+
         // Find all unique harmful values below the minimum successful value
-        const harmfulBelowSuccess = [...new Set(harmfulValues.filter(v => v < minSuccessful))].sort((a, b) => a - b);
-        
+        const harmfulBelowSuccess = [
+            ...new Set(harmfulValues.filter((v) => v < minSuccessful)),
+        ].sort((a, b) => a - b);
+
         // Try each potential threshold
         for (const harmfulThreshold of harmfulBelowSuccess) {
             const testThresholds = { ...bestCombination };
             testThresholds[thresholdName] = harmfulThreshold + 0.0001;
-            
+
             // Only test if it's higher than current
-            if (testThresholds[thresholdName] <= currentThresholds[thresholdName]) continue;
-            
+            if (
+                testThresholds[thresholdName] <=
+                currentThresholds[thresholdName]
+            )
+                continue;
+
             // Test this combination
-            const result = testThresholdCombination(signals, testThresholds, phases);
-            const keptSuccess = result.kept.filter(s => s.isSuccessful).length;
-            const eliminatedFP = result.eliminated.filter(s => s.category === "FALSE_POSITIVE").length;
-            
+            const result = testThresholdCombination(
+                signals,
+                testThresholds,
+                phases
+            );
+            const keptSuccess = result.kept.filter(
+                (s) => s.isSuccessful
+            ).length;
+            const eliminatedFP = result.eliminated.filter(
+                (s) => s.category === "FALSE_POSITIVE"
+            ).length;
+
             // Score: prioritize keeping successful signals, then eliminating false positives
-            const score = (result.phasesWithSuccess * 1000) + (keptSuccess * 100) + eliminatedFP;
-            
+            const score =
+                result.phasesWithSuccess * 1000 +
+                keptSuccess * 100 +
+                eliminatedFP;
+
             if (score > bestScore && result.phasesWithSuccess > 0) {
                 bestScore = score;
                 bestCombination = { ...testThresholds };
                 bestMetrics = {
                     eliminatedFP,
                     keptSuccess,
-                    phasesWithSuccess: result.phasesWithSuccess
+                    phasesWithSuccess: result.phasesWithSuccess,
                 };
-                console.log(`  ${thresholdName}: Found better threshold at ${testThresholds[thresholdName]} (keeps ${keptSuccess} successful, eliminates ${eliminatedFP} harmful)`);
+                console.log(
+                    `  ${thresholdName}: Found better threshold at ${testThresholds[thresholdName]} (keeps ${keptSuccess} successful, eliminates ${eliminatedFP} harmful)`
+                );
             }
         }
     }
-    
+
     // Use the best combination found
     const optimalThresholds = bestCombination;
-    console.log(`  Best combination: ${bestMetrics.keptSuccess} successful kept, ${bestMetrics.eliminatedFP} harmful eliminated`);
-    
+    console.log(
+        `  Best combination: ${bestMetrics.keptSuccess} successful kept, ${bestMetrics.eliminatedFP} harmful eliminated`
+    );
+
     // Calculate after metrics
-    const finalResult = testThresholdCombination(signals, optimalThresholds, phases);
-    const keptFalsePositives = finalResult.kept.filter(s => s.category === "FALSE_POSITIVE");
-    const keptHarmless = finalResult.kept.filter(s => s.category?.startsWith("HARMLESS"));
-    
+    const finalResult = testThresholdCombination(
+        signals,
+        optimalThresholds,
+        phases
+    );
+    const keptFalsePositives = finalResult.kept.filter(
+        (s) => s.category === "FALSE_POSITIVE"
+    );
+    const keptHarmless = finalResult.kept.filter((s) =>
+        s.category?.startsWith("HARMLESS")
+    );
+
     const afterMetrics = {
         totalSignals: finalResult.kept.length,
-        truePositives: finalResult.kept.filter(s => s.isSuccessful).length,
+        truePositives: finalResult.kept.filter((s) => s.isSuccessful).length,
         falsePositives: keptFalsePositives.length,
         harmlessSignals: keptHarmless.length,
-        eliminatedFalsePositives: falsePositives.length - keptFalsePositives.length,
-        keptSuccessfulSignals: finalResult.kept.filter(s => s.isSuccessful).length,
+        eliminatedFalsePositives:
+            falsePositives.length - keptFalsePositives.length,
+        keptSuccessfulSignals: finalResult.kept.filter((s) => s.isSuccessful)
+            .length,
         phasesWithSuccess: finalResult.phasesWithSuccess,
-        lostPhases: beforeMetrics.phasesWithSuccess - finalResult.phasesWithSuccess
+        lostPhases:
+            beforeMetrics.phasesWithSuccess - finalResult.phasesWithSuccess,
     };
-    
+
     const harmlessBreakdown = {
-        redundant: keptHarmless.filter(s => s.category === "HARMLESS_REDUNDANT").length,
-        breakEven: keptHarmless.filter(s => s.category === "HARMLESS_BE").length,
-        smallTP: keptHarmless.filter(s => s.category === "HARMLESS_SMALL_TP").length
+        redundant: keptHarmless.filter(
+            (s) => s.category === "HARMLESS_REDUNDANT"
+        ).length,
+        breakEven: keptHarmless.filter((s) => s.category === "HARMLESS_BE")
+            .length,
+        smallTP: keptHarmless.filter((s) => s.category === "HARMLESS_SMALL_TP")
+            .length,
     };
-    
+
     return {
         detector,
         originalThresholds: currentThresholds,
         optimizedThresholds: optimalThresholds,
         beforeMetrics,
         afterMetrics,
-        harmlessBreakdown
+        harmlessBreakdown,
     };
 }
 
@@ -662,7 +771,9 @@ function generateHTML(results: OptimizationResult[], date: string): string {
         <p><strong>Date:</strong> ${date}</p>
         <p><strong>Objective:</strong> Raise thresholds to eliminate false positives while keeping at least 1 successful signal per phase</p>
         
-        ${results.map(r => `
+        ${results
+            .map(
+                (r) => `
             <div class="detector-section">
                 <h2 class="detector-title">📊 ${r.detector.toUpperCase()} Detector</h2>
                 
@@ -684,34 +795,50 @@ function generateHTML(results: OptimizationResult[], date: string): string {
                         </tr>
                     </thead>
                     <tbody>
-                        ${Object.keys(r.originalThresholds).map(key => {
-                            const original = r.originalThresholds[key];
-                            const optimized = r.optimizedThresholds[key];
-                            if (original === undefined || optimized === undefined) return '';
-                            
-                            // Handle different value types
-                            let originalStr = String(original);
-                            let optimizedStr = String(optimized);
-                            let changeClass = 'unchanged';
-                            let changeText = 'No change';
-                            
-                            if (typeof original === 'number' && typeof optimized === 'number') {
-                                const change = optimized - original;
-                                changeClass = change > 0 ? 'increased' : (change < 0 ? 'decreased' : 'unchanged');
-                                
-                                // Format numbers with appropriate precision
-                                originalStr = original.toFixed(4);
-                                optimizedStr = optimized.toFixed(4);
-                                
-                                if (change !== 0) {
-                                    changeText = change > 0 ? `+${change.toFixed(4)}` : change.toFixed(4);
+                        ${Object.keys(r.originalThresholds)
+                            .map((key) => {
+                                const original = r.originalThresholds[key];
+                                const optimized = r.optimizedThresholds[key];
+                                if (
+                                    original === undefined ||
+                                    optimized === undefined
+                                )
+                                    return "";
+
+                                // Handle different value types
+                                let originalStr = String(original);
+                                let optimizedStr = String(optimized);
+                                let changeClass = "unchanged";
+                                let changeText = "No change";
+
+                                if (
+                                    typeof original === "number" &&
+                                    typeof optimized === "number"
+                                ) {
+                                    const change = optimized - original;
+                                    changeClass =
+                                        change > 0
+                                            ? "increased"
+                                            : change < 0
+                                              ? "decreased"
+                                              : "unchanged";
+
+                                    // Format numbers with appropriate precision
+                                    originalStr = original.toFixed(4);
+                                    optimizedStr = optimized.toFixed(4);
+
+                                    if (change !== 0) {
+                                        changeText =
+                                            change > 0
+                                                ? `+${change.toFixed(4)}`
+                                                : change.toFixed(4);
+                                    }
+                                } else if (original !== optimized) {
+                                    changeClass = "increased"; // Changed
+                                    changeText = `${originalStr} → ${optimizedStr}`;
                                 }
-                            } else if (original !== optimized) {
-                                changeClass = 'increased'; // Changed
-                                changeText = `${originalStr} → ${optimizedStr}`;
-                            }
-                            
-                            return `
+
+                                return `
                                 <tr>
                                     <td><strong>${key}</strong></td>
                                     <td>${originalStr}</td>
@@ -719,7 +846,8 @@ function generateHTML(results: OptimizationResult[], date: string): string {
                                     <td class="${changeClass}">${changeText}</td>
                                 </tr>
                             `;
-                        }).join('')}
+                            })
+                            .join("")}
                     </tbody>
                 </table>
                 
@@ -760,7 +888,7 @@ function generateHTML(results: OptimizationResult[], date: string): string {
                         </div>
                         <div class="metric">
                             <span class="metric-label">False Positives:</span>
-                            <span class="metric-value ${r.afterMetrics.falsePositives < r.beforeMetrics.falsePositives ? 'positive' : 'negative'}">${r.afterMetrics.falsePositives}</span>
+                            <span class="metric-value ${r.afterMetrics.falsePositives < r.beforeMetrics.falsePositives ? "positive" : "negative"}">${r.afterMetrics.falsePositives}</span>
                         </div>
                         <div class="metric">
                             <span class="metric-label">Harmless Signals:</span>
@@ -782,66 +910,79 @@ function generateHTML(results: OptimizationResult[], date: string): string {
                 
                 <div class="summary-box" style="background: #e8f5e9; border-color: #4CAF50;">
                     <strong>💡 Recommendation:</strong><br>
-                    ${r.afterMetrics.eliminatedFalsePositives > 0 ? 
-                        `Apply these optimized thresholds to eliminate ${r.afterMetrics.eliminatedFalsePositives} false positives while maintaining ${((r.afterMetrics.truePositives / r.beforeMetrics.truePositives) * 100).toFixed(1)}% of successful signals.` :
-                        `Current thresholds are already optimal. No stricter thresholds possible without losing phase coverage.`
+                    ${
+                        r.afterMetrics.eliminatedFalsePositives > 0
+                            ? `Apply these optimized thresholds to eliminate ${r.afterMetrics.eliminatedFalsePositives} false positives while maintaining ${((r.afterMetrics.truePositives / r.beforeMetrics.truePositives) * 100).toFixed(1)}% of successful signals.`
+                            : `Current thresholds are already optimal. No stricter thresholds possible without losing phase coverage.`
                     }
                 </div>
             </div>
-        `).join('')}
+        `
+            )
+            .join("")}
     </div>
 </body>
 </html>`;
-    
+
     return html;
 }
 
 async function main(): Promise<void> {
-    const date = process.argv[2] || new Date().toISOString().split('T')[0];
-    
+    const date = process.argv[2] || new Date().toISOString().split("T")[0];
+
     console.log(`🔍 Optimizing thresholds for ${date}...`);
-    
+
     // Load current thresholds
     const currentThresholds = await loadCurrentThresholds();
     console.log("📋 Loaded current production thresholds");
-    
+
     // Load signals
     const signalsByDetector = await loadSignals(date);
     console.log(`📊 Loaded signals for ${signalsByDetector.size} detectors`);
-    
+
     // Load price data
     const priceData = await loadPriceData(date);
     console.log(`💹 Loaded ${priceData.size} price points`);
-    
+
     const results: OptimizationResult[] = [];
-    
+
     for (const [detector, signals] of signalsByDetector) {
         console.log(`\n🎯 Optimizing ${detector}...`);
-        
+
         // Calculate price movements
         calculatePriceMovements(signals, priceData);
-        
+
         // Create phases
         const phases = createPhases(signals);
         console.log(`  Created ${phases.length} phases`);
-        
+
         // Categorize signals
         categorizeSignals(phases);
-        
+
         // Find optimal thresholds
-        const detectorThresholds = currentThresholds[detector as keyof DetectorThresholds];
-        const result = findOptimalThresholds(detector, signals, phases, detectorThresholds);
+        const detectorThresholds =
+            currentThresholds[detector as keyof DetectorThresholds];
+        const result = findOptimalThresholds(
+            detector,
+            signals,
+            phases,
+            detectorThresholds
+        );
         results.push(result);
-        
-        console.log(`  ✅ Eliminated ${result.afterMetrics.eliminatedFalsePositives} false positives`);
-        console.log(`  ✅ Kept ${result.afterMetrics.keptSuccessfulSignals}/${result.beforeMetrics.truePositives} successful signals`);
+
+        console.log(
+            `  ✅ Eliminated ${result.afterMetrics.eliminatedFalsePositives} false positives`
+        );
+        console.log(
+            `  ✅ Kept ${result.afterMetrics.keptSuccessfulSignals}/${result.beforeMetrics.truePositives} successful signals`
+        );
     }
-    
+
     // Generate HTML report
     const html = generateHTML(results, date);
     const outputPath = `threshold_optimization_${date}.html`;
     await fs.writeFile(outputPath, html);
-    
+
     console.log(`\n✅ Report generated: ${outputPath}`);
 }
 

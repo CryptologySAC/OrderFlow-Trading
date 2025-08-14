@@ -20,13 +20,13 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { FinancialMath } from "./financialMath.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
-import type { SignalCandidate } from "../types/signalTypes.js";
-import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 import type {
-    AbsorptionCalculatedValues,
-    ExhaustionCalculatedValues,
-    DeltaCVDCalculatedValues,
-} from "../types/calculatedValuesTypes.js";
+    SignalCandidate,
+    AbsorptionThresholdChecks,
+    ExhaustionThresholdChecks,
+    DeltaCVDThresholdChecks,
+} from "../types/signalTypes.js";
+import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 
 /**
  * Signal validation data structure for ML training input
@@ -92,11 +92,11 @@ export interface SignalValidationRecord {
     exhaustionGap?: boolean;
     priceEfficiencyHigh?: boolean;
 
-    // Calculated Values (for CSV output)
-    calculatedValues:
-        | AbsorptionCalculatedValues
-        | ExhaustionCalculatedValues
-        | DeltaCVDCalculatedValues;
+    // Threshold Checks (for CSV output)
+    thresholdChecks:
+        | AbsorptionThresholdChecks
+        | ExhaustionThresholdChecks
+        | DeltaCVDThresholdChecks;
 
     // Rejection Analysis (for failed signals)
     rejectionReason?: string;
@@ -180,11 +180,11 @@ export interface SignalRejectionRecord {
     deltacvd_cvdImbalanceThreshold?: number;
     deltacvd_institutionalThreshold?: number;
 
-    // DYNAMIC CALCULATED VALUES - All actual computed values during detection
-    calculatedValues:
-        | AbsorptionCalculatedValues
-        | ExhaustionCalculatedValues
-        | DeltaCVDCalculatedValues;
+    // THRESHOLD CHECKS - All actual thresholds and calculated values during detection
+    thresholdChecks:
+        | AbsorptionThresholdChecks
+        | ExhaustionThresholdChecks
+        | DeltaCVDThresholdChecks;
 
     // Post-rejection analysis (filled later)
     actualTPPrice?: number; // The price where TP would have been hit (if reached)
@@ -278,11 +278,11 @@ export interface SuccessfulSignalRecord {
         enhancedConfidence?: number;
     };
 
-    // ✅ CALCULATED VALUES: For proper CSV header alignment
-    calculatedValues:
-        | AbsorptionCalculatedValues
-        | ExhaustionCalculatedValues
-        | DeltaCVDCalculatedValues;
+    // ✅ THRESHOLD CHECKS: For proper CSV header alignment
+    thresholdChecks:
+        | AbsorptionThresholdChecks
+        | ExhaustionThresholdChecks
+        | DeltaCVDThresholdChecks;
 
     // Market context
     marketVolume: number;
@@ -1180,10 +1180,10 @@ export class SignalValidationLogger {
     public logSignal(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
-        calculatedValues:
-            | AbsorptionCalculatedValues
-            | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues,
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks,
         marketContext: {
             totalAggressiveVolume: number;
             totalPassiveVolume: number;
@@ -1265,8 +1265,8 @@ export class SignalValidationLogger {
                 priceEfficiencyHigh:
                     signal.qualityFlags?.priceEfficiency ?? false,
 
-                // Store calculated values for later use
-                calculatedValues: calculatedValues,
+                // Store threshold checks for later use
+                thresholdChecks: thresholdChecks,
             };
 
             // Store for validation tracking
@@ -1276,7 +1276,7 @@ export class SignalValidationLogger {
             this.setupValidationTimers(signal.id, event.price);
 
             // Log immediately (partial record)
-            this.writeSignalRecord(record, calculatedValues);
+            this.writeSignalRecord(record, thresholdChecks);
 
             this.logger.info(
                 "SignalValidationLogger: Signal logged for validation",
@@ -1303,10 +1303,10 @@ export class SignalValidationLogger {
     public logSuccessfulSignal(
         detectorType: "exhaustion" | "absorption" | "deltacvd",
         event: EnrichedTradeEvent,
-        calculatedValues:
-            | AbsorptionCalculatedValues
-            | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues,
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks,
         marketContext: {
             marketVolume: number;
             marketSpread: number;
@@ -1318,9 +1318,9 @@ export class SignalValidationLogger {
             // Check for daily rotation before logging
             this.checkAndRotateFiles();
 
-            // Convert calculatedValues to parameterValues format for CSV output
+            // Convert thresholdChecks to parameterValues format for CSV output
             const parameterValues: SuccessfulSignalRecord["parameterValues"] =
-                this.convertCalculatedValuesToParameterValues(calculatedValues);
+                this.convertThresholdChecksToParameterValues(thresholdChecks);
 
             const record: SuccessfulSignalRecord = {
                 timestamp: event.timestamp,
@@ -1328,7 +1328,7 @@ export class SignalValidationLogger {
                 signalSide, // Mandatory - a signal without side is useless
                 price: event.price,
                 parameterValues,
-                calculatedValues, // ✅ Store for CSV alignment
+                thresholdChecks, // ✅ Store for CSV alignment
                 marketVolume: marketContext.marketVolume,
                 marketSpread: marketContext.marketSpread,
                 marketVolatility: marketContext.marketVolatility,
@@ -1378,33 +1378,37 @@ export class SignalValidationLogger {
             threshold: number;
             actual: number;
         },
-        calculatedValues:
-            | AbsorptionCalculatedValues
-            | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues,
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks,
         signalSide: "buy" | "sell"
     ): void {
         try {
             // Check for daily rotation before logging
             this.checkAndRotateFiles();
 
-            // Use the new calculatedValues parameter directly
-            const allCalculatedValues = calculatedValues;
+            // Use the thresholdChecks parameter directly
+            const allThresholdChecks = thresholdChecks;
 
             // Extract basic values for backward compatibility
+            // Note: We're extracting calculated values from the threshold checks
             const aggressiveVolume =
-                "calculatedMinAggVolume" in calculatedValues
-                    ? Number(calculatedValues.calculatedMinAggVolume) || 0
+                "minAggVolume" in thresholdChecks
+                    ? Number(thresholdChecks.minAggVolume.calculated) || 0
                     : 0;
             const passiveVolume = 0; // Not included in new interface
             const priceEfficiency =
-                "calculatedPriceEfficiency" in calculatedValues
-                    ? Number(calculatedValues.calculatedPriceEfficiency) || 0
+                "priceEfficiencyThreshold" in thresholdChecks
+                    ? Number(
+                          thresholdChecks.priceEfficiencyThreshold?.calculated
+                      ) || 0
                     : 0;
             const confidence =
-                "calculatedMinEnhancedConfidence" in calculatedValues
+                "minEnhancedConfidenceThreshold" in thresholdChecks
                     ? Number(
-                          calculatedValues.calculatedMinEnhancedConfidence
+                          thresholdChecks.minEnhancedConfidenceThreshold
+                              ?.calculated
                       ) || 0
                     : 0;
 
@@ -1426,8 +1430,8 @@ export class SignalValidationLogger {
                 priceEfficiency,
                 confidence,
 
-                // ✅ ALL CALCULATED VALUES: Every calculation the detector made
-                calculatedValues: allCalculatedValues,
+                // ✅ ALL THRESHOLD CHECKS: Every threshold and calculation the detector made
+                thresholdChecks: allThresholdChecks,
             };
 
             // Store rejection for later validation
@@ -1543,7 +1547,7 @@ export class SignalValidationLogger {
                 if (record.tpSlStatus === "TP") {
                     this.writeSuccessfulSignalRecord(
                         record,
-                        record.calculatedValues
+                        record.thresholdChecks
                     );
                 } else {
                     // Signal hit SL or didn't reach TP - log but don't write to successful file
@@ -1828,7 +1832,7 @@ export class SignalValidationLogger {
                         record.tpSlStatus = "TP";
                     }
                     // Write to success/validation file - this signal was successful (reached TP)
-                    this.writeSignalRecord(record, record.calculatedValues);
+                    this.writeSignalRecord(record, record.thresholdChecks);
                 } else {
                     // Signal did NOT reach 0.7% TP within timeframe
                     // This is a FALSE signal - don't track it in success/validation
@@ -2012,10 +2016,10 @@ export class SignalValidationLogger {
      */
     private writeSignalRecord(
         record: SignalValidationRecord,
-        calculatedValues:
-            | AbsorptionCalculatedValues
-            | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks
     ): void {
         try {
             const commonFields = [
@@ -2026,72 +2030,98 @@ export class SignalValidationLogger {
                 record.price,
             ];
 
-            let calculatedFields: (string | number | boolean)[] = [];
+            let calculatedFields: string[] = [];
             switch (record.detectorType) {
                 case "deltacvd":
-                    const deltacvdValues =
-                        calculatedValues as DeltaCVDCalculatedValues;
+                    const deltacvdChecks =
+                        thresholdChecks as DeltaCVDThresholdChecks;
                     calculatedFields = [
-                        deltacvdValues.calculatedMinTradesPerSec,
-                        deltacvdValues.calculatedMinVolPerSec,
-                        deltacvdValues.calculatedSignalThreshold,
-                        deltacvdValues.calculatedEventCooldownMs,
-                        deltacvdValues.calculatedEnhancementMode,
-                        deltacvdValues.calculatedCvdImbalanceThreshold,
-                        deltacvdValues.calculatedTimeWindowIndex,
-                        deltacvdValues.calculatedInstitutionalThreshold,
+                        JSON.stringify(deltacvdChecks.minTradesPerSec),
+                        JSON.stringify(deltacvdChecks.minVolPerSec),
+                        JSON.stringify(deltacvdChecks.signalThreshold),
+                        JSON.stringify(deltacvdChecks.eventCooldownMs),
+                        JSON.stringify(deltacvdChecks.enhancementMode),
+                        JSON.stringify(deltacvdChecks.cvdImbalanceThreshold),
+                        JSON.stringify(deltacvdChecks.timeWindowIndex),
+                        JSON.stringify(deltacvdChecks.institutionalThreshold),
                     ];
                     break;
                 case "exhaustion":
-                    const exhaustionValues =
-                        calculatedValues as ExhaustionCalculatedValues;
+                    const exhaustionChecks =
+                        thresholdChecks as ExhaustionThresholdChecks;
                     calculatedFields = [
-                        exhaustionValues.calculatedMinAggVolume,
-                        exhaustionValues.calculatedExhaustionThreshold,
-                        exhaustionValues.calculatedTimeWindowIndex,
-                        exhaustionValues.calculatedEventCooldownMs,
-                        exhaustionValues.calculatedUseStandardizedZones,
-                        exhaustionValues.calculatedEnhancementMode,
-                        exhaustionValues.calculatedMinEnhancedConfidenceThreshold,
-                        exhaustionValues.calculatedEnableDepletionAnalysis,
-                        exhaustionValues.calculatedDepletionVolumeThreshold,
-                        exhaustionValues.calculatedDepletionRatioThreshold,
-                        exhaustionValues.calculatedPassiveVolumeExhaustionRatio,
-                        exhaustionValues.calculatedVarianceReductionFactor,
-                        exhaustionValues.calculatedAlignmentNormalizationFactor,
-                        exhaustionValues.calculatedAggressiveVolumeExhaustionThreshold,
-                        exhaustionValues.calculatedAggressiveVolumeReductionFactor,
-                        exhaustionValues.calculatedPassiveRatioBalanceThreshold,
-                        exhaustionValues.calculatedPremiumConfidenceThreshold,
-                        exhaustionValues.calculatedVariancePenaltyFactor,
-                        exhaustionValues.calculatedRatioBalanceCenterPoint,
+                        JSON.stringify(exhaustionChecks.minAggVolume),
+                        JSON.stringify(exhaustionChecks.exhaustionThreshold),
+                        JSON.stringify(exhaustionChecks.timeWindowIndex),
+                        JSON.stringify(exhaustionChecks.eventCooldownMs),
+                        JSON.stringify(exhaustionChecks.useStandardizedZones),
+                        JSON.stringify(exhaustionChecks.enhancementMode),
+                        JSON.stringify(
+                            exhaustionChecks.minEnhancedConfidenceThreshold
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.enableDepletionAnalysis
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.depletionVolumeThreshold
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.depletionRatioThreshold
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.passiveVolumeExhaustionRatio
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.varianceReductionFactor
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.alignmentNormalizationFactor
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.aggressiveVolumeExhaustionThreshold
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.aggressiveVolumeReductionFactor
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.passiveRatioBalanceThreshold
+                        ),
+                        JSON.stringify(
+                            exhaustionChecks.premiumConfidenceThreshold
+                        ),
+                        JSON.stringify(exhaustionChecks.variancePenaltyFactor),
+                        JSON.stringify(
+                            exhaustionChecks.ratioBalanceCenterPoint
+                        ),
                     ];
                     break;
                 case "absorption":
-                    const absorptionValues =
-                        calculatedValues as AbsorptionCalculatedValues;
+                    const absorptionChecks =
+                        thresholdChecks as AbsorptionThresholdChecks;
                     calculatedFields = [
-                        absorptionValues.calculatedMinAggVolume,
-                        absorptionValues.calculatedTimeWindowIndex,
-                        absorptionValues.calculatedEventCooldownMs,
-                        absorptionValues.calculatedPriceEfficiencyThreshold,
-                        absorptionValues.calculatedMaxAbsorptionRatio,
-                        absorptionValues.calculatedMinPassiveMultiplier,
-                        absorptionValues.calculatedPassiveAbsorptionThreshold,
-                        absorptionValues.calculatedExpectedMovementScalingFactor,
-                        absorptionValues.calculatedLiquidityGradientRange,
-                        absorptionValues.calculatedInstitutionalVolumeThreshold,
-                        absorptionValues.calculatedInstitutionalVolumeRatioThreshold,
-                        absorptionValues.calculatedEnableInstitutionalVolumeFilter,
-                        absorptionValues.calculatedMinAbsorptionScore,
-                        absorptionValues.calculatedFinalConfidenceRequired,
-                        absorptionValues.calculatedMaxZoneCountForScoring,
-                        absorptionValues.calculatedMinEnhancedConfidenceThreshold,
-                        absorptionValues.calculatedUseStandardizedZones,
-                        absorptionValues.calculatedEnhancementMode,
-                        absorptionValues.calculatedBalanceThreshold,
-                        absorptionValues.calculatedConfluenceMinZones,
-                        absorptionValues.calculatedConfluenceMaxDistance,
+                        JSON.stringify(absorptionChecks.minAggVolume),
+                        JSON.stringify(absorptionChecks.timeWindowIndex),
+                        JSON.stringify(absorptionChecks.eventCooldownMs),
+                        JSON.stringify(
+                            absorptionChecks.priceEfficiencyThreshold
+                        ),
+                        JSON.stringify(absorptionChecks.maxAbsorptionRatio),
+                        JSON.stringify(absorptionChecks.minPassiveMultiplier),
+                        JSON.stringify(
+                            absorptionChecks.passiveAbsorptionThreshold
+                        ),
+                        JSON.stringify(
+                            absorptionChecks.expectedMovementScalingFactor
+                        ),
+
+                        JSON.stringify(absorptionChecks.minAbsorptionScore),
+                        JSON.stringify(
+                            absorptionChecks.finalConfidenceRequired
+                        ),
+                        JSON.stringify(absorptionChecks.maxZoneCountForScoring),
+                        JSON.stringify(absorptionChecks.balanceThreshold),
+                        JSON.stringify(absorptionChecks.confluenceMinZones),
+                        JSON.stringify(absorptionChecks.confluenceMaxDistance),
                     ];
                     break;
             }
@@ -2148,14 +2178,14 @@ export class SignalValidationLogger {
 
     /**
      * ✅ DETECTOR-SPECIFIC CSV formatter for successful signals - explicit field extraction for header alignment
-     * INSTITUTIONAL COMPLIANCE: Uses calculatedValues parameter with proper typing
+     * INSTITUTIONAL COMPLIANCE: Uses thresholdChecks parameter with JSON format for each column
      */
     private formatDetectorSpecificSuccessfulSignalCSV(
         record: SuccessfulSignalRecord,
-        calculatedValues:
-            | AbsorptionCalculatedValues
-            | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks
     ): string {
         // Try to find signalSide from validation record with same timestamp
         let signalSide = record.signalSide || "";
@@ -2195,81 +2225,98 @@ export class SignalValidationLogger {
             record.priceEfficiencyHigh || false,
         ];
 
-        // ✅ EXPLICIT FIELD EXTRACTION: Match exact header order from getDetectorSpecificSuccessfulHeader
-        let configParameters: (string | number | boolean)[] = [];
+        // ✅ NEW FORMAT: Output threshold checks as JSON for each parameter column
+        let configParameters: string[] = [];
 
         switch (record.detectorType) {
             case "exhaustion":
-                const exhaustionValues =
-                    calculatedValues as ExhaustionCalculatedValues;
+                const exhaustionChecks =
+                    thresholdChecks as ExhaustionThresholdChecks;
                 configParameters = [
-                    exhaustionValues.calculatedMinAggVolume,
-                    exhaustionValues.calculatedExhaustionThreshold,
-                    exhaustionValues.calculatedTimeWindowIndex,
-                    exhaustionValues.calculatedEventCooldownMs,
-                    exhaustionValues.calculatedUseStandardizedZones,
-                    exhaustionValues.calculatedEnhancementMode,
-                    exhaustionValues.calculatedMinEnhancedConfidenceThreshold,
-                    exhaustionValues.calculatedEnableDepletionAnalysis,
-                    exhaustionValues.calculatedDepletionVolumeThreshold,
-                    exhaustionValues.calculatedDepletionRatioThreshold,
-                    exhaustionValues.calculatedPassiveVolumeExhaustionRatio,
-                    exhaustionValues.calculatedVarianceReductionFactor,
-                    exhaustionValues.calculatedAlignmentNormalizationFactor,
-                    exhaustionValues.calculatedAggressiveVolumeExhaustionThreshold,
-                    exhaustionValues.calculatedAggressiveVolumeReductionFactor,
-                    exhaustionValues.calculatedPassiveRatioBalanceThreshold,
-                    exhaustionValues.calculatedPremiumConfidenceThreshold,
-                    exhaustionValues.calculatedVariancePenaltyFactor,
-                    exhaustionValues.calculatedRatioBalanceCenterPoint,
+                    JSON.stringify(exhaustionChecks.minAggVolume),
+                    JSON.stringify(exhaustionChecks.exhaustionThreshold),
+                    JSON.stringify(exhaustionChecks.timeWindowIndex),
+                    JSON.stringify(exhaustionChecks.eventCooldownMs),
+                    JSON.stringify(exhaustionChecks.useStandardizedZones),
+                    JSON.stringify(exhaustionChecks.enhancementMode),
+                    JSON.stringify(
+                        exhaustionChecks.minEnhancedConfidenceThreshold
+                    ),
+                    JSON.stringify(exhaustionChecks.enableDepletionAnalysis),
+                    JSON.stringify(exhaustionChecks.depletionVolumeThreshold),
+                    JSON.stringify(exhaustionChecks.depletionRatioThreshold),
+                    JSON.stringify(
+                        exhaustionChecks.passiveVolumeExhaustionRatio
+                    ),
+                    JSON.stringify(exhaustionChecks.varianceReductionFactor),
+                    JSON.stringify(
+                        exhaustionChecks.alignmentNormalizationFactor
+                    ),
+                    JSON.stringify(
+                        exhaustionChecks.aggressiveVolumeExhaustionThreshold
+                    ),
+                    JSON.stringify(
+                        exhaustionChecks.aggressiveVolumeReductionFactor
+                    ),
+                    JSON.stringify(
+                        exhaustionChecks.passiveRatioBalanceThreshold
+                    ),
+                    JSON.stringify(exhaustionChecks.premiumConfidenceThreshold),
+                    JSON.stringify(exhaustionChecks.variancePenaltyFactor),
+                    JSON.stringify(exhaustionChecks.ratioBalanceCenterPoint),
+                    JSON.stringify(exhaustionChecks.enableDynamicZoneTracking),
+                    JSON.stringify(exhaustionChecks.maxZonesPerSide),
+                    JSON.stringify(exhaustionChecks.zoneDepletionThreshold),
+                    JSON.stringify(exhaustionChecks.gapDetectionTicks),
                 ];
                 break;
             case "absorption":
-                const absorptionValues =
-                    calculatedValues as AbsorptionCalculatedValues;
+                const absorptionChecks =
+                    thresholdChecks as AbsorptionThresholdChecks;
                 configParameters = [
-                    absorptionValues.calculatedMinAggVolume,
-                    absorptionValues.calculatedTimeWindowIndex,
-                    absorptionValues.calculatedEventCooldownMs,
-                    absorptionValues.calculatedPriceEfficiencyThreshold,
-                    absorptionValues.calculatedMaxAbsorptionRatio,
-                    absorptionValues.calculatedMinPassiveMultiplier,
-                    absorptionValues.calculatedPassiveAbsorptionThreshold,
-                    absorptionValues.calculatedExpectedMovementScalingFactor,
-                    absorptionValues.calculatedLiquidityGradientRange,
-                    absorptionValues.calculatedInstitutionalVolumeThreshold,
-                    absorptionValues.calculatedInstitutionalVolumeRatioThreshold,
-                    absorptionValues.calculatedEnableInstitutionalVolumeFilter,
-                    absorptionValues.calculatedMinAbsorptionScore,
-                    absorptionValues.calculatedFinalConfidenceRequired,
-                    absorptionValues.calculatedMaxZoneCountForScoring,
-                    absorptionValues.calculatedMinEnhancedConfidenceThreshold,
-                    absorptionValues.calculatedUseStandardizedZones,
-                    absorptionValues.calculatedEnhancementMode,
-                    absorptionValues.calculatedBalanceThreshold,
-                    absorptionValues.calculatedConfluenceMinZones,
-                    absorptionValues.calculatedConfluenceMaxDistance,
+                    JSON.stringify(absorptionChecks.minAggVolume),
+                    JSON.stringify(absorptionChecks.timeWindowIndex),
+                    JSON.stringify(absorptionChecks.eventCooldownMs),
+                    JSON.stringify(absorptionChecks.priceEfficiencyThreshold),
+                    JSON.stringify(absorptionChecks.maxAbsorptionRatio),
+                    JSON.stringify(absorptionChecks.minPassiveMultiplier),
+                    JSON.stringify(absorptionChecks.passiveAbsorptionThreshold),
+                    JSON.stringify(
+                        absorptionChecks.expectedMovementScalingFactor
+                    ),
+                    JSON.stringify(absorptionChecks.minAbsorptionScore),
+                    JSON.stringify(absorptionChecks.finalConfidenceRequired),
+                    JSON.stringify(absorptionChecks.maxZoneCountForScoring),
+                    JSON.stringify(absorptionChecks.balanceThreshold),
+                    JSON.stringify(absorptionChecks.confluenceMinZones),
+                    JSON.stringify(absorptionChecks.confluenceMaxDistance),
+                    JSON.stringify(absorptionChecks.maxZonesPerSide),
+                    JSON.stringify(absorptionChecks.zoneHistoryWindowMs),
+                    JSON.stringify(absorptionChecks.absorptionZoneThreshold),
+                    JSON.stringify(absorptionChecks.minPassiveVolumeForZone),
+                    JSON.stringify(absorptionChecks.priceStabilityTicks),
+                    JSON.stringify(absorptionChecks.minAbsorptionEvents),
                 ];
                 break;
             case "deltacvd":
-                const deltacvdValues =
-                    calculatedValues as DeltaCVDCalculatedValues;
+                const deltacvdChecks =
+                    thresholdChecks as DeltaCVDThresholdChecks;
                 configParameters = [
-                    deltacvdValues.calculatedMinTradesPerSec,
-                    deltacvdValues.calculatedMinVolPerSec,
-                    deltacvdValues.calculatedSignalThreshold,
-                    deltacvdValues.calculatedEventCooldownMs,
-                    deltacvdValues.calculatedEnhancementMode,
-                    deltacvdValues.calculatedCvdImbalanceThreshold,
-                    deltacvdValues.calculatedTimeWindowIndex,
-                    deltacvdValues.calculatedInstitutionalThreshold,
+                    JSON.stringify(deltacvdChecks.minTradesPerSec),
+                    JSON.stringify(deltacvdChecks.minVolPerSec),
+                    JSON.stringify(deltacvdChecks.signalThreshold),
+                    JSON.stringify(deltacvdChecks.eventCooldownMs),
+                    JSON.stringify(deltacvdChecks.enhancementMode),
+                    JSON.stringify(deltacvdChecks.cvdImbalanceThreshold),
+                    JSON.stringify(deltacvdChecks.timeWindowIndex),
+                    JSON.stringify(deltacvdChecks.institutionalThreshold),
                 ];
                 break;
         }
 
         const allFields = [
             ...commonFields,
-            ...configParameters.map(String),
+            ...configParameters, // Already JSON strings
             ...outcomeFields.map(String),
         ];
         return allFields.join(",") + "\n";
@@ -2277,20 +2324,20 @@ export class SignalValidationLogger {
 
     /**
      * Write successful signal record to CSV
-     * INSTITUTIONAL COMPLIANCE: Uses calculatedValues for proper header alignment
+     * INSTITUTIONAL COMPLIANCE: Uses thresholdChecks for proper header alignment
      */
     private writeSuccessfulSignalRecord(
         record: SuccessfulSignalRecord,
-        calculatedValues:
-            | AbsorptionCalculatedValues
-            | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks
     ): void {
         try {
-            // ✅ DETECTOR-SPECIFIC CSV LINE: Pass calculatedValues for proper alignment
+            // ✅ DETECTOR-SPECIFIC CSV LINE: Pass thresholdChecks for proper alignment
             const csvLine = this.formatDetectorSpecificSuccessfulSignalCSV(
                 record,
-                calculatedValues
+                thresholdChecks
             );
 
             // ✅ NON-BLOCKING: Add to detector-specific buffer instead of direct file write
@@ -2319,14 +2366,14 @@ export class SignalValidationLogger {
 
     /**
      * ✅ DETECTOR-SPECIFIC CSV formatter for rejections - explicit field extraction for header alignment
-     * INSTITUTIONAL COMPLIANCE: Uses calculatedValues parameter with proper typing
+     * INSTITUTIONAL COMPLIANCE: Uses thresholdChecks parameter with JSON format for each column
      */
     private formatDetectorSpecificRejectionCSV(
         record: SignalRejectionRecord,
-        calculatedValues:
-            | AbsorptionCalculatedValues
-            | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks
     ): string {
         const commonFields = [
             record.timestamp,
@@ -2354,81 +2401,98 @@ export class SignalValidationLogger {
             record.priceEfficiencyHigh || false,
         ];
 
-        // ✅ EXPLICIT FIELD EXTRACTION: Match exact header order from getDetectorSpecificRejectionHeader
-        let configParameters: (string | number | boolean)[] = [];
+        // ✅ NEW FORMAT: Output threshold checks as JSON for each parameter column
+        let configParameters: string[] = [];
 
         switch (record.detectorType) {
             case "exhaustion":
-                const exhaustionValues =
-                    calculatedValues as ExhaustionCalculatedValues;
+                const exhaustionChecks =
+                    thresholdChecks as ExhaustionThresholdChecks;
                 configParameters = [
-                    exhaustionValues.calculatedMinAggVolume,
-                    exhaustionValues.calculatedExhaustionThreshold,
-                    exhaustionValues.calculatedTimeWindowIndex,
-                    exhaustionValues.calculatedEventCooldownMs,
-                    exhaustionValues.calculatedUseStandardizedZones,
-                    exhaustionValues.calculatedEnhancementMode,
-                    exhaustionValues.calculatedMinEnhancedConfidenceThreshold,
-                    exhaustionValues.calculatedEnableDepletionAnalysis,
-                    exhaustionValues.calculatedDepletionVolumeThreshold,
-                    exhaustionValues.calculatedDepletionRatioThreshold,
-                    exhaustionValues.calculatedPassiveVolumeExhaustionRatio,
-                    exhaustionValues.calculatedVarianceReductionFactor,
-                    exhaustionValues.calculatedAlignmentNormalizationFactor,
-                    exhaustionValues.calculatedAggressiveVolumeExhaustionThreshold,
-                    exhaustionValues.calculatedAggressiveVolumeReductionFactor,
-                    exhaustionValues.calculatedPassiveRatioBalanceThreshold,
-                    exhaustionValues.calculatedPremiumConfidenceThreshold,
-                    exhaustionValues.calculatedVariancePenaltyFactor,
-                    exhaustionValues.calculatedRatioBalanceCenterPoint,
+                    JSON.stringify(exhaustionChecks.minAggVolume),
+                    JSON.stringify(exhaustionChecks.exhaustionThreshold),
+                    JSON.stringify(exhaustionChecks.timeWindowIndex),
+                    JSON.stringify(exhaustionChecks.eventCooldownMs),
+                    JSON.stringify(exhaustionChecks.useStandardizedZones),
+                    JSON.stringify(exhaustionChecks.enhancementMode),
+                    JSON.stringify(
+                        exhaustionChecks.minEnhancedConfidenceThreshold
+                    ),
+                    JSON.stringify(exhaustionChecks.enableDepletionAnalysis),
+                    JSON.stringify(exhaustionChecks.depletionVolumeThreshold),
+                    JSON.stringify(exhaustionChecks.depletionRatioThreshold),
+                    JSON.stringify(
+                        exhaustionChecks.passiveVolumeExhaustionRatio
+                    ),
+                    JSON.stringify(exhaustionChecks.varianceReductionFactor),
+                    JSON.stringify(
+                        exhaustionChecks.alignmentNormalizationFactor
+                    ),
+                    JSON.stringify(
+                        exhaustionChecks.aggressiveVolumeExhaustionThreshold
+                    ),
+                    JSON.stringify(
+                        exhaustionChecks.aggressiveVolumeReductionFactor
+                    ),
+                    JSON.stringify(
+                        exhaustionChecks.passiveRatioBalanceThreshold
+                    ),
+                    JSON.stringify(exhaustionChecks.premiumConfidenceThreshold),
+                    JSON.stringify(exhaustionChecks.variancePenaltyFactor),
+                    JSON.stringify(exhaustionChecks.ratioBalanceCenterPoint),
+                    JSON.stringify(exhaustionChecks.enableDynamicZoneTracking),
+                    JSON.stringify(exhaustionChecks.maxZonesPerSide),
+                    JSON.stringify(exhaustionChecks.zoneDepletionThreshold),
+                    JSON.stringify(exhaustionChecks.gapDetectionTicks),
                 ];
                 break;
             case "absorption":
-                const absorptionValues =
-                    calculatedValues as AbsorptionCalculatedValues;
+                const absorptionChecks =
+                    thresholdChecks as AbsorptionThresholdChecks;
                 configParameters = [
-                    absorptionValues.calculatedMinAggVolume,
-                    absorptionValues.calculatedTimeWindowIndex,
-                    absorptionValues.calculatedEventCooldownMs,
-                    absorptionValues.calculatedPriceEfficiencyThreshold,
-                    absorptionValues.calculatedMaxAbsorptionRatio,
-                    absorptionValues.calculatedMinPassiveMultiplier,
-                    absorptionValues.calculatedPassiveAbsorptionThreshold,
-                    absorptionValues.calculatedExpectedMovementScalingFactor,
-                    absorptionValues.calculatedLiquidityGradientRange,
-                    absorptionValues.calculatedInstitutionalVolumeThreshold,
-                    absorptionValues.calculatedInstitutionalVolumeRatioThreshold,
-                    absorptionValues.calculatedEnableInstitutionalVolumeFilter,
-                    absorptionValues.calculatedMinAbsorptionScore,
-                    absorptionValues.calculatedFinalConfidenceRequired,
-                    absorptionValues.calculatedMaxZoneCountForScoring,
-                    absorptionValues.calculatedMinEnhancedConfidenceThreshold,
-                    absorptionValues.calculatedUseStandardizedZones,
-                    absorptionValues.calculatedEnhancementMode,
-                    absorptionValues.calculatedBalanceThreshold,
-                    absorptionValues.calculatedConfluenceMinZones,
-                    absorptionValues.calculatedConfluenceMaxDistance,
+                    JSON.stringify(absorptionChecks.minAggVolume),
+                    JSON.stringify(absorptionChecks.timeWindowIndex),
+                    JSON.stringify(absorptionChecks.eventCooldownMs),
+                    JSON.stringify(absorptionChecks.priceEfficiencyThreshold),
+                    JSON.stringify(absorptionChecks.maxAbsorptionRatio),
+                    JSON.stringify(absorptionChecks.minPassiveMultiplier),
+                    JSON.stringify(absorptionChecks.passiveAbsorptionThreshold),
+                    JSON.stringify(
+                        absorptionChecks.expectedMovementScalingFactor
+                    ),
+                    JSON.stringify(absorptionChecks.minAbsorptionScore),
+                    JSON.stringify(absorptionChecks.finalConfidenceRequired),
+                    JSON.stringify(absorptionChecks.maxZoneCountForScoring),
+                    JSON.stringify(absorptionChecks.balanceThreshold),
+                    JSON.stringify(absorptionChecks.confluenceMinZones),
+                    JSON.stringify(absorptionChecks.confluenceMaxDistance),
+                    JSON.stringify(absorptionChecks.maxZonesPerSide),
+                    JSON.stringify(absorptionChecks.zoneHistoryWindowMs),
+                    JSON.stringify(absorptionChecks.absorptionZoneThreshold),
+                    JSON.stringify(absorptionChecks.minPassiveVolumeForZone),
+                    JSON.stringify(absorptionChecks.priceStabilityTicks),
+                    JSON.stringify(absorptionChecks.minAbsorptionEvents),
                 ];
                 break;
             case "deltacvd":
-                const deltacvdValues =
-                    calculatedValues as DeltaCVDCalculatedValues;
+                const deltacvdChecks =
+                    thresholdChecks as DeltaCVDThresholdChecks;
                 configParameters = [
-                    deltacvdValues.calculatedMinTradesPerSec,
-                    deltacvdValues.calculatedMinVolPerSec,
-                    deltacvdValues.calculatedSignalThreshold,
-                    deltacvdValues.calculatedEventCooldownMs,
-                    deltacvdValues.calculatedEnhancementMode,
-                    deltacvdValues.calculatedCvdImbalanceThreshold,
-                    deltacvdValues.calculatedTimeWindowIndex,
-                    deltacvdValues.calculatedInstitutionalThreshold,
+                    JSON.stringify(deltacvdChecks.minTradesPerSec),
+                    JSON.stringify(deltacvdChecks.minVolPerSec),
+                    JSON.stringify(deltacvdChecks.signalThreshold),
+                    JSON.stringify(deltacvdChecks.eventCooldownMs),
+                    JSON.stringify(deltacvdChecks.enhancementMode),
+                    JSON.stringify(deltacvdChecks.cvdImbalanceThreshold),
+                    JSON.stringify(deltacvdChecks.timeWindowIndex),
+                    JSON.stringify(deltacvdChecks.institutionalThreshold),
                 ];
                 break;
         }
 
         const allFields = [
             ...commonFields,
-            ...configParameters.map(String),
+            ...configParameters, // Already JSON strings
             ...outcomeFields.map(String),
         ];
         return allFields.join(",") + "\n";
@@ -2451,7 +2515,7 @@ export class SignalValidationLogger {
             // Use same CSV format as rejection records
             const csvLine = this.formatDetectorSpecificRejectionCSV(
                 record,
-                record.calculatedValues
+                record.thresholdChecks
             );
 
             // Add to detector-specific rejected_missed buffer
@@ -2485,10 +2549,10 @@ export class SignalValidationLogger {
      */
     private writeRejectionRecord(record: SignalRejectionRecord): void {
         try {
-            // ✅ DETECTOR-SPECIFIC CSV LINE: Pass calculatedValues for proper alignment
+            // ✅ DETECTOR-SPECIFIC CSV LINE: Pass thresholdChecks for proper alignment
             const csvLine = this.formatDetectorSpecificRejectionCSV(
                 record,
-                record.calculatedValues
+                record.thresholdChecks
             );
 
             // ✅ NON-BLOCKING: Add to detector-specific buffer instead of direct file write
@@ -2585,137 +2649,125 @@ export class SignalValidationLogger {
     }
 
     /**
-     * Convert calculatedValues to parameterValues format for CSV output
-     * INSTITUTIONAL COMPLIANCE: Maps calculated values to expected CSV structure
+     * Convert thresholdChecks to parameterValues format for CSV output
+     * INSTITUTIONAL COMPLIANCE: Maps threshold checks to expected CSV structure
      */
-    private convertCalculatedValuesToParameterValues(
-        calculatedValues:
-            | AbsorptionCalculatedValues
-            | ExhaustionCalculatedValues
-            | DeltaCVDCalculatedValues
+    private convertThresholdChecksToParameterValues(
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks
     ): SuccessfulSignalRecord["parameterValues"] {
         const result: SuccessfulSignalRecord["parameterValues"] = {};
 
         try {
             // Extract common fields that exist across all detector types
-            if ("calculatedMinAggVolume" in calculatedValues) {
-                result.minAggVolume = calculatedValues.calculatedMinAggVolume;
+            if ("minAggVolume" in thresholdChecks) {
+                result.minAggVolume = thresholdChecks.minAggVolume.calculated;
             }
-            if ("calculatedTimeWindowIndex" in calculatedValues) {
+            if ("timeWindowIndex" in thresholdChecks) {
                 result.timeWindowIndex =
-                    calculatedValues.calculatedTimeWindowIndex;
+                    thresholdChecks.timeWindowIndex.calculated;
             }
-            if ("calculatedEventCooldownMs" in calculatedValues) {
+            if ("eventCooldownMs" in thresholdChecks) {
                 result.eventCooldownMs =
-                    calculatedValues.calculatedEventCooldownMs;
+                    thresholdChecks.eventCooldownMs.calculated;
             }
-            if ("calculatedEnhancementMode" in calculatedValues) {
+            if ("enhancementMode" in thresholdChecks) {
                 result.enhancementMode =
-                    calculatedValues.calculatedEnhancementMode;
+                    thresholdChecks.enhancementMode.calculated;
             }
-            if (
-                "calculatedMinEnhancedConfidenceThreshold" in calculatedValues
-            ) {
+            if ("minEnhancedConfidenceThreshold" in thresholdChecks) {
                 result.minEnhancedConfidenceThreshold =
-                    calculatedValues.calculatedMinEnhancedConfidenceThreshold;
+                    thresholdChecks.minEnhancedConfidenceThreshold.calculated;
                 result.confidence =
-                    calculatedValues.calculatedMinEnhancedConfidenceThreshold;
+                    thresholdChecks.minEnhancedConfidenceThreshold.calculated;
             }
 
             // Handle Exhaustion-specific fields
-            if ("calculatedExhaustionThreshold" in calculatedValues) {
-                const exhaustionValues = calculatedValues;
+            if ("exhaustionThreshold" in thresholdChecks) {
+                const exhaustionChecks = thresholdChecks;
                 result.exhaustionThreshold =
-                    exhaustionValues.calculatedExhaustionThreshold;
+                    exhaustionChecks.exhaustionThreshold.calculated;
                 result.useStandardizedZones =
-                    exhaustionValues.calculatedUseStandardizedZones;
+                    exhaustionChecks.useStandardizedZones.calculated;
                 result.enableDepletionAnalysis =
-                    exhaustionValues.calculatedEnableDepletionAnalysis;
+                    exhaustionChecks.enableDepletionAnalysis.calculated;
                 result.depletionVolumeThreshold =
-                    exhaustionValues.calculatedDepletionVolumeThreshold;
+                    exhaustionChecks.depletionVolumeThreshold.calculated;
                 result.depletionRatioThreshold =
-                    exhaustionValues.calculatedDepletionRatioThreshold;
+                    exhaustionChecks.depletionRatioThreshold.calculated;
                 result.passiveVolumeExhaustionRatio =
-                    exhaustionValues.calculatedPassiveVolumeExhaustionRatio;
+                    exhaustionChecks.passiveVolumeExhaustionRatio.calculated;
                 result.varianceReductionFactor =
-                    exhaustionValues.calculatedVarianceReductionFactor;
+                    exhaustionChecks.varianceReductionFactor.calculated;
                 result.alignmentNormalizationFactor =
-                    exhaustionValues.calculatedAlignmentNormalizationFactor;
+                    exhaustionChecks.alignmentNormalizationFactor.calculated;
                 result.aggressiveVolumeExhaustionThreshold =
-                    exhaustionValues.calculatedAggressiveVolumeExhaustionThreshold;
+                    exhaustionChecks.aggressiveVolumeExhaustionThreshold.calculated;
                 result.aggressiveVolumeReductionFactor =
-                    exhaustionValues.calculatedAggressiveVolumeReductionFactor;
+                    exhaustionChecks.aggressiveVolumeReductionFactor.calculated;
                 result.passiveRatioBalanceThreshold =
-                    exhaustionValues.calculatedPassiveRatioBalanceThreshold;
+                    exhaustionChecks.passiveRatioBalanceThreshold.calculated;
                 result.premiumConfidenceThreshold =
-                    exhaustionValues.calculatedPremiumConfidenceThreshold;
+                    exhaustionChecks.premiumConfidenceThreshold.calculated;
                 result.variancePenaltyFactor =
-                    exhaustionValues.calculatedVariancePenaltyFactor;
+                    exhaustionChecks.variancePenaltyFactor.calculated;
                 result.ratioBalanceCenterPoint =
-                    exhaustionValues.calculatedRatioBalanceCenterPoint;
+                    exhaustionChecks.ratioBalanceCenterPoint.calculated;
             }
 
             // Handle Absorption-specific fields
-            if ("calculatedPriceEfficiencyThreshold" in calculatedValues) {
-                const absorptionValues = calculatedValues;
+            if ("priceEfficiencyThreshold" in thresholdChecks) {
+                const absorptionChecks = thresholdChecks;
                 result.priceEfficiencyThreshold =
-                    absorptionValues.calculatedPriceEfficiencyThreshold;
+                    absorptionChecks.priceEfficiencyThreshold.calculated;
                 result.maxAbsorptionRatio =
-                    absorptionValues.calculatedMaxAbsorptionRatio;
+                    absorptionChecks.maxAbsorptionRatio.calculated;
                 result.minPassiveMultiplier =
-                    absorptionValues.calculatedMinPassiveMultiplier;
+                    absorptionChecks.minPassiveMultiplier.calculated;
                 result.passiveAbsorptionThreshold =
-                    absorptionValues.calculatedPassiveAbsorptionThreshold;
+                    absorptionChecks.passiveAbsorptionThreshold.calculated;
                 result.expectedMovementScalingFactor =
-                    absorptionValues.calculatedExpectedMovementScalingFactor;
-                result.liquidityGradientRange =
-                    absorptionValues.calculatedLiquidityGradientRange;
-                result.institutionalVolumeThreshold =
-                    absorptionValues.calculatedInstitutionalVolumeThreshold;
-                result.institutionalVolumeRatioThreshold =
-                    absorptionValues.calculatedInstitutionalVolumeRatioThreshold;
-                result.enableInstitutionalVolumeFilter =
-                    absorptionValues.calculatedEnableInstitutionalVolumeFilter;
+                    absorptionChecks.expectedMovementScalingFactor.calculated;
                 result.minAbsorptionScore =
-                    absorptionValues.calculatedMinAbsorptionScore;
+                    absorptionChecks.minAbsorptionScore.calculated;
                 result.finalConfidenceRequired =
-                    absorptionValues.calculatedFinalConfidenceRequired;
+                    absorptionChecks.finalConfidenceRequired.calculated;
                 result.maxZoneCountForScoring =
-                    absorptionValues.calculatedMaxZoneCountForScoring;
-                result.useStandardizedZones =
-                    absorptionValues.calculatedUseStandardizedZones;
+                    absorptionChecks.maxZoneCountForScoring.calculated;
                 result.balanceThreshold =
-                    absorptionValues.calculatedBalanceThreshold;
+                    absorptionChecks.balanceThreshold.calculated;
                 result.confluenceMinZones =
-                    absorptionValues.calculatedConfluenceMinZones;
+                    absorptionChecks.confluenceMinZones.calculated;
                 result.confluenceMaxDistance =
-                    absorptionValues.calculatedConfluenceMaxDistance;
+                    absorptionChecks.confluenceMaxDistance.calculated;
                 result.absorptionThreshold =
-                    absorptionValues.calculatedMaxAbsorptionRatio;
+                    absorptionChecks.maxAbsorptionRatio.calculated;
 
                 // Set priceEfficiency from threshold for compatibility
                 result.priceEfficiency =
-                    absorptionValues.calculatedPriceEfficiencyThreshold;
+                    absorptionChecks.priceEfficiencyThreshold.calculated;
             }
 
             // Handle DeltaCVD-specific fields
-            if ("calculatedMinTradesPerSec" in calculatedValues) {
-                const deltacvdValues = calculatedValues;
+            if ("minTradesPerSec" in thresholdChecks) {
+                const deltacvdChecks = thresholdChecks;
                 result.minTradesPerSec =
-                    deltacvdValues.calculatedMinTradesPerSec;
-                result.minVolPerSec = deltacvdValues.calculatedMinVolPerSec;
+                    deltacvdChecks.minTradesPerSec.calculated;
+                result.minVolPerSec = deltacvdChecks.minVolPerSec.calculated;
                 result.signalThreshold =
-                    deltacvdValues.calculatedSignalThreshold;
+                    deltacvdChecks.signalThreshold.calculated;
                 result.cvdImbalanceThreshold =
-                    deltacvdValues.calculatedCvdImbalanceThreshold;
+                    deltacvdChecks.cvdImbalanceThreshold.calculated;
                 result.institutionalThreshold =
-                    deltacvdValues.calculatedInstitutionalThreshold;
+                    deltacvdChecks.institutionalThreshold.calculated;
             }
 
             return result;
         } catch (error) {
             this.logger.error(
-                "SignalValidationLogger: Failed to convert calculatedValues to parameterValues",
+                "SignalValidationLogger: Failed to convert thresholdChecks to parameterValues",
                 {
                     error:
                         error instanceof Error ? error.message : String(error),

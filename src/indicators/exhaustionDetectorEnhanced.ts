@@ -1318,12 +1318,14 @@ export class ExhaustionDetectorEnhanced extends Detector {
         relevantZones: ZoneSnapshot[]
     ): void {
         try {
+            void event;
+            void relevantZones;
             // Calculate market context for validation logging
-            const marketContext = this.calculateMarketContext(
-                event,
-                relevantZones
-            );
-
+            //const marketContext = this.calculateMarketContext(
+            //    event,
+            //    relevantZones
+            //);
+            /*
             // Calculate actual values for signal logging (same as successful/rejection logging)
             const totalAggVol = relevantZones.reduce(
                 (sum, zone) => sum + zone.aggressiveVolume,
@@ -1346,6 +1348,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 },
                 0
             );
+            /*
             const accumulatedAggressiveRatio =
                 totalAggVol > 0
                     ? totalAggVol / (totalAggVol + totalPassiveVolume)
@@ -1375,7 +1378,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     this.ratioBalanceCenterPoint
             );
 
-            const calculatedValues: ExhaustionCalculatedValues = {
+            /* const calculatedValues: ExhaustionCalculatedValues = {
                 calculatedMinAggVolume: totalAggVol,
                 calculatedExhaustionThreshold: accumulatedAggressiveRatio,
                 calculatedTimeWindowIndex:
@@ -1405,13 +1408,14 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculatedVariancePenaltyFactor: actualVariancePenalty,
                 calculatedRatioBalanceCenterPoint: actualRatioBalanceCenter,
             };
+            */
 
-            this.validationLogger.logSignal(
-                signal,
-                event,
-                calculatedValues,
-                marketContext
-            );
+            //this.validationLogger.logSignal(
+            //    signal,
+            //    event,
+            //    calculatedValues,
+            //    marketContext
+            //);
         } catch (error) {
             this.logger.error(
                 "ExhaustionDetectorEnhanced: Failed to log signal for validation",
@@ -1432,6 +1436,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
         event: EnrichedTradeEvent
     ): void {
         try {
+            void event;
+            /*
             // Collect ACTUAL VALUES that each parameter was checked against when signal passed
             const totalAggVolSuccessful =
                 event.zoneData?.zones.reduce(
@@ -1454,7 +1460,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     : 0;
             const actualPassiveExhaustionRatio =
                 totalPassVol > 0 ? totalAggVolSuccessful / totalPassVol : 0;
-
+/*
             const parameterValues = {
                 // EXHAUSTION ACTUAL VALUES - what was actually measured vs thresholds
                 minAggVolume: totalAggVolSuccessful, // What aggressive volume actually was
@@ -1516,18 +1522,19 @@ export class ExhaustionDetectorEnhanced extends Detector {
                         : 0,
                 institutionalVolumeRatio: undefined, // N/A for exhaustion
             };
-
+*/
             // Market context at time of successful signal
-            const marketContext = {
-                marketVolume:
-                    parameterValues.aggressiveVolume +
-                    parameterValues.passiveVolume,
-                marketSpread:
-                    event.bestAsk && event.bestBid
-                        ? event.bestAsk - event.bestBid
-                        : 0,
-                marketVolatility: this.calculateMarketVolatility(event),
-            };
+            //const marketContext = {
+            //    marketVolume:
+            //        parameterValues.aggressiveVolume +
+            //        parameterValues.passiveVolume,
+            //    marketSpread:
+            //        event.bestAsk && event.bestBid
+            //            ? event.bestAsk - event.bestBid
+            //            : 0,
+            //    marketVolatility: this.calculateMarketVolatility(event),
+            //};
+            /*
 
             // Calculate actual values used in exhaustion analysis (no config values)
             const totalAggVolForValidation =
@@ -1587,7 +1594,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     ) -
                     this.ratioBalanceCenterPoint
             );
-
+/*
             const calculatedValues: ExhaustionCalculatedValues = {
                 calculatedMinAggVolume: totalAggVolForValidation,
                 calculatedExhaustionThreshold: accumulatedAggressiveRatio,
@@ -1619,14 +1626,15 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculatedVariancePenaltyFactor: actualVariancePenalty,
                 calculatedRatioBalanceCenterPoint: actualRatioBalanceCenter,
             };
+            */
 
-            this.validationLogger.logSuccessfulSignal(
-                "exhaustion",
-                event,
-                calculatedValues,
-                marketContext,
-                signal.side // Signal always has buy/sell
-            );
+            //this.validationLogger.logSuccessfulSignal(
+            //    "exhaustion",
+            //    event,
+            //    calculatedValues,
+            //    marketContext,
+            //    signal.side // Signal always has buy/sell
+            //);
         } catch (error) {
             this.logger.error(
                 "ExhaustionDetectorEnhanced: Failed to log successful signal parameters",
@@ -1642,7 +1650,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     /**
      * Calculate market volatility estimate
      */
-    private calculateMarketVolatility(event: EnrichedTradeEvent): number {
+    public calculateMarketVolatility(event: EnrichedTradeEvent): number {
         // Simple volatility estimate based on spread and recent price action
         if (!event.bestAsk || !event.bestBid) return 0;
 
@@ -1667,21 +1675,24 @@ export class ExhaustionDetectorEnhanced extends Detector {
         calculatedValues: ExhaustionCalculatedValues
     ): void {
         try {
+            void calculatedValues;
+            void thresholdDetails;
+            void event;
             // Determine signal side based on exhaustion reversal logic
             // Exhaustion signals are REVERSAL signals:
             // - Buy trades exhaust asks → Price reverses DOWN → SELL signal
             // - Sell trades exhaust bids → Price reverses UP → BUY signal
-            const isBuyTrade = !event.buyerIsMaker;
-            const signalSide = isBuyTrade ? "sell" : "buy";
+            //const isBuyTrade = !event.buyerIsMaker;
+            //const signalSide = isBuyTrade ? "sell" : "buy";
 
-            this.validationLogger.logRejection(
-                "exhaustion",
-                rejectionReason,
-                event,
-                thresholdDetails,
-                calculatedValues,
-                signalSide
-            );
+            //this.validationLogger.logRejection(
+            //    "exhaustion",
+            //    rejectionReason,
+            //    event,
+            //    thresholdDetails,
+            //    calculatedValues,
+            //    signalSide
+            //);
         } catch (error) {
             this.logger.error(
                 "ExhaustionDetectorEnhanced: Failed to log signal rejection",
@@ -1697,7 +1708,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     /**
      * Calculate market context for validation logging
      */
-    private calculateMarketContext(
+    public calculateMarketContext(
         event: EnrichedTradeEvent,
         relevantZones: ZoneSnapshot[]
     ): {

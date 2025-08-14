@@ -624,36 +624,40 @@ async function optimizeThresholds(date: string): Promise<void> {
 
         // Generate ALL possible combinations of thresholds
         const thresholdNames = Array.from(thresholdRanges.keys());
-        const thresholdValues = thresholdNames.map(name => 
-            thresholdRanges.get(name) || []
+        const thresholdValues = thresholdNames.map(
+            (name) => thresholdRanges.get(name) || []
         );
 
         // Helper function to generate all combinations
         function generateCombinations(
-            arrays: number[][], 
-            index: number = 0, 
+            arrays: number[][],
+            index: number = 0,
             current: number[] = []
         ): number[][] {
             if (index === arrays.length) {
                 return current.length > 0 ? [current.slice()] : [];
             }
-            
+
             const results: number[][] = [];
             // Test with each value at percentiles: min, 25%, 50%, 75%, 90%
             const valuesToTest = arrays[index].slice(0, 5); // Already limited to 5 values
-            
+
             for (const value of valuesToTest) {
                 current.push(value);
-                results.push(...generateCombinations(arrays, index + 1, current));
+                results.push(
+                    ...generateCombinations(arrays, index + 1, current)
+                );
                 current.pop();
             }
-            
+
             return results;
         }
 
         // Generate all combinations (limit to reasonable number)
         const allCombinations = generateCombinations(thresholdValues);
-        console.log(`   Testing ${allCombinations.length} threshold combinations...`);
+        console.log(
+            `   Testing ${allCombinations.length} threshold combinations...`
+        );
 
         // Test each combination
         for (const combination of allCombinations) {
@@ -693,14 +697,16 @@ async function optimizeThresholds(date: string): Promise<void> {
         console.log("\n🏆 TOP THRESHOLD COMBINATIONS:\n");
 
         // Find best full combinations (multiple thresholds)
-        const fullCombinations = results.filter(r => r.thresholds.size > 1);
-        const singleThresholds = results.filter(r => r.thresholds.size === 1);
+        const fullCombinations = results.filter((r) => r.thresholds.size > 1);
+        const singleThresholds = results.filter((r) => r.thresholds.size === 1);
 
         console.log("🎯 BEST MULTI-THRESHOLD COMBINATIONS:");
         for (let i = 0; i < Math.min(3, fullCombinations.length); i++) {
             const r = fullCombinations[i];
 
-            console.log(`\n${i + 1}. Score: ${r.qualityScore.toFixed(1)} [${r.thresholds.size} thresholds]`);
+            console.log(
+                `\n${i + 1}. Score: ${r.qualityScore.toFixed(1)} [${r.thresholds.size} thresholds]`
+            );
             console.log("   Thresholds:");
             for (const [name, value] of r.thresholds) {
                 console.log(`     ${name}: ${value.toFixed(4)}`);
@@ -727,7 +733,9 @@ async function optimizeThresholds(date: string): Promise<void> {
         for (let i = 0; i < Math.min(2, singleThresholds.length); i++) {
             const r = singleThresholds[i];
             const [name, value] = Array.from(r.thresholds.entries())[0];
-            console.log(`   ${name}: ${value.toFixed(4)} (Score: ${r.qualityScore.toFixed(1)})`);
+            console.log(
+                `   ${name}: ${value.toFixed(4)} (Score: ${r.qualityScore.toFixed(1)})`
+            );
         }
 
         // Overall statistics

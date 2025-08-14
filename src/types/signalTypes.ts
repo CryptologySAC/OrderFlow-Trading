@@ -536,3 +536,86 @@ export interface SuperiorFlowConditions {
     marketVolatility: number;
     trendStrength: number;
 }
+
+// ============================================================================
+// THRESHOLD CHECK TYPES FOR SIGNAL VALIDATION
+// ============================================================================
+
+/**
+ * Represents a threshold check with config value, calculated value, and operator
+ */
+export interface ThresholdCheck<T = number> {
+    threshold: T; // Config value from config.json
+    calculated: T; // Actual calculated value from signal
+    op: "EQL" | "EQS" | "EQ" | "NONE"; // Comparison operator
+}
+
+/**
+ * Absorption detector threshold checks for all config parameters
+ */
+export interface AbsorptionThresholdChecks {
+    minAggVolume: ThresholdCheck<number>;
+    timeWindowIndex: ThresholdCheck<number>;
+    eventCooldownMs: ThresholdCheck<number>;
+    priceEfficiencyThreshold: ThresholdCheck<number>;
+    maxAbsorptionRatio: ThresholdCheck<number>;
+    minPassiveMultiplier: ThresholdCheck<number>;
+    passiveAbsorptionThreshold: ThresholdCheck<number>;
+    expectedMovementScalingFactor: ThresholdCheck<number>;
+    minAbsorptionScore: ThresholdCheck<number>;
+    finalConfidenceRequired: ThresholdCheck<number>;
+    maxZoneCountForScoring: ThresholdCheck<number>;
+    balanceThreshold: ThresholdCheck<number>;
+    confluenceMinZones: ThresholdCheck<number>;
+    confluenceMaxDistance: ThresholdCheck<number>;
+    maxZonesPerSide: ThresholdCheck<number>;
+    zoneHistoryWindowMs: ThresholdCheck<number>;
+    absorptionZoneThreshold: ThresholdCheck<number>;
+    minPassiveVolumeForZone: ThresholdCheck<number>;
+    priceStabilityTicks: ThresholdCheck<number>;
+    minAbsorptionEvents: ThresholdCheck<number>;
+}
+
+/**
+ * Exhaustion detector threshold checks for all config parameters
+ */
+export interface ExhaustionThresholdChecks {
+    minAggVolume: ThresholdCheck<number>;
+    exhaustionThreshold: ThresholdCheck<number>;
+    minEnhancedConfidenceThreshold: ThresholdCheck<number>;
+    depletionVolumeThreshold: ThresholdCheck<number>;
+    depletionRatioThreshold: ThresholdCheck<number>;
+    alignmentNormalizationFactor: ThresholdCheck<number>;
+    timeWindowIndex: ThresholdCheck<number>;
+    eventCooldownMs: ThresholdCheck<number>;
+    useStandardizedZones: ThresholdCheck<boolean>;
+    enhancementMode: ThresholdCheck<string>;
+    enableDepletionAnalysis: ThresholdCheck<boolean>;
+    enableDynamicZoneTracking: ThresholdCheck<boolean>;
+    maxZonesPerSide: ThresholdCheck<number>;
+    zoneDepletionThreshold: ThresholdCheck<number>;
+    gapDetectionTicks: ThresholdCheck<number>;
+    passiveVolumeExhaustionRatio: ThresholdCheck<number>;
+    varianceReductionFactor: ThresholdCheck<number>;
+    aggressiveVolumeExhaustionThreshold: ThresholdCheck<number>;
+    aggressiveVolumeReductionFactor: ThresholdCheck<number>;
+    passiveRatioBalanceThreshold: ThresholdCheck<number>;
+    premiumConfidenceThreshold: ThresholdCheck<number>;
+    variancePenaltyFactor: ThresholdCheck<number>;
+    ratioBalanceCenterPoint: ThresholdCheck<number>;
+}
+
+/**
+ * DeltaCVD detector threshold checks for all config parameters
+ */
+export interface DeltaCVDThresholdChecks {
+    minTradesPerSec: ThresholdCheck<number>;
+    minVolPerSec: ThresholdCheck<number>;
+    signalThreshold: ThresholdCheck<number>;
+    eventCooldownMs: ThresholdCheck<number>;
+    timeWindowIndex: ThresholdCheck<number>;
+    enhancementMode: ThresholdCheck<string>;
+    cvdImbalanceThreshold: ThresholdCheck<number>;
+    institutionalThreshold: ThresholdCheck<number>;
+    volumeEfficiencyThreshold: ThresholdCheck<number>;
+}
