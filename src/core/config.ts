@@ -124,6 +124,7 @@ export const ExhaustionDetectorSchema = z.object({
     maxZonesPerSide: z.number().int().min(1).max(10),
     zoneDepletionThreshold: z.number().min(0.5).max(0.95),
     gapDetectionTicks: z.number().int().min(1).max(10),
+    zoneHistoryWindowMs: z.number().int().min(5000).max(300000), // Zone lookback window
 
     // Additional configurable thresholds to replace magic numbers
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.7), // Replace hardcoded 0.5

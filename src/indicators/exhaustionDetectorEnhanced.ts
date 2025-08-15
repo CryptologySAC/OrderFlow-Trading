@@ -66,7 +66,6 @@ export interface ExhaustionEnhancementStats {
  * Universal Zones from the preprocessor, with all parameters configurable and no magic numbers.
  */
 export class ExhaustionDetectorEnhanced extends Detector {
-    private readonly windowMs: number;
     private readonly enhancementStats: ExhaustionEnhancementStats;
     private readonly zoneTracker: ExhaustionZoneTracker;
 
@@ -85,9 +84,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
         // Initialize parent Detector (not ExhaustionDetector)
         super(id, logger, metricsCollector, signalLogger);
 
-        // Cache time window to avoid repeated Config lookups
-        this.windowMs = Config.getTimeWindow(settings.timeWindowIndex);
-
         // Initialize enhancement statistics
         this.enhancementStats = {
             callCount: 0,
@@ -103,7 +99,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         const zoneTrackerConfig: ZoneTrackerConfig = {
             maxZonesPerSide: settings.maxZonesPerSide,
-            historyWindowMs: this.windowMs,
+            historyWindowMs: settings.zoneHistoryWindowMs,
             depletionThreshold: settings.zoneDepletionThreshold,
             minPeakVolume: settings.minAggVolume,
             gapDetectionTicks: settings.gapDetectionTicks,
@@ -641,7 +637,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
         }
 
         // Filter zones by time window using trade timestamp
-        const windowStartTime = event.timestamp - this.windowMs;
+        const windowStartTime =
+            event.timestamp - this.settings.zoneHistoryWindowMs;
         const recentZones = allZones.filter(
             (zone) => zone.lastUpdate >= windowStartTime
         );
@@ -653,6 +650,25 @@ export class ExhaustionDetectorEnhanced extends Detector {
             Config.UNIVERSAL_ZONE_CONFIG.maxZoneConfluenceDistance
         );
         if (relevantZones.length === 0) {
+            return null;
+        }
+
+        // Apply confluence detection - require minimum number of zones
+        // This adds quality control: we need multiple zones confirming exhaustion
+        if (
+            relevantZones.length <
+            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount
+        ) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Insufficient zone confluence",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    zonesFound: relevantZones.length,
+                    minRequired:
+                        Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount,
+                }
+            );
             return null;
         }
 

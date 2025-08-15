@@ -231,7 +231,8 @@
                 "maxZonesPerSide": 5,
                 "zoneDepletionThreshold": 0.7,
                 "gapDetectionTicks": 3,
-                "passiveRatioBalanceThreshold": 0.5
+                "passiveRatioBalanceThreshold": 0.5,
+                "zoneHistoryWindowMs": 60000
             },
 
             "absorption": {
