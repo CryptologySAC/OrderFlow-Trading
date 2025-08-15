@@ -3,16 +3,18 @@
  * Analyzes successful signals and reconstructs actual price movements
  * to verify if they truly reached their profit targets within 90 minutes.
  *
+ * Updated to work with JSON Lines format (.jsonl) instead of CSV
+ *
  * Usage:
- *   npx tsx analyze_success_with_price_reconstruction.ts [YYYY-MM-DD]
+ *   npx tsx analysis/analyze_success_with_price_reconstruction.ts [YYYY-MM-DD]
  *
  * Examples:
- *   npx tsx analyze_success_with_price_reconstruction.ts              # Uses today's date
- *   npx tsx analyze_success_with_price_reconstruction.ts 2025-08-12   # Specific date
+ *   npx tsx analysis/analyze_success_with_price_reconstruction.ts              # Uses today's date
+ *   npx tsx analysis/analyze_success_with_price_reconstruction.ts 2025-08-12   # Specific date
  */
 import * as fs from "fs/promises";
-import { getAnalysisDate } from "./utils/getAnalysisDate";
-import { FinancialMath } from "./src/utils/financialMath";
+import { getAnalysisDate } from "../utils/getAnalysisDate";
+import { FinancialMath } from "../src/utils/financialMath";
 
 interface SuccessfulSignal {
     timestamp: number;
@@ -71,8 +73,6 @@ interface TradingPhase {
         duration: number;
     };
 }
-
-// Removed MarketSwing interface - using phase-based approach instead
 
 // Legacy interface for backwards compatibility
 interface SwingData {
@@ -355,26 +355,35 @@ function identifySwings(
     }));
 }
 
+/**
+ * Read successful signals from JSON Lines format
+ */
 async function readSuccessfulSignals(
     filePath: string
 ): Promise<SuccessfulSignal[]> {
     try {
         const content = await fs.readFile(filePath, "utf-8");
         const lines = content.trim().split("\n");
-        if (lines.length < 2) return [];
+        if (lines.length === 0) return [];
 
         const signals: SuccessfulSignal[] = [];
 
-        for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split(",");
-            if (values.length < 4) continue;
-
-            signals.push({
-                timestamp: parseInt(values[0]),
-                detectorType: values[1],
-                signalSide: values[2] as "buy" | "sell",
-                price: parseFloat(values[3]),
-            });
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            
+            try {
+                const jsonRecord = JSON.parse(line);
+                
+                signals.push({
+                    timestamp: jsonRecord.timestamp,
+                    detectorType: jsonRecord.detectorType,
+                    signalSide: jsonRecord.signalSide,
+                    price: jsonRecord.price,
+                });
+            } catch (parseError) {
+                console.warn(`Failed to parse line in ${filePath}: ${line.substring(0, 100)}...`);
+                continue;
+            }
         }
 
         return signals;
@@ -384,32 +393,34 @@ async function readSuccessfulSignals(
     }
 }
 
+/**
+ * Extract price data from JSON Lines rejection logs
+ */
 async function extractPriceData(
     rejectedFilePath: string
 ): Promise<Map<number, number>> {
-    // Extract all price points from rejected logs
-    // Key: timestamp, Value: price
     const priceMap = new Map<number, number>();
 
     try {
         const content = await fs.readFile(rejectedFilePath, "utf-8");
         const lines = content.trim().split("\n");
-        if (lines.length < 2) return priceMap;
+        if (lines.length === 0) return priceMap;
 
-        // Find column indices
-        const headers = lines[0].split(",");
-        const timestampIdx = headers.indexOf("timestamp");
-        const priceIdx = headers.indexOf("price");
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            
+            try {
+                const jsonRecord = JSON.parse(line);
+                
+                const timestamp = jsonRecord.timestamp;
+                const price = jsonRecord.price;
 
-        for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split(",");
-            if (values.length <= Math.max(timestampIdx, priceIdx)) continue;
-
-            const timestamp = parseInt(values[timestampIdx]);
-            const price = parseFloat(values[priceIdx]);
-
-            if (!isNaN(timestamp) && !isNaN(price)) {
-                priceMap.set(timestamp, price);
+                if (timestamp && price && !isNaN(timestamp) && !isNaN(price)) {
+                    priceMap.set(timestamp, price);
+                }
+            } catch (parseError) {
+                // Skip malformed lines
+                continue;
             }
         }
 
@@ -444,13 +455,13 @@ async function analyzeSignals(): Promise<void> {
     const dateStr = getAnalysisDate();
     console.log(`Analyzing signals for date: ${dateStr}`);
 
-    // Load all price data from rejected logs
+    // Load all price data from rejected logs (now JSON Lines)
     console.log("Loading price data from rejected logs...");
     const absorptionPrices = await extractPriceData(
-        `logs/signal_validation/absorption_rejected_missed_${dateStr}.csv`
+        `logs/signal_validation/absorption_rejected_missed_${dateStr}.jsonl`
     );
     const exhaustionPrices = await extractPriceData(
-        `logs/signal_validation/exhaustion_rejected_missed_${dateStr}.csv`
+        `logs/signal_validation/exhaustion_rejected_missed_${dateStr}.jsonl`
     );
 
     // Combine all price data
@@ -477,9 +488,9 @@ async function analyzeSignals(): Promise<void> {
     const results: SignalAnalysis[] = [];
 
     const signalFiles = [
-        `logs/signal_validation/absorption_successful_${dateStr}.csv`,
-        `logs/signal_validation/exhaustion_successful_${dateStr}.csv`,
-        `logs/signal_validation/deltacvd_successful_${dateStr}.csv`,
+        `logs/signal_validation/absorption_successful_${dateStr}.jsonl`,
+        `logs/signal_validation/exhaustion_successful_${dateStr}.jsonl`,
+        `logs/signal_validation/deltacvd_successful_${dateStr}.jsonl`,
     ];
 
     for (const filePath of signalFiles) {
@@ -718,6 +729,7 @@ async function generateHTMLReport(
     <div class="summary">
         <p><strong>Target Movement:</strong> 0.7% | <strong>Time Window:</strong> 90 minutes | <strong>Timezone:</strong> Lima (UTC-5)</p>
         <p><strong>Analysis:</strong> Signals grouped by trading phases with cluster detection. Phases separated by 15+ min gaps or 0.3%+ retracements.</p>
+        <p><strong>Data Format:</strong> Updated to use JSON Lines (.jsonl) format for improved data integrity</p>
     </div>
     
     ${
@@ -784,14 +796,16 @@ async function generateHTMLReport(
     
     <p style="margin-top: 40px; color: #888; font-size: 12px;">
         Generated: ${new Date().toISOString()}<br>
-        Price data source: Reconstructed from rejected_missed log files
+        Price data source: Reconstructed from rejected_missed log files (JSON Lines format)<br>
+        Output location: analysis/reports/
     </p>
 </body>
 </html>`;
 
-    await fs.writeFile("successful_signals_actual_tp_analysis.html", html);
+    const reportPath = "analysis/reports/successful_signals_actual_tp_analysis.html";
+    await fs.writeFile(reportPath, html);
     console.log(
-        "\n✅ HTML report saved to: successful_signals_actual_tp_analysis.html"
+        `\n✅ HTML report saved to: ${reportPath}`
     );
 }
 
@@ -896,8 +910,6 @@ function printSwingSummary(phases: SwingData[]): void {
         `   Avg Signals per Cluster: ${(totalSignals / totalClusters).toFixed(1)}`
     );
 }
-
-// Removed old printSummary function - replaced with phase-based analysis
 
 // Run the analysis
 analyzeSignals().catch(console.error);
