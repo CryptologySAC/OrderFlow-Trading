@@ -370,10 +370,10 @@ async function readSuccessfulSignals(
 
         for (const line of lines) {
             if (!line.trim()) continue;
-            
+
             try {
                 const jsonRecord = JSON.parse(line);
-                
+
                 signals.push({
                     timestamp: jsonRecord.timestamp,
                     detectorType: jsonRecord.detectorType,
@@ -381,7 +381,9 @@ async function readSuccessfulSignals(
                     price: jsonRecord.price,
                 });
             } catch (parseError) {
-                console.warn(`Failed to parse line in ${filePath}: ${line.substring(0, 100)}...`);
+                console.warn(
+                    `Failed to parse line in ${filePath}: ${line.substring(0, 100)}...`
+                );
                 continue;
             }
         }
@@ -408,10 +410,10 @@ async function extractPriceData(
 
         for (const line of lines) {
             if (!line.trim()) continue;
-            
+
             try {
                 const jsonRecord = JSON.parse(line);
-                
+
                 const timestamp = jsonRecord.timestamp;
                 const price = jsonRecord.price;
 
@@ -802,11 +804,10 @@ async function generateHTMLReport(
 </body>
 </html>`;
 
-    const reportPath = "analysis/reports/successful_signals_actual_tp_analysis.html";
+    const reportPath =
+        "analysis/reports/successful_signals_actual_tp_analysis.html";
     await fs.writeFile(reportPath, html);
-    console.log(
-        `\n✅ HTML report saved to: ${reportPath}`
-    );
+    console.log(`\n✅ HTML report saved to: ${reportPath}`);
 }
 
 function printSwingSummary(phases: SwingData[]): void {

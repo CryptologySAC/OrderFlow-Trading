@@ -3,7 +3,7 @@
  * Advanced threshold optimization that tests COMBINATIONS of thresholds
  * to find optimal settings that maximize successful signals while
  * filtering harmful ones and maintaining swing coverage.
- * 
+ *
  * Updated to work with JSON Lines format (.jsonl) instead of CSV
  */
 
@@ -94,27 +94,32 @@ interface ThresholdCombination {
 const THRESHOLD_FIELD_MAP = {
     absorption: {
         minAggVolume: "thresholdChecks.minAggVolume.threshold",
-        priceEfficiencyThreshold: "thresholdChecks.priceEfficiencyThreshold.threshold", 
+        priceEfficiencyThreshold:
+            "thresholdChecks.priceEfficiencyThreshold.threshold",
         minPassiveMultiplier: "thresholdChecks.minPassiveMultiplier.threshold",
-        passiveAbsorptionThreshold: "thresholdChecks.passiveAbsorptionThreshold.threshold",
-        finalConfidenceRequired: "thresholdChecks.finalConfidenceRequired.threshold",
+        passiveAbsorptionThreshold:
+            "thresholdChecks.passiveAbsorptionThreshold.threshold",
+        finalConfidenceRequired:
+            "thresholdChecks.finalConfidenceRequired.threshold",
     },
     exhaustion: {
         minAggVolume: "thresholdChecks.minAggVolume.threshold",
         exhaustionThreshold: "thresholdChecks.exhaustionThreshold.threshold",
-        passiveRatioBalanceThreshold: "thresholdChecks.passiveRatioBalanceThreshold.threshold",
+        passiveRatioBalanceThreshold:
+            "thresholdChecks.passiveRatioBalanceThreshold.threshold",
     },
     deltacvd: {
         minTradesPerSec: "thresholdChecks.minTradesPerSec.threshold",
-        minVolPerSec: "thresholdChecks.minVolPerSec.threshold", 
+        minVolPerSec: "thresholdChecks.minVolPerSec.threshold",
         signalThreshold: "thresholdChecks.signalThreshold.threshold",
-        cvdImbalanceThreshold: "thresholdChecks.cvdImbalanceThreshold.threshold",
-    }
+        cvdImbalanceThreshold:
+            "thresholdChecks.cvdImbalanceThreshold.threshold",
+    },
 };
 
 // Helper function to extract nested values from JSON object
 function getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((current, key) => {
+    return path.split(".").reduce((current, key) => {
         return current && current[key] !== undefined ? current[key] : undefined;
     }, obj);
 }
@@ -137,10 +142,10 @@ async function loadSignalsWithDetails(date: string): Promise<Signal[]> {
 
                 for (const line of lines) {
                     if (!line.trim()) continue;
-                    
+
                     try {
                         const jsonRecord = JSON.parse(line);
-                        
+
                         const signal: Signal = {
                             timestamp: jsonRecord.timestamp,
                             detectorType: detector,
@@ -150,11 +155,23 @@ async function loadSignalsWithDetails(date: string): Promise<Signal[]> {
                         };
 
                         // Extract threshold values based on detector type
-                        const thresholdFields = THRESHOLD_FIELD_MAP[detector as keyof typeof THRESHOLD_FIELD_MAP];
+                        const thresholdFields =
+                            THRESHOLD_FIELD_MAP[
+                                detector as keyof typeof THRESHOLD_FIELD_MAP
+                            ];
                         if (thresholdFields) {
-                            for (const [thresholdName, jsonPath] of Object.entries(thresholdFields)) {
-                                const value = getNestedValue(jsonRecord, jsonPath);
-                                if (typeof value === 'number' && !isNaN(value)) {
+                            for (const [
+                                thresholdName,
+                                jsonPath,
+                            ] of Object.entries(thresholdFields)) {
+                                const value = getNestedValue(
+                                    jsonRecord,
+                                    jsonPath
+                                );
+                                if (
+                                    typeof value === "number" &&
+                                    !isNaN(value)
+                                ) {
                                     signal.thresholds.set(thresholdName, value);
                                 }
                             }
@@ -168,7 +185,9 @@ async function loadSignalsWithDetails(date: string): Promise<Signal[]> {
 
                         signals.push(signal);
                     } catch (parseError) {
-                        console.warn(`Failed to parse line in ${filePath}: ${line.substring(0, 100)}...`);
+                        console.warn(
+                            `Failed to parse line in ${filePath}: ${line.substring(0, 100)}...`
+                        );
                         continue;
                     }
                 }
@@ -201,13 +220,18 @@ async function enrichSignalsWithPriceMovements(
 
             for (const line of lines) {
                 if (!line.trim()) continue;
-                
+
                 try {
                     const jsonRecord = JSON.parse(line);
                     const timestamp = jsonRecord.timestamp;
                     const price = jsonRecord.price;
 
-                    if (timestamp && price && !isNaN(timestamp) && !isNaN(price)) {
+                    if (
+                        timestamp &&
+                        price &&
+                        !isNaN(timestamp) &&
+                        !isNaN(price)
+                    ) {
                         priceMap.set(timestamp, price);
                     }
                 } catch (parseError) {
@@ -613,7 +637,9 @@ async function optimizeThresholds(date: string): Promise<void> {
         console.log(`${"=".repeat(80)}`);
 
         // Get threshold ranges from actual signal data
-        const thresholdFields = Object.keys(THRESHOLD_FIELD_MAP[detector as keyof typeof THRESHOLD_FIELD_MAP]);
+        const thresholdFields = Object.keys(
+            THRESHOLD_FIELD_MAP[detector as keyof typeof THRESHOLD_FIELD_MAP]
+        );
         const thresholdRanges = new Map<string, number[]>();
 
         for (const threshold of thresholdFields) {
@@ -778,7 +804,7 @@ async function optimizeThresholds(date: string): Promise<void> {
         reportData.optimizationResults[detector] = {
             totalSignals: detectorSignals.length,
             statistics: categories,
-            topCombinations: fullCombinations.slice(0, 3).map(r => ({
+            topCombinations: fullCombinations.slice(0, 3).map((r) => ({
                 qualityScore: r.qualityScore,
                 thresholds: Object.fromEntries(r.thresholds),
                 performance: {
@@ -787,7 +813,7 @@ async function optimizeThresholds(date: string): Promise<void> {
                     successRate: r.successRate,
                     harmfulRate: r.harmfulRate,
                     coverageRate: r.coverageRate,
-                }
+                },
             })),
         };
     }
@@ -799,7 +825,9 @@ async function optimizeThresholds(date: string): Promise<void> {
     console.log("\n" + "=".repeat(80));
     console.log("💡 OPTIMIZATION COMPLETE");
     console.log("=".repeat(80));
-    console.log("📊 Updated to use JSON Lines format for improved data integrity");
+    console.log(
+        "📊 Updated to use JSON Lines format for improved data integrity"
+    );
     console.log("📁 Reports saved to analysis/reports/ directory");
 }
 

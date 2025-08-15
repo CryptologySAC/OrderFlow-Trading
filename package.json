@@ -1,7 +1,7 @@
 {
     "name": "orderflow-trading",
     "type": "module",
-    "version": "1.0.0-beta",
+    "version": "1.0.1-beta",
     "license": "MIT",
     "author": "Cryptology",
     "description": "Cryptology OrderFlow Trading",
