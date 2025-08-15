@@ -285,31 +285,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculated: depletionResult.depletionRatio,
                 op: "EQL", // Check: depletionResult.depletionRatio >= settings.exhaustionThreshold,
             },
-            timeWindowIndex: {
-                threshold: this.settings.timeWindowIndex,
-                calculated: this.settings.timeWindowIndex,
-                op: "NONE", // Not actively checked
-            },
-            eventCooldownMs: {
-                threshold: this.settings.eventCooldownMs,
-                calculated: this.settings.eventCooldownMs,
-                op: "NONE", // Cooldown is handled separately
-            },
-            maxZonesPerSide: {
-                threshold: this.settings.maxZonesPerSide,
-                calculated: this.settings.maxZonesPerSide,
-                op: "NONE",
-            },
-            gapDetectionTicks: {
-                threshold: this.settings.gapDetectionTicks,
-                calculated: this.settings.gapDetectionTicks,
-                op: "NONE",
-            },
-            zoneDepletionThreshold: {
-                threshold: this.settings.zoneDepletionThreshold,
-                calculated: this.settings.zoneDepletionThreshold,
-                op: "NONE",
-            },
         };
 
         const dominantSide =

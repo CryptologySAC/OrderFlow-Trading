@@ -127,7 +127,7 @@ export const ExhaustionDetectorSchema = z.object({
     zoneHistoryWindowMs: z.number().int().min(5000).max(300000), // Zone lookback window
 
     // Additional configurable thresholds to replace magic numbers
-    passiveRatioBalanceThreshold: z.number().min(0.3).max(0.7), // Replace hardcoded 0.5
+    passiveRatioBalanceThreshold: z.number().min(0.3).max(0.95), // Replace hardcoded 0.5
 });
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain

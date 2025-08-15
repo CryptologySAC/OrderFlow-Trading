@@ -301,14 +301,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const passesThreshold_balanceThreshold =
             balancedFlow && balancedFlow <= this.settings.balanceThreshold;
 
-        // Calculate actual price movement in ticks from zones
-        const priceMovementTicks =
-            relevantZones.length > 0 && relevantZones[0]
-                ? FinancialMath.divideQuantities(
-                      Math.abs(event.price - relevantZones[0].priceLevel),
-                      Config.TICK_SIZE
-                  )
-                : 0;
+        // Calculate price movement range in ticks using zone tracker's time-based approach
+        const priceMovementTicks = this.zoneTracker.getPriceRangeInTicks();
         const passesThreshold_priceStabilityTicks =
             priceMovementTicks <= this.settings.priceStabilityTicks;
 
@@ -372,51 +366,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 threshold: this.settings.priceStabilityTicks,
                 calculated: priceMovementTicks,
                 op: "EQS", // Used for stability analysis, not directly checked
-            },
-            timeWindowIndex: {
-                threshold: this.settings.timeWindowIndex,
-                calculated: this.settings.timeWindowIndex,
-                op: "NONE", // Not actively checked
-            },
-            eventCooldownMs: {
-                threshold: this.settings.eventCooldownMs,
-                calculated: this.settings.eventCooldownMs,
-                op: "NONE", // Cooldown is handled separately
-            },
-            expectedMovementScalingFactor: {
-                threshold: this.settings.expectedMovementScalingFactor,
-                calculated: this.settings.expectedMovementScalingFactor,
-                op: "NONE", // Used for calculations, not checked
-            },
-            maxZoneCountForScoring: {
-                threshold: this.settings.maxZoneCountForScoring,
-                calculated: this.settings.maxZoneCountForScoring,
-                op: "NONE", // Used for scoring calculation, not checked
-            },
-            maxZonesPerSide: {
-                threshold: this.settings.maxZonesPerSide,
-                calculated: this.settings.maxZonesPerSide,
-                op: "NONE", // Zone count limit, handled by zone tracker
-            },
-            zoneHistoryWindowMs: {
-                threshold: this.settings.zoneHistoryWindowMs,
-                calculated: this.settings.zoneHistoryWindowMs,
-                op: "NONE", // Window configuration, not checked
-            },
-            absorptionZoneThreshold: {
-                threshold: this.settings.absorptionZoneThreshold,
-                calculated: this.settings.absorptionZoneThreshold,
-                op: "NONE", // Absorption ratio already checked via maxAbsorptionRatio
-            },
-            minPassiveVolumeForZone: {
-                threshold: this.settings.minPassiveVolumeForZone,
-                calculated: this.settings.minPassiveVolumeForZone,
-                op: "NONE", // Window configuration, not checked
-            },
-            minAbsorptionEvents: {
-                threshold: this.settings.minAbsorptionEvents,
-                calculated: this.settings.minAbsorptionEvents,
-                op: "NONE", // Window configuration, not checked
             },
         };
 

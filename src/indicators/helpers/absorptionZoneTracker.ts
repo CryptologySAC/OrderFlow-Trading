@@ -347,7 +347,7 @@ export class AbsorptionZoneTracker {
     /**
      * Check if price has remained stable despite volume
      */
-    private checkPriceStability(): boolean {
+    public checkPriceStability(): boolean {
         if (this.priceHistory.length < 2) {
             return false;
         }
@@ -365,6 +365,26 @@ export class AbsorptionZoneTracker {
             this.tickSize * this.config.priceStabilityTicks;
 
         return priceChange <= maxAllowedChange;
+    }
+
+    /**
+     * Get actual price range in ticks for logging/analysis
+     */
+    public getPriceRangeInTicks(): number {
+        if (this.priceHistory.length < 2) {
+            return 0;
+        }
+
+        const firstPrice = this.priceHistory[0]?.price;
+        const lastPrice =
+            this.priceHistory[this.priceHistory.length - 1]?.price;
+
+        if (firstPrice === undefined || lastPrice === undefined) {
+            return 0;
+        }
+
+        const priceChange = Math.abs(lastPrice - firstPrice);
+        return FinancialMath.divideQuantities(priceChange, this.tickSize);
     }
 
     /**

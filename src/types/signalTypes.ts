@@ -555,22 +555,13 @@ export interface ThresholdCheck<T = number> {
  */
 export interface AbsorptionThresholdChecks {
     minAggVolume: ThresholdCheck<number>;
-    timeWindowIndex: ThresholdCheck<number>;
-    eventCooldownMs: ThresholdCheck<number>;
     priceEfficiencyThreshold: ThresholdCheck<number>;
     maxAbsorptionRatio: ThresholdCheck<number>;
     minPassiveMultiplier: ThresholdCheck<number>;
     passiveAbsorptionThreshold: ThresholdCheck<number>;
-    expectedMovementScalingFactor: ThresholdCheck<number>;
     minAbsorptionScore: ThresholdCheck<number>;
-    maxZoneCountForScoring: ThresholdCheck<number>;
     balanceThreshold: ThresholdCheck<number>;
-    maxZonesPerSide: ThresholdCheck<number>;
-    zoneHistoryWindowMs: ThresholdCheck<number>;
-    absorptionZoneThreshold: ThresholdCheck<number>;
-    minPassiveVolumeForZone: ThresholdCheck<number>;
     priceStabilityTicks: ThresholdCheck<number>;
-    minAbsorptionEvents: ThresholdCheck<number>;
 }
 
 /**
@@ -579,11 +570,6 @@ export interface AbsorptionThresholdChecks {
 export interface ExhaustionThresholdChecks {
     minAggVolume: ThresholdCheck<number>;
     exhaustionThreshold: ThresholdCheck<number>;
-    timeWindowIndex: ThresholdCheck<number>;
-    eventCooldownMs: ThresholdCheck<number>;
-    maxZonesPerSide: ThresholdCheck<number>;
-    zoneDepletionThreshold: ThresholdCheck<number>;
-    gapDetectionTicks: ThresholdCheck<number>;
     passiveRatioBalanceThreshold: ThresholdCheck<number>;
 }
 

@@ -224,19 +224,19 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 500,
+                "minAggVolume": 150,
                 "exhaustionThreshold": 0.83,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
                 "maxZonesPerSide": 5,
                 "zoneDepletionThreshold": 0.7,
                 "gapDetectionTicks": 3,
-                "passiveRatioBalanceThreshold": 0.5,
+                "passiveRatioBalanceThreshold": 0.85,
                 "zoneHistoryWindowMs": 60000
             },
 
             "absorption": {
-                "minAggVolume": 500,
+                "minAggVolume": 200,
                 "priceEfficiencyThreshold": 0.0046,
                 "minPassiveMultiplier": 15.0,
                 "timeWindowIndex": 0,
