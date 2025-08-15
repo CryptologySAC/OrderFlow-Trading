@@ -92,15 +92,34 @@ export class ExhaustionZoneTracker {
      */
     public updateZone(zone: ZoneSnapshot, timestamp: number): void {
         const zoneId = zone.zoneId;
+
+        // Skip zones without significant passive volume
+        if (zone.passiveBidVolume === 0 && zone.passiveAskVolume === 0) {
+            return; // No passive liquidity to track
+        }
+
+        if (!this.currentSpread) {
+            return; // Wait for spread to be set
+        }
+
         const isNearBid = this.isNearBid(zone.priceLevel);
         const isNearAsk = this.isNearAsk(zone.priceLevel);
 
         if (!isNearBid && !isNearAsk) {
-            return; // Zone too far from spread
+            // Zone too far from spread - skip silently
+            return;
         }
 
         const trackedZones = isNearBid ? this.bidZones : this.askZones;
-        let tracked = trackedZones.get(zoneId);
+
+        // Use price level as key for better zone continuity
+        // Normalize to tick size using FinancialMath for consistency
+        const normalizedPrice = FinancialMath.normalizePriceToTick(
+            zone.priceLevel,
+            this.tickSize
+        );
+        const priceKey = normalizedPrice.toFixed(4);
+        let tracked = trackedZones.get(priceKey);
 
         if (!tracked) {
             // Initialize new tracked zone
@@ -113,28 +132,38 @@ export class ExhaustionZoneTracker {
                 lastUpdate: timestamp,
                 depletionEvents: 0,
             };
-            trackedZones.set(zoneId, tracked);
+            trackedZones.set(priceKey, tracked);
         }
 
-        // Update peak volumes
+        // Update zone ID if it changed (but keep history)
+        tracked.zoneId = zoneId;
+
+        // Update peak volumes - ensure we handle NaN/undefined values
+        const currentBidVolume = zone.passiveBidVolume || 0;
+        const currentAskVolume = zone.passiveAskVolume || 0;
+
         tracked.maxPassiveBidVolume = Math.max(
             tracked.maxPassiveBidVolume,
-            zone.passiveBidVolume
+            currentBidVolume
         );
         tracked.maxPassiveAskVolume = Math.max(
             tracked.maxPassiveAskVolume,
-            zone.passiveAskVolume
+            currentAskVolume
         );
 
-        // Add history entry
+        // Add history entry with proper defaults
         const entry: ZoneHistoryEntry = {
             timestamp,
-            passiveBidVolume: zone.passiveBidVolume,
-            passiveAskVolume: zone.passiveAskVolume,
-            aggressiveVolume: zone.aggressiveVolume,
+            passiveBidVolume: currentBidVolume,
+            passiveAskVolume: currentAskVolume,
+            aggressiveVolume: zone.aggressiveVolume || 0,
             priceLevel: zone.priceLevel,
             spread: this.currentSpread
-                ? this.currentSpread.ask - this.currentSpread.bid
+                ? FinancialMath.calculateSpread(
+                      this.currentSpread.ask,
+                      this.currentSpread.bid,
+                      4
+                  )
                 : 0,
         };
 

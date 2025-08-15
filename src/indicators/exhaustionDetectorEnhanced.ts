@@ -494,12 +494,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
         exhaustionType: "bid" | "ask" | "both" | null;
     } {
         // If dynamic zone tracking is enabled, use the new tracker
-        // Update zone tracker with current zones
+        // CRITICAL: Update spread BEFORE updating zones so zones can be properly filtered
         if (event.bestBid && event.bestAsk) {
             this.zoneTracker.updateSpread(event.bestBid, event.bestAsk);
         }
 
-        // Update zones in tracker
+        // Update zones in tracker - will now correctly filter based on spread
         for (const zone of zoneData.zones) {
             this.zoneTracker.updateZone(zone, event.timestamp);
         }
