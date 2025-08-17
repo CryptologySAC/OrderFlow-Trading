@@ -944,13 +944,14 @@ export class OrderflowPreprocessor
                 }
             );
 
-            // CRITICAL FIX: Use actual trade price for passive volume calculation
-            // This ensures we get the correct bid/ask volumes around the trade price
+            // CRITICAL FIX: Use wider band for passive volume calculation
+            // Use bandTicks (7) instead of zoneTicks (1) to capture more order book liquidity
             const band = this.bookState.sumBand(
                 tradePrice,
-                zoneTicks,
+                this.bandTicks,
                 this.tickSize
             );
+
 
             // Volume-weighted price starts as null - first trade in zone will set it
             const volumeWeightedPrice = null;

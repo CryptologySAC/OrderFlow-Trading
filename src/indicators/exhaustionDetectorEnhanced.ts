@@ -115,6 +115,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
     }
 
     public onEnrichedTrade(event: EnrichedTradeEvent): void {
+        
         if (!event.zoneData) {
             return;
         }
@@ -539,6 +540,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         buyerIsMaker: boolean,
         relevantZones: ZoneSnapshot[]
     ): VolumePressure | null {
+        
         // Calculate total aggressive volume using FinancialMath.safeAdd
         let directionalAggressiveVolume = 0;
         let directionalPassiveVolume = 0;
@@ -554,6 +556,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             const directionalPassive = !buyerIsMaker
                 ? (zone.passiveAskVolume ?? 0) // Buy trades absorb ask liquidity
                 : (zone.passiveBidVolume ?? 0); // Sell trades absorb bid liquidity
+
 
             // Validate inputs before FinancialMath calls to prevent NaN BigInt errors
             if (
