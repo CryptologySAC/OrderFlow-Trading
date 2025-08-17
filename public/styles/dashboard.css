@@ -446,6 +446,7 @@ canvas {
     border-color: var(--resize-handle-hover);
 }
 
+
 .reset-layout-btn {
     background-color: #dc3545 !important;
     color: white !important;

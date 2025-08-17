@@ -11,6 +11,35 @@
             <!-- Column 1: Order Book -->
             <section class="column" id="column1">
                 <div class="chart-container" id="orderBookContainer">
+                    <div class="order-book-controls">
+                        <div class="aggregation-selector">
+                            <button
+                                data-aggregation="tick"
+                                class="active"
+                                title="1 tick precision (1¢)"
+                            >
+                                1¢
+                            </button>
+                            <button
+                                data-aggregation="small"
+                                title="5 tick aggregation (5¢)"
+                            >
+                                5¢
+                            </button>
+                            <button
+                                data-aggregation="medium"
+                                title="10 tick aggregation (10¢)"
+                            >
+                                10¢
+                            </button>
+                            <button
+                                data-aggregation="large"
+                                title="20 tick aggregation (20¢)"
+                            >
+                                20¢
+                            </button>
+                        </div>
+                    </div>
                     <div class="chartAreaWrapper50">
                         <canvas id="orderBookChart"></canvas>
                     </div>

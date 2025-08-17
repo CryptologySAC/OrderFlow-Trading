@@ -51,6 +51,8 @@ let maxSupportResistanceLevels = 20;
 let activeZones = new Map();
 let maxActiveZones = 10;
 
+// Order book display - backend sends properly configured data
+
 // Used to control badge display
 let badgeTimeout = null;
 let latestBadgeElem = null;
@@ -926,78 +928,10 @@ const tradeWebsocket = new TradeWebSocket({
                     }
 
                     orderBookData = message.data;
-                    if (window.orderBookChart) {
-                        // Update chart data with new structure
-                        const labels = [];
-                        const askData = [];
-                        const bidData = [];
-
-                        // Select levels symmetrically around mid price for balanced display
-                        const maxLevels = 30;
-                        const midPrice = orderBookData.midPrice || 0;
-
-                        // Sort levels by price to ensure proper ordering
-                        const sortedLevels = orderBookData.priceLevels.sort(
-                            (a, b) => a.price - b.price
-                        );
-
-                        // Find the index closest to midPrice
-                        let midIndex = 0;
-                        let minDiff = Infinity;
-                        for (let i = 0; i < sortedLevels.length; i++) {
-                            const diff = Math.abs(
-                                sortedLevels[i].price - midPrice
-                            );
-                            if (diff < minDiff) {
-                                minDiff = diff;
-                                midIndex = i;
-                            }
-                        }
-
-                        // Select symmetric range around midPrice
-                        const levelsPerSide = Math.floor(maxLevels / 2);
-                        const startIndex = Math.max(
-                            0,
-                            midIndex - levelsPerSide
-                        );
-                        const endIndex = Math.min(
-                            sortedLevels.length,
-                            startIndex + maxLevels
-                        );
-                        const levelsToShow = sortedLevels.slice(
-                            startIndex,
-                            endIndex
-                        );
-
-                        levelsToShow.forEach((level) => {
-                            const priceStr = level.price
-                                ? level.price.toFixed(2)
-                                : "0.00";
-
-                            // Add ask position
-                            labels.push(`${priceStr}_ask`);
-                            askData.push(level.ask || 0);
-                            bidData.push(null);
-
-                            // Add bid position
-                            labels.push(`${priceStr}_bid`);
-                            askData.push(null);
-                            bidData.push(level.bid || 0);
-                        });
-
-                        orderBookChart.data.labels = labels;
-                        orderBookChart.data.datasets[0].data = askData;
-                        orderBookChart.data.datasets[1].data = bidData;
-
-                        // Update colors based on current theme
-                        const currentTheme = getCurrentTheme();
-                        const actualTheme =
-                            currentTheme === "system"
-                                ? getSystemTheme()
-                                : currentTheme;
-                        updateOrderBookBarColors(actualTheme);
-
-                        scheduleOrderBookUpdate();
+                    
+                    // Display the data directly from backend (already 1-tick precision)
+                    if (orderBookChart) {
+                        updateOrderBookDisplay(orderBookData);
                     } else {
                         console.warn(
                             "Order book chart not initialized; skipping update"
@@ -2810,6 +2744,7 @@ function cleanupOldSupportResistanceLevels() {
  * Handle accumulation/distribution zones as visual boxes on the chart
  */
 
+
 /**
  * Handle zone update messages from WebSocket
  */
@@ -3332,6 +3267,75 @@ function cleanupOldZones() {
             removeZoneBox(zoneId);
         }
     }
+}
+
+
+/**
+ * Update order book display with data from backend
+ */
+function updateOrderBookDisplay(data) {
+    if (!orderBookChart) {
+        return;
+    }
+
+    const labels = [];
+    const askData = [];
+    const bidData = [];
+
+    // Backend sends data already configured with proper binSize (1-tick)
+    // Just display it directly without any local processing
+    const priceLevels = data.priceLevels || [];
+    
+    // Select levels symmetrically around mid price for balanced display
+    const maxLevels = 50; // Show more levels since we have 1-tick precision
+    const midPrice = data.midPrice || 0;
+
+    // Sort levels by price
+    const sortedLevels = priceLevels.sort((a, b) => a.price - b.price);
+
+    // Find the index closest to midPrice
+    let midIndex = 0;
+    let minDiff = Infinity;
+    for (let i = 0; i < sortedLevels.length; i++) {
+        const diff = Math.abs(sortedLevels[i].price - midPrice);
+        if (diff < minDiff) {
+            minDiff = diff;
+            midIndex = i;
+        }
+    }
+
+    // Select levels around midpoint
+    const halfLevels = Math.floor(maxLevels / 2);
+    const startIndex = Math.max(0, midIndex - halfLevels);
+    const endIndex = Math.min(sortedLevels.length, startIndex + maxLevels);
+    const displayLevels = sortedLevels.slice(startIndex, endIndex);
+
+    // Build chart data
+    displayLevels.forEach((level) => {
+        const priceStr = level.price.toFixed(2);
+
+        // Add ask position
+        labels.push(`${priceStr}_ask`);
+        askData.push(level.ask || 0);
+        bidData.push(null);
+
+        // Add bid position
+        labels.push(`${priceStr}_bid`);
+        askData.push(null);
+        bidData.push(level.bid || 0);
+    });
+
+    orderBookChart.data.labels = labels;
+    orderBookChart.data.datasets[0].data = askData;
+    orderBookChart.data.datasets[1].data = bidData;
+
+    // Update colors based on theme
+    const currentTheme = getCurrentTheme();
+    const actualTheme =
+        currentTheme === "system" ? getSystemTheme() : currentTheme;
+    updateOrderBookBarColors(actualTheme);
+
+    scheduleOrderBookUpdate();
 }
 
 // Start application

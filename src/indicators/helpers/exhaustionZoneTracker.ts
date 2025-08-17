@@ -459,9 +459,13 @@ export class ExhaustionZoneTracker {
      */
     private isNearBid(priceLevel: number): boolean {
         if (!this.currentSpread) return false;
+        // Include zones AT and BELOW the bid (and slightly above for spread zones)
         const distance = this.currentSpread.bid - priceLevel;
         const tickDistance = distance / this.tickSize;
-        return tickDistance >= 0 && tickDistance <= this.config.maxZonesPerSide;
+        // Allow zones from slightly above bid (negative distance) to maxZonesPerSide below
+        return (
+            tickDistance >= -2 && tickDistance <= this.config.maxZonesPerSide
+        );
     }
 
     /**
@@ -469,9 +473,13 @@ export class ExhaustionZoneTracker {
      */
     private isNearAsk(priceLevel: number): boolean {
         if (!this.currentSpread) return false;
+        // Include zones AT and ABOVE the ask (and slightly below for spread zones)
         const distance = priceLevel - this.currentSpread.ask;
         const tickDistance = distance / this.tickSize;
-        return tickDistance >= 0 && tickDistance <= this.config.maxZonesPerSide;
+        // Allow zones from slightly below ask (negative distance) to maxZonesPerSide above
+        return (
+            tickDistance >= -2 && tickDistance <= this.config.maxZonesPerSide
+        );
     }
 
     /**

@@ -53,7 +53,7 @@
             "maxDashboardInterval": 1000,
             "significantChangeThreshold": 0.001,
             "standardZoneConfig": {
-                "zoneTicks": 10,
+                "zoneTicks": 1,
                 "timeWindows": [
                     180000, 300000, 600000, 1200000, 2700000, 5400000
                 ],
@@ -108,8 +108,8 @@
                 "staleThresholdMs": 5000
             },
             "orderBookProcessor": {
-                "binSize": 10,
-                "numLevels": 150,
+                "binSize": 1,
+                "numLevels": 50,
                 "maxBufferSize": 100000
             },
             "tradesProcessor": {
@@ -224,26 +224,26 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 130,
-                "exhaustionThreshold": 0.5,
+                "minAggVolume": 50,
+                "exhaustionThreshold": 0.4,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
-                "maxZonesPerSide": 10,
-                "zoneDepletionThreshold": 0.7,
+                "maxZonesPerSide": 15,
+                "zoneDepletionThreshold": 0.6,
                 "gapDetectionTicks": 3,
                 "passiveRatioBalanceThreshold": 0.8,
                 "zoneHistoryWindowMs": 60000
             },
 
             "absorption": {
-                "minAggVolume": 212,
-                "passiveAbsorptionThreshold": 0.94,
+                "minAggVolume": 100,
+                "passiveAbsorptionThreshold": 0.7,
                 "priceEfficiencyThreshold": 0.001152,
                 "maxPriceImpactRatio": 0.01,
-                "minPassiveMultiplier": 82.2,
-                "minAbsorptionScore": 0.9396,
-                "balanceThreshold": 0.1018,
-                "priceStabilityTicks": 3,
+                "minPassiveMultiplier": 3.0,
+                "minAbsorptionScore": 0.7,
+                "balanceThreshold": 0.25,
+                "priceStabilityTicks": 5,
 
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
