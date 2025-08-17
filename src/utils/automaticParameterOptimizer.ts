@@ -614,7 +614,7 @@ export class AutomaticParameterOptimizer {
                 timeWindowIndex: config.timeWindowIndex,
                 eventCooldownMs: config.eventCooldownMs,
                 priceEfficiencyThreshold: config.priceEfficiencyThreshold,
-                maxAbsorptionRatio: config.maxAbsorptionRatio,
+                maxPriceImpactRatio: config.maxPriceImpactRatio,
                 minPassiveMultiplier: config.minPassiveMultiplier,
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
@@ -653,7 +653,7 @@ export class AutomaticParameterOptimizer {
                 timeWindowIndex: config.timeWindowIndex,
                 eventCooldownMs: config.eventCooldownMs,
                 priceEfficiencyThreshold: config.priceEfficiencyThreshold,
-                maxAbsorptionRatio: config.maxAbsorptionRatio,
+                maxPriceImpactRatio: config.maxPriceImpactRatio,
                 minPassiveMultiplier: config.minPassiveMultiplier,
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:

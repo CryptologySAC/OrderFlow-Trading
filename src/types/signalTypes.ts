@@ -556,7 +556,7 @@ export interface ThresholdCheck<T = number> {
 export interface AbsorptionThresholdChecks {
     minAggVolume: ThresholdCheck<number>;
     priceEfficiencyThreshold: ThresholdCheck<number>;
-    maxAbsorptionRatio: ThresholdCheck<number>;
+    maxPriceImpactRatio: ThresholdCheck<number>;
     minPassiveMultiplier: ThresholdCheck<number>;
     passiveAbsorptionThreshold: ThresholdCheck<number>;
     minAbsorptionScore: ThresholdCheck<number>;

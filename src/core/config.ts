@@ -122,7 +122,7 @@ export const ExhaustionDetectorSchema = z.object({
 
     // Dynamic zone tracking for true exhaustion detection
     maxZonesPerSide: z.number().int().min(1).max(10),
-    zoneDepletionThreshold: z.number().min(0.5).max(0.95),
+    zoneDepletionThreshold: z.number().min(0.4).max(0.95),
     gapDetectionTicks: z.number().int().min(1).max(10),
     zoneHistoryWindowMs: z.number().int().min(5000).max(300000), // Zone lookback window
 
@@ -139,8 +139,8 @@ export const AbsorptionDetectorSchema = z.object({
 
     // Absorption thresholds
     priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
-    maxAbsorptionRatio: z.number().min(0.1).max(1.0),
-    minPassiveMultiplier: z.number().min(0.5).max(50.0),
+    maxPriceImpactRatio: z.number().min(0.0).max(1.0),
+    minPassiveMultiplier: z.number().min(0.5).max(250.0),
     passiveAbsorptionThreshold: z.number().min(0.1).max(50),
 
     // Calculation parameters

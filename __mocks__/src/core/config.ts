@@ -139,7 +139,7 @@ const mockAbsorptionConfig = {
     timeWindowIndex: 0, // Use first time window (matches current schema)
     eventCooldownMs: 0, // Disable cooldown for testing
     priceEfficiencyThreshold: 0.001, // Very permissive for testing
-    maxAbsorptionRatio: 0.95,
+    maxPriceImpactRatio: 0.95,
     minPassiveMultiplier: 1.05, // Very low multiplier
     passiveAbsorptionThreshold: 0.6, // Minimum valid threshold per schema
     institutionalVolumeThreshold: 5, // Very low threshold for testing

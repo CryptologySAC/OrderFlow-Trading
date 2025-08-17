@@ -2127,7 +2127,7 @@ export class SignalValidationLogger {
                 result.priceEfficiencyThreshold =
                     absorptionChecks.priceEfficiencyThreshold.calculated;
                 result.maxAbsorptionRatio =
-                    absorptionChecks.maxAbsorptionRatio.calculated;
+                    absorptionChecks.maxPriceImpactRatio.calculated;
                 result.minPassiveMultiplier =
                     absorptionChecks.minPassiveMultiplier.calculated;
                 result.passiveAbsorptionThreshold =
@@ -2138,7 +2138,7 @@ export class SignalValidationLogger {
                 result.balanceThreshold =
                     absorptionChecks.balanceThreshold.calculated;
                 result.absorptionThreshold =
-                    absorptionChecks.maxAbsorptionRatio.calculated;
+                    absorptionChecks.maxPriceImpactRatio.calculated;
 
                 // Set priceEfficiency from threshold for compatibility
                 result.priceEfficiency =

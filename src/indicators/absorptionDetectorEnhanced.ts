@@ -261,14 +261,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
             priceEfficiency <= this.settings.priceEfficiencyThreshold;
 
         // Calculate absorption ratio using FinancialMath
-        // maxAbsorptionRatio: // Check: absorptionRatio <= this.enhancementConfig.maxAbsorptionRatio
-        const absorptionRatio = this.calculateAbsorptionRatio(
+        // maxPriceImpactRatio: // Check: priceImpactRatio <= this.enhancementConfig.maxPriceImpactRatio
+        const priceImpactRatio = this.calculatePriceImpactRatio(
             event,
             volumePressure.pressureRatio
         );
-        const passesThreshold_maxAbsorptionRatio =
-            absorptionRatio !== null &&
-            absorptionRatio <= this.settings.maxAbsorptionRatio;
+        const passesThreshold_maxPriceImpactRatio =
+            priceImpactRatio !== null &&
+            priceImpactRatio <= this.settings.maxPriceImpactRatio;
 
         // Check passive multiplier (passive must be X times aggressive)
         // minPassiveMultiplier: Check: actualPassiveMultiplier >= this.enhancementConfig.minPassiveMultiplier,
@@ -317,7 +317,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             passesThreshold_minAggVolume &&
             passesThreshold_passiveAbsorptionThreshold &&
             passesThreshold_priceEfficiencyThreshold &&
-            passesThreshold_maxAbsorptionRatio &&
+            passesThreshold_maxPriceImpactRatio &&
             passesThreshold_minPassiveMultiplier &&
             passesThreshold_minAbsorptionScore &&
             passesThreshold_balanceThreshold &&
@@ -341,10 +341,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 calculated: priceEfficiency,
                 op: "EQS", // Check: priceEfficiency <= threshold
             },
-            maxAbsorptionRatio: {
-                threshold: this.settings.maxAbsorptionRatio,
-                calculated: absorptionRatio ?? Number.MAX_SAFE_INTEGER,
-                op: "EQS", // Check: absorptionRatio <= threshold
+            maxPriceImpactRatio: {
+                threshold: this.settings.maxPriceImpactRatio,
+                calculated: priceImpactRatio ?? Number.MAX_SAFE_INTEGER,
+                op: "EQS", // Check: priceImpactRatio <= threshold
             },
             minPassiveMultiplier: {
                 threshold: this.settings.minPassiveMultiplier,
@@ -360,7 +360,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             balanceThreshold: {
                 threshold: this.settings.balanceThreshold,
                 calculated: balancedFlow ?? -1,
-                op: "EQL", // Used for balance detection, specific check logic
+                op: "EQS", // Used for balance detection, specific check logic
             },
             priceStabilityTicks: {
                 threshold: this.settings.priceStabilityTicks,
@@ -415,7 +415,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     aggressive: volumePressure.directionalAggressiveVolume,
                     passive: volumePressure.directionalPassiveVolume,
                     refilled: false, // Will be determined later
-                    absorptionScore: absorptionRatio,
+                    absorptionScore: absorptionScore,
                     passiveMultiplier: actualPassiveMultiplier,
                     priceEfficiency,
                     spreadImpact:
@@ -480,11 +480,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 thresholdType = "price_efficiency";
                 thresholdValue = this.settings.priceEfficiencyThreshold;
                 actualValue = priceEfficiency;
-            } else if (!passesThreshold_maxAbsorptionRatio) {
-                rejectionReason = "absorption_ratio_too_high";
-                thresholdType = "absorption_ratio";
-                thresholdValue = this.settings.maxAbsorptionRatio;
-                actualValue = absorptionRatio ?? Number.MAX_SAFE_INTEGER;
+            } else if (!passesThreshold_maxPriceImpactRatio) {
+                rejectionReason = "price_impact_ratio_too_high";
+                thresholdType = "price_impact_ratio";
+                thresholdValue = this.settings.maxPriceImpactRatio;
+                actualValue = priceImpactRatio ?? Number.MAX_SAFE_INTEGER;
             } else if (!passesThreshold_minPassiveMultiplier) {
                 rejectionReason = "passive_multiplier_too_low";
                 thresholdType = "passive_multiplier";
@@ -828,10 +828,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 passiveAskVolume:
                     thresholdChecks.passiveAbsorptionThreshold.calculated,
                 institutionalVolumeRatio:
-                    thresholdChecks.maxAbsorptionRatio.calculated,
+                    thresholdChecks.maxPriceImpactRatio.calculated,
                 priceEfficiency:
                     thresholdChecks.priceEfficiencyThreshold.calculated,
-                absorptionRatio: thresholdChecks.maxAbsorptionRatio.calculated,
+                priceImpactRatio:
+                    thresholdChecks.maxPriceImpactRatio.calculated,
             };
 
             this.validationLogger.logSignal(
@@ -960,9 +961,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate absorption ratio using FinancialMath precision
+     * Calculate price impact ratio - measures how much price moved relative to expected movement
+     * Lower values indicate better absorption (less price movement despite volume)
      */
-    private calculateAbsorptionRatio(
+    private calculatePriceImpactRatio(
         event: EnrichedTradeEvent,
         pressureRatio: number
     ): number | null {
@@ -973,13 +975,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         if (expectedMovement === 0) return null;
 
-        // Calculate absorption using volume pressure and price impact
+        // Calculate price impact from best bid
         if (event.bestBid === undefined) return null; // Cannot calculate without bid price
         const actualImpact = FinancialMath.calculateAbs(
             FinancialMath.safeSubtract(event.price, event.bestBid)
         );
 
-        // Factor in volume pressure for more accurate absorption calculation
+        // Factor in volume pressure for adjusted impact
         const pressureAdjustedImpact = FinancialMath.multiplyQuantities(
             actualImpact,
             pressureRatio

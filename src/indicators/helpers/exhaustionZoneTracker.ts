@@ -142,14 +142,22 @@ export class ExhaustionZoneTracker {
         const currentBidVolume = zone.passiveBidVolume || 0;
         const currentAskVolume = zone.passiveAskVolume || 0;
 
-        tracked.maxPassiveBidVolume = Math.max(
-            tracked.maxPassiveBidVolume,
-            currentBidVolume
+        // Track rolling peak volume over the configured history window (not all-time maximum)
+        // This allows detection of genuine exhaustion when volume depletes from recent peaks
+        // Use half of the history window for peak lookback to ensure we have context
+        const peakLookbackMs = Math.floor(this.config.historyWindowMs / 2);
+        const recentHistory = tracked.history.filter(
+            (h) => h.timestamp > timestamp - peakLookbackMs
         );
-        tracked.maxPassiveAskVolume = Math.max(
-            tracked.maxPassiveAskVolume,
-            currentAskVolume
-        );
+
+        // Calculate recent peaks including current values
+        const recentBidVolumes = recentHistory.map((h) => h.passiveBidVolume);
+        recentBidVolumes.push(currentBidVolume);
+        const recentAskVolumes = recentHistory.map((h) => h.passiveAskVolume);
+        recentAskVolumes.push(currentAskVolume);
+
+        tracked.maxPassiveBidVolume = Math.max(...recentBidVolumes, 0);
+        tracked.maxPassiveAskVolume = Math.max(...recentAskVolumes, 0);
 
         // Add history entry with proper defaults
         const entry: ZoneHistoryEntry = {

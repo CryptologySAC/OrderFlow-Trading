@@ -224,34 +224,35 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 150,
-                "exhaustionThreshold": 0.83,
+                "minAggVolume": 130,
+                "exhaustionThreshold": 0.5,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
-                "maxZonesPerSide": 5,
+                "maxZonesPerSide": 10,
                 "zoneDepletionThreshold": 0.7,
                 "gapDetectionTicks": 3,
-                "passiveRatioBalanceThreshold": 0.85,
+                "passiveRatioBalanceThreshold": 0.8,
                 "zoneHistoryWindowMs": 60000
             },
 
             "absorption": {
-                "minAggVolume": 200,
-                "priceEfficiencyThreshold": 0.0046,
-                "minPassiveMultiplier": 15.0,
+                "minAggVolume": 212,
+                "passiveAbsorptionThreshold": 0.94,
+                "priceEfficiencyThreshold": 0.001152,
+                "maxPriceImpactRatio": 0.01,
+                "minPassiveMultiplier": 82.2,
+                "minAbsorptionScore": 0.9396,
+                "balanceThreshold": 0.1018,
+                "priceStabilityTicks": 3,
+
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
-                "maxAbsorptionRatio": 0.7,
-                "passiveAbsorptionThreshold": 0.66,
                 "expectedMovementScalingFactor": 10,
-                "minAbsorptionScore": 0.92,
                 "maxZoneCountForScoring": 5,
-                "balanceThreshold": 0.44,
                 "maxZonesPerSide": 5,
                 "zoneHistoryWindowMs": 60000,
                 "absorptionZoneThreshold": 1.5,
                 "minPassiveVolumeForZone": 50,
-                "priceStabilityTicks": 2,
                 "minAbsorptionEvents": 2
             },
 
