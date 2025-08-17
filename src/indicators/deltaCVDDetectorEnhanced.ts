@@ -144,7 +144,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
 
         this.logger.info("DeltaCVDDetectorEnhanced initialized", {
             detectorId: id,
-            enhancementMode: this.enhancementConfig.enhancementMode,
         });
     }
 
@@ -159,37 +158,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     public detect(event: EnrichedTradeEvent): SignalCandidate | null {
         // Update current price for signal validation
         this.validationLogger.updateCurrentPrice(event.price);
-
-        // Check enhancement mode early
-        if (this.enhancementConfig.enhancementMode === "disabled") {
-            this.metricsCollector.incrementCounter(
-                "cvd_signal_processing_insufficient_samples_total",
-                1
-            );
-            this.logSignalRejection(
-                event,
-                "enhancement_mode_disabled",
-                {
-                    type: "enhancement_mode",
-                    threshold: 1,
-                    actual: 0,
-                },
-                {
-                    calculatedMinTradesPerSec: 0,
-                    calculatedMinVolPerSec: 0,
-                    calculatedSignalThreshold: 0,
-                    calculatedEventCooldownMs:
-                        Date.now() - (this.lastSignal.get("last") || 0),
-                    calculatedEnhancementMode:
-                        this.enhancementConfig.enhancementMode,
-                    calculatedCvdImbalanceThreshold: 0,
-                    calculatedTimeWindowIndex:
-                        this.enhancementConfig.timeWindowIndex,
-                    calculatedInstitutionalThreshold: 0,
-                } as DeltaCVDCalculatedValues
-            );
-            return null;
-        }
 
         // Core CVD detection using restructured architecture
         const coreResult = this.detectCoreCVD(event);
@@ -351,7 +319,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 detectorId: this.getId(),
                 price: event.price,
                 quantity: event.quantity,
-                enhancementMode: this.enhancementConfig.enhancementMode,
                 hasZoneData: !!event.zoneData,
                 timestamp: event.timestamp,
             }
@@ -484,7 +451,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             calculatedSignalThreshold: realConfidence, // vs config signalThreshold (0.7)
             calculatedEventCooldownMs:
                 event.timestamp - (this.lastSignal.get("last") || 0), // vs config eventCooldownMs (1000)
-            calculatedEnhancementMode: this.enhancementConfig.enhancementMode, // vs config enhancementMode ("production")
             calculatedCvdImbalanceThreshold: divergenceResult.maxVolumeRatio, // vs config cvdImbalanceThreshold (0.18) - actual volumeRatio checked
             calculatedTimeWindowIndex: this.enhancementConfig.timeWindowIndex, // vs config timeWindowIndex (0)
             calculatedInstitutionalThreshold: event.quantity, // vs config institutionalThreshold (25.0) - actual trade quantity checked
@@ -827,7 +793,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
             event.price,
-            5
+            15 // TODO Setting!
         );
 
         this.logger.debug(
@@ -837,7 +803,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 totalZones: allZones.length,
                 relevantZones: relevantZones.length,
                 searchPrice: event.price,
-                searchDistance: 5,
+                searchDistance: 15,
             }
         );
 
@@ -1033,8 +999,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         );
 
         // Simple CVD-based signal direction: more buying = buy signal, more selling = sell signal
-        if (buyRatio > 0.5) return "buy";
-        if (buyRatio < 0.5) return "sell";
+        if (buyRatio > 0.6) return "buy";
+        if (buyRatio < 0.4) return "sell";
         // Note: This return null case (neutral 50/50 split) doesn't need separate logging as it's handled in the calling function
         return null; // No clear signal
     }
@@ -1090,21 +1056,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
      */
     public getEnhancementStats(): DeltaCVDEnhancementStats {
         return { ...this.enhancementStats };
-    }
-
-    /**
-     * Update enhancement mode at runtime (for A/B testing and gradual rollout)
-     *
-     * DELTACVD PHASE 1: Runtime configuration management
-     */
-    public setEnhancementMode(
-        mode: "disabled" | "monitoring" | "production"
-    ): void {
-        this.enhancementConfig.enhancementMode = mode;
-        this.logger.info("DeltaCVDDetectorEnhanced: Enhancement mode updated", {
-            detectorId: this.getId(),
-            newMode: mode,
-        });
     }
 
     /**

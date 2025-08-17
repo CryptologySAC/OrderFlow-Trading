@@ -173,9 +173,6 @@ export const DeltaCVDDetectorSchema = z.object({
     // Zone time window configuration
     timeWindowIndex: z.number().int().min(0).max(5),
 
-    // Zone enhancement control
-    enhancementMode: z.enum(["disabled", "monitoring", "production"]),
-
     // CVD divergence analysis parameters
     cvdImbalanceThreshold: z.number().min(0.05).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
 

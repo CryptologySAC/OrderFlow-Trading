@@ -221,7 +221,6 @@ export class DetectorFactory {
             `[DetectorFactory] Created Enhanced DeltaCVDDetector (deprecated originals)`,
             {
                 id,
-                enhancementMode: productionSettings.enhancementMode,
             }
         );
 

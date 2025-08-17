@@ -71,7 +71,6 @@ export interface DeltaCVDCalculatedValues {
     calculatedMinVolPerSec: number; // compared against minVolPerSec (5.0)
     calculatedSignalThreshold: number; // compared against signalThreshold (0.7)
     calculatedEventCooldownMs: number; // compared against eventCooldownMs (1000)
-    calculatedEnhancementMode: string; // compared against enhancementMode ("production")
     calculatedCvdImbalanceThreshold: number; // compared against cvdImbalanceThreshold (0.18)
     calculatedTimeWindowIndex: number; // compared against timeWindowIndex (0)
     calculatedInstitutionalThreshold: number; // compared against institutionalThreshold (25.0)

@@ -1209,8 +1209,8 @@ function initializeOrderBookChart(ctx) {
             },
             datasets: {
                 bar: {
-                    barPercentage: 0.45,
-                    categoryPercentage: 1.0,
+                    barPercentage: 1.0,
+                    categoryPercentage: 0.5,
                 },
             },
             plugins: {
