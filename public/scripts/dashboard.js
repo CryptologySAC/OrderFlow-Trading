@@ -928,7 +928,7 @@ const tradeWebsocket = new TradeWebSocket({
                     }
 
                     orderBookData = message.data;
-                    
+
                     // Display the data directly from backend (already 1-tick precision)
                     if (orderBookChart) {
                         updateOrderBookDisplay(orderBookData);
@@ -2744,7 +2744,6 @@ function cleanupOldSupportResistanceLevels() {
  * Handle accumulation/distribution zones as visual boxes on the chart
  */
 
-
 /**
  * Handle zone update messages from WebSocket
  */
@@ -3269,7 +3268,6 @@ function cleanupOldZones() {
     }
 }
 
-
 /**
  * Update order book display with data from backend
  */
@@ -3285,7 +3283,7 @@ function updateOrderBookDisplay(data) {
     // Backend sends data already configured with proper binSize (1-tick)
     // Just display it directly without any local processing
     const priceLevels = data.priceLevels || [];
-    
+
     // Select levels symmetrically around mid price for balanced display
     const maxLevels = 50; // Show more levels since we have 1-tick precision
     const midPrice = data.midPrice || 0;
