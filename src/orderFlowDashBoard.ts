@@ -368,20 +368,6 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Support/Resistance Detector - DISABLED: Generating too many useless signals
-        // this.supportResistanceDetector =
-        //     DetectorFactory.createSupportResistanceDetector(
-        //         Config.SUPPORT_RESISTANCE_DETECTOR,
-        //         dependencies,
-        //         { id: "ltcusdt-support-resistance-main" }
-        //     );
-        // this.signalCoordinator.registerDetector(
-        //     this.supportResistanceDetector,
-        //     ["support_resistance_level"],
-        //     10,
-        //     true
-        // );
-
         // Accumulation Zone Detector
         this.accumulationZoneDetector =
             DetectorFactory.createAccumulationDetector(detectorDependencies, {

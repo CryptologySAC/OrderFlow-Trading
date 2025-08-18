@@ -2099,18 +2099,6 @@ export class SignalValidationLogger {
             if ("minAggVolume" in thresholdChecks) {
                 result.minAggVolume = thresholdChecks.minAggVolume.calculated;
             }
-            if ("timeWindowIndex" in thresholdChecks) {
-                result.timeWindowIndex =
-                    thresholdChecks.timeWindowIndex.calculated;
-            }
-            if ("eventCooldownMs" in thresholdChecks) {
-                result.eventCooldownMs =
-                    thresholdChecks.eventCooldownMs.calculated;
-            }
-            if ("enhancementMode" in thresholdChecks) {
-                result.enhancementMode =
-                    thresholdChecks.enhancementMode.calculated;
-            }
 
             // Handle Exhaustion-specific fields
             if ("exhaustionThreshold" in thresholdChecks) {

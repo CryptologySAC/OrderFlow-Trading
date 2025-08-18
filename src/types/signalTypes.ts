@@ -578,9 +578,6 @@ export interface DeltaCVDThresholdChecks {
     minTradesPerSec: ThresholdCheck<number>;
     minVolPerSec: ThresholdCheck<number>;
     signalThreshold: ThresholdCheck<number>;
-    eventCooldownMs: ThresholdCheck<number>;
-    timeWindowIndex: ThresholdCheck<number>;
-    enhancementMode: ThresholdCheck<string>;
     cvdImbalanceThreshold: ThresholdCheck<number>;
     institutionalThreshold: ThresholdCheck<number>;
     volumeEfficiencyThreshold: ThresholdCheck<number>;
