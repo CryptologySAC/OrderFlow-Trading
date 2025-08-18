@@ -31,7 +31,7 @@
         "typecheck": "tsc --noEmit",
         "build:watch": "tsc -p tsconfig.build.json --watch",
         "analyze:signals": "npx tsx analysis/analyze_success_with_price_reconstruction.ts",
-        "analyze:thresholds": "npx tsx analysis/analyze_threshold_combinations.ts"
+        "analyze:thresholds": "npx tsx analysis/analyze_threshold_optimization_binary.ts"
     },
     "devDependencies": {
         "@types/better-sqlite3": "7.6.13",

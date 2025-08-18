@@ -1302,15 +1302,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         thresholds: DeltaCVDThresholdChecks
     ): void {
         try {
-            // Calculate market context for validation logging
-            const marketContext = this.calculateMarketContext(event);
-
-            this.validationLogger.logSignal(
-                signal,
-                event,
-                thresholds,
-                marketContext
-            );
+            this.validationLogger.logSignal(signal, event, thresholds);
         } catch (error) {
             this.logger.error(
                 "DeltaCVDDetectorEnhanced: Failed to log signal for validation",

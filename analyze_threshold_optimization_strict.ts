@@ -983,7 +983,7 @@ async function main(): Promise<void> {
     // Generate HTML report
     const html = generateHTML(results, date);
     const outputPath = `threshold_optimization_${date}.html`;
-    await fs.writeFile(outputPath, html, 'utf8');
+    await fs.writeFile(outputPath, html, "utf8");
 
     console.log(`\n✅ Report generated: ${outputPath}`);
 }

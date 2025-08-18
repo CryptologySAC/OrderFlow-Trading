@@ -546,7 +546,7 @@ async function generateHTMLReport(
 
     const reportPath =
         "analysis/reports/successful_signals_actual_tp_analysis.html";
-    await fs.writeFile(reportPath, html, 'utf8');
+    await fs.writeFile(reportPath, html, "utf8");
     console.log(`\n✅ HTML report saved to: ${reportPath}`);
 }
 

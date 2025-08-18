@@ -473,7 +473,7 @@ async function generateHTMLReport(
 </body>
 </html>`;
 
-    await fs.writeFile("absorption_threshold_analysis.html", html, 'utf8');
+    await fs.writeFile("absorption_threshold_analysis.html", html, "utf8");
     console.log(
         "\n✅ HTML report saved to: absorption_threshold_analysis.html"
     );

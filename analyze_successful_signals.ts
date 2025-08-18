@@ -305,7 +305,7 @@ function generateHTMLReport(results: AnalysisResult[]): void {
 </body>
 </html>`;
 
-    fs.writeFile("signal_verification_report.html", html, 'utf8');
+    fs.writeFile("signal_verification_report.html", html, "utf8");
     console.log("\n✅ HTML report saved to: signal_verification_report.html");
 }
 

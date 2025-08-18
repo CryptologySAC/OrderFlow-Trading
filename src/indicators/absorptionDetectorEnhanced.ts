@@ -735,28 +735,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
         try {
             // Collect ACTUAL VALUES that each parameter was checked against when signal passed
 
-            // Market context at time of successful signal
-            const marketContext = {
-                marketVolume:
-                    event.zoneData?.zones.reduce(
-                        (sum, zone) =>
-                            sum + zone.aggressiveVolume + zone.passiveVolume,
-                        0
-                    ) || 0,
-                marketSpread:
-                    event.bestAsk && event.bestBid
-                        ? event.bestAsk - event.bestBid
-                        : 0,
-                marketVolatility: this.calculateMarketVolatility(event),
-            };
-
             // Calculate the same values used in rejection logging
 
             this.validationLogger.logSuccessfulSignal(
                 "absorption",
                 event,
                 thresholdChecks,
-                marketContext,
                 signal.side // Signal always has buy/sell
             );
         } catch (error) {
@@ -772,20 +756,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
     }
 
     /**
-     * Calculate market volatility estimate
-     */
-    private calculateMarketVolatility(event: EnrichedTradeEvent): number {
-        // Simple volatility estimate based on spread and recent price action
-        if (!event.bestAsk || !event.bestBid) return 0;
-
-        const spread = event.bestAsk - event.bestBid;
-        const midPrice = (event.bestAsk + event.bestBid) / 2;
-
-        // Return spread as percentage of mid price
-        return FinancialMath.divideQuantities(spread, midPrice);
-    }
-
-    /**
      * Log signal for validation tracking
      */
     private logSignalForValidation(
@@ -794,31 +764,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         thresholdChecks: AbsorptionThresholdChecks
     ): void {
         try {
-            // Calculate market context for validation logging
-            const marketContext = {
-                totalAggressiveVolume: thresholdChecks.minAggVolume.calculated,
-                totalPassiveVolume:
-                    thresholdChecks.passiveAbsorptionThreshold.calculated,
-                aggressiveBuyVolume: thresholdChecks.minAggVolume.calculated,
-                aggressiveSellVolume: thresholdChecks.minAggVolume.calculated,
-                passiveBidVolume:
-                    thresholdChecks.passiveAbsorptionThreshold.calculated,
-                passiveAskVolume:
-                    thresholdChecks.passiveAbsorptionThreshold.calculated,
-                institutionalVolumeRatio:
-                    thresholdChecks.maxPriceImpactRatio.calculated,
-                priceEfficiency:
-                    thresholdChecks.priceEfficiencyThreshold.calculated,
-                priceImpactRatio:
-                    thresholdChecks.maxPriceImpactRatio.calculated,
-            };
-
-            this.validationLogger.logSignal(
-                signal,
-                event,
-                thresholdChecks,
-                marketContext
-            );
+            this.validationLogger.logSignal(signal, event, thresholdChecks);
         } catch (error) {
             this.logger.error(
                 "AbsorptionDetectorEnhanced: Failed to log signal for validation",

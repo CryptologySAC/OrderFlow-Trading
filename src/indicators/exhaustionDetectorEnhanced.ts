@@ -401,25 +401,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         thresholdChecks: ExhaustionThresholdChecks
     ): void {
         try {
-            // Calculate market context for validation logging
-            const marketContext = {
-                totalAggressiveVolume: thresholdChecks.minAggVolume.calculated,
-                totalPassiveVolume: 0,
-                aggressiveBuyVolume: thresholdChecks.minAggVolume.calculated,
-                aggressiveSellVolume: thresholdChecks.minAggVolume.calculated,
-                passiveBidVolume: 0,
-                passiveAskVolume: 0,
-                institutionalVolumeRatio:
-                    thresholdChecks.passiveRatioBalanceThreshold.calculated,
-                priceEfficiency: 0,
-            };
-
-            this.validationLogger.logSignal(
-                signal,
-                event,
-                thresholdChecks,
-                marketContext
-            );
+            this.validationLogger.logSignal(signal, event, thresholdChecks);
         } catch (error) {
             this.logger.error(
                 "ExhaustionDetectorEnhanced: Failed to log signal for validation",
@@ -443,28 +425,10 @@ export class ExhaustionDetectorEnhanced extends Detector {
         try {
             // Collect ACTUAL VALUES that each parameter was checked against when signal passed
 
-            // Market context at time of successful signal
-            const marketContext = {
-                marketVolume:
-                    event.zoneData?.zones.reduce(
-                        (sum, zone) =>
-                            sum + zone.aggressiveVolume + zone.passiveVolume,
-                        0
-                    ) || 0,
-                marketSpread:
-                    event.bestAsk && event.bestBid
-                        ? event.bestAsk - event.bestBid
-                        : 0,
-                marketVolatility: 0,
-            };
-
-            // Calculate the same values used in rejection logging
-
             this.validationLogger.logSuccessfulSignal(
                 "exhaustion",
                 event,
                 thresholdChecks,
-                marketContext,
                 signal.side // Signal always has buy/sell
             );
         } catch (error) {

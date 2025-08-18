@@ -38,38 +38,7 @@ export interface SignalValidationRecord {
     signalId: string;
     detectorType: "exhaustion" | "absorption" | "deltacvd";
     signalSide: "buy" | "sell";
-    confidence: number;
-
-    // Market Context at Signal Time
     price: number;
-    tradeQuantity: number;
-    bestBid?: number;
-    bestAsk?: number;
-    spread?: number;
-
-    // Volume Analysis
-    totalAggressiveVolume: number;
-    totalPassiveVolume: number;
-    aggressiveBuyVolume: number;
-    aggressiveSellVolume: number;
-    passiveBidVolume: number;
-    passiveAskVolume: number;
-    volumeImbalance: number;
-    institutionalVolumeRatio: number;
-
-    // Zone Analysis
-    activeZones: number;
-    zoneTotalVolume: number;
-    priceEfficiency: number | null;
-    absorptionRatio?: number;
-    exhaustionRatio?: number;
-    depletionRatio?: number;
-
-    // Signal Quality Metrics
-    signalStrength: number;
-    confluenceScore: number;
-    institutionalFootprint: number;
-    qualityGrade: "premium" | "standard" | "low";
 
     // Performance Validation (filled later)
     priceAt5min?: number;
@@ -85,13 +54,6 @@ export interface SignalValidationRecord {
     signalAccuracy15min?: boolean;
     signalAccuracy1hr?: boolean;
     tpSlStatus?: "TP" | "SL" | "PENDING" | "NEITHER"; // Target reached or stop loss hit
-
-    // Quality flags
-    crossTimeframe?: boolean;
-    institutionalVolume?: boolean;
-    zoneConfluence?: boolean;
-    exhaustionGap?: boolean;
-    priceEfficiencyHigh?: boolean;
 
     // Threshold Checks (for CSV output)
     thresholdChecks:
@@ -120,65 +82,6 @@ export interface SignalRejectionRecord {
     thresholdType: string;
     thresholdValue: number;
     actualValue: number;
-
-    // Basic market context
-    aggressiveVolume: number;
-    passiveVolume: number;
-    priceEfficiency: number | null;
-
-    // EXHAUSTION: All 20 parameters
-    exhaustion_minAggVolume?: number;
-    exhaustion_timeWindowIndex?: number;
-    exhaustion_exhaustionThreshold?: number;
-    exhaustion_eventCooldownMs?: number;
-    exhaustion_useStandardizedZones?: boolean;
-    exhaustion_enhancementMode?: string;
-    exhaustion_minEnhancedConfidenceThreshold?: number;
-    exhaustion_depletionVolumeThreshold?: number;
-    exhaustion_depletionRatioThreshold?: number;
-    exhaustion_enableDepletionAnalysis?: boolean;
-    exhaustion_varianceReductionFactor?: number;
-    exhaustion_alignmentNormalizationFactor?: number;
-    exhaustion_passiveVolumeExhaustionRatio?: number;
-    exhaustion_aggressiveVolumeExhaustionThreshold?: number;
-    exhaustion_aggressiveVolumeReductionFactor?: number;
-    exhaustion_passiveRatioBalanceThreshold?: number;
-    exhaustion_premiumConfidenceThreshold?: number;
-    exhaustion_variancePenaltyFactor?: number;
-    exhaustion_ratioBalanceCenterPoint?: number;
-
-    // ABSORPTION: All 23 parameters
-    absorption_minAggVolume?: number;
-    absorption_timeWindowIndex?: number;
-    absorption_eventCooldownMs?: number;
-    absorption_priceEfficiencyThreshold?: number;
-    absorption_maxAbsorptionRatio?: number;
-    absorption_minPassiveMultiplier?: number;
-    absorption_passiveAbsorptionThreshold?: number;
-    absorption_expectedMovementScalingFactor?: number;
-    absorption_liquidityGradientRange?: number;
-    absorption_institutionalVolumeThreshold?: number;
-    absorption_institutionalVolumeRatioThreshold?: number;
-    absorption_enableInstitutionalVolumeFilter?: boolean;
-    absorption_minAbsorptionScore?: number;
-    absorption_finalConfidenceRequired?: number;
-    absorption_maxZoneCountForScoring?: number;
-    absorption_minEnhancedConfidenceThreshold?: number;
-    absorption_useStandardizedZones?: boolean;
-    absorption_enhancementMode?: string;
-    absorption_balanceThreshold?: number;
-    absorption_confluenceMinZones?: number;
-    absorption_confluenceMaxDistance?: number;
-
-    // DELTACVD: All 8 parameters
-    deltacvd_minTradesPerSec?: number;
-    deltacvd_minVolPerSec?: number;
-    deltacvd_signalThreshold?: number;
-    deltacvd_eventCooldownMs?: number;
-    deltacvd_timeWindowIndex?: number;
-    deltacvd_enhancementMode?: string;
-    deltacvd_cvdImbalanceThreshold?: number;
-    deltacvd_institutionalThreshold?: number;
 
     // THRESHOLD CHECKS - All actual thresholds and calculated values during detection
     thresholdChecks:
@@ -212,82 +115,11 @@ export interface SuccessfulSignalRecord {
     signalSide: "buy" | "sell";
     price: number;
 
-    // ALL 40+ parameter values from config that allowed this signal to pass
-    parameterValues: {
-        // EXHAUSTION DETECTOR - ALL PARAMETERS FROM CONFIG
-        minAggVolume?: number;
-        exhaustionThreshold?: number;
-        timeWindowIndex?: number;
-        eventCooldownMs?: number;
-        useStandardizedZones?: boolean;
-        enhancementMode?: string;
-        minEnhancedConfidenceThreshold?: number;
-        enableDepletionAnalysis?: boolean;
-        depletionVolumeThreshold?: number;
-        depletionRatioThreshold?: number;
-        passiveVolumeExhaustionRatio?: number;
-        varianceReductionFactor?: number;
-        alignmentNormalizationFactor?: number;
-        aggressiveVolumeExhaustionThreshold?: number;
-        aggressiveVolumeReductionFactor?: number;
-        passiveRatioBalanceThreshold?: number;
-        premiumConfidenceThreshold?: number;
-        variancePenaltyFactor?: number;
-        ratioBalanceCenterPoint?: number;
-
-        // ABSORPTION DETECTOR - ALL PARAMETERS FROM CONFIG
-        absorptionThreshold?: number;
-        priceEfficiencyThreshold?: number;
-        maxAbsorptionRatio?: number;
-        minPassiveMultiplier?: number;
-        passiveAbsorptionThreshold?: number;
-        expectedMovementScalingFactor?: number;
-        liquidityGradientRange?: number;
-        institutionalVolumeThreshold?: number;
-        institutionalVolumeRatioThreshold?: number;
-        enableInstitutionalVolumeFilter?: boolean;
-        minAbsorptionScore?: number;
-        finalConfidenceRequired?: number;
-        maxZoneCountForScoring?: number;
-        balanceThreshold?: number;
-        confluenceMinZones?: number;
-        confluenceMaxDistance?: number;
-
-        // RUNTIME VALUES (calculated during signal)
-        priceEfficiency?: number;
-        confidence?: number;
-        aggressiveVolume?: number;
-        passiveVolume?: number;
-        volumeRatio?: number;
-        institutionalVolumeRatio?: number;
-
-        // DELTACVD DETECTOR - ALL PARAMETERS FROM CONFIG
-        minTradesPerSec?: number;
-        minVolPerSec?: number;
-        signalThreshold?: number;
-        cvdImbalanceThreshold?: number;
-        institutionalThreshold?: number;
-
-        // DeltaCVD-specific runtime values
-        cvdDivergenceStrength?: number;
-        cvdAffectedZones?: number;
-        buyVolume?: number;
-        sellVolume?: number;
-        cvdDelta?: number;
-        buyRatio?: number;
-        enhancedConfidence?: number;
-    };
-
     // ✅ THRESHOLD CHECKS: For proper CSV header alignment
     thresholdChecks:
         | AbsorptionThresholdChecks
         | ExhaustionThresholdChecks
         | DeltaCVDThresholdChecks;
-
-    // Market context
-    marketVolume: number;
-    marketSpread: number;
-    marketVolatility: number;
 
     // Post-signal analysis (filled later)
     actualTPPrice?: number; // The price where TP was hit (if reached)
@@ -297,13 +129,6 @@ export interface SuccessfulSignalRecord {
     wasTopOrBottomSignal?: boolean;
     signalQuality?: "top" | "bottom" | "noise";
     tpSlStatus?: "TP" | "SL" | "NEITHER"; // Target reached or stop loss hit
-
-    // Quality flags
-    crossTimeframe?: boolean;
-    institutionalVolume?: boolean;
-    zoneConfluence?: boolean;
-    exhaustionGap?: boolean;
-    priceEfficiencyHigh?: boolean;
 }
 
 /**
@@ -863,20 +688,7 @@ export class SignalValidationLogger {
         thresholdChecks:
             | AbsorptionThresholdChecks
             | ExhaustionThresholdChecks
-            | DeltaCVDThresholdChecks,
-        marketContext: {
-            totalAggressiveVolume: number;
-            totalPassiveVolume: number;
-            aggressiveBuyVolume: number;
-            aggressiveSellVolume: number;
-            passiveBidVolume: number;
-            passiveAskVolume: number;
-            institutionalVolumeRatio: number;
-            priceEfficiency: number | null;
-            absorptionRatio?: number;
-            exhaustionRatio?: number;
-            depletionRatio?: number;
-        }
+            | DeltaCVDThresholdChecks
     ): void {
         try {
             // Check for daily rotation before logging
@@ -891,59 +703,9 @@ export class SignalValidationLogger {
                     | "absorption"
                     | "deltacvd",
                 signalSide: signal.side,
-                confidence: signal.confidence,
 
                 // Market Context
                 price: event.price,
-                tradeQuantity: event.quantity,
-                bestBid: event.bestBid ?? 0,
-                bestAsk: event.bestAsk ?? 0,
-                spread:
-                    event.bestAsk && event.bestBid
-                        ? event.bestAsk - event.bestBid
-                        : -1,
-
-                // Volume Analysis
-                totalAggressiveVolume: marketContext.totalAggressiveVolume,
-                totalPassiveVolume: marketContext.totalPassiveVolume,
-                aggressiveBuyVolume: marketContext.aggressiveBuyVolume,
-                aggressiveSellVolume: marketContext.aggressiveSellVolume,
-                passiveBidVolume: marketContext.passiveBidVolume,
-                passiveAskVolume: marketContext.passiveAskVolume,
-                volumeImbalance: this.calculateVolumeImbalance(
-                    marketContext.aggressiveBuyVolume,
-                    marketContext.aggressiveSellVolume
-                ),
-                institutionalVolumeRatio:
-                    marketContext.institutionalVolumeRatio,
-
-                // Zone Analysis
-                activeZones: event.zoneData ? event.zoneData.zones.length : 0,
-                zoneTotalVolume: event.zoneData
-                    ? this.calculateZoneTotalVolume(event.zoneData.zones)
-                    : 0,
-                priceEfficiency: marketContext.priceEfficiency,
-                absorptionRatio: marketContext.absorptionRatio ?? 0,
-                exhaustionRatio: marketContext.exhaustionRatio ?? 0,
-                depletionRatio: marketContext.depletionRatio ?? 0,
-
-                // Signal Quality Metrics
-                signalStrength: signal.confidence,
-                confluenceScore: this.calculateConfluenceScore(event),
-                institutionalFootprint: marketContext.institutionalVolumeRatio,
-                qualityGrade: this.determineQualityGrade(
-                    signal.confidence,
-                    marketContext.institutionalVolumeRatio
-                ),
-
-                // Quality flags from signal (default to false if not present)
-                crossTimeframe: signal.qualityFlags?.crossTimeframe ?? false,
-                institutionalVolume:
-                    signal.qualityFlags?.institutionalVolume ?? false,
-                zoneConfluence: signal.qualityFlags?.zoneConfluence ?? false,
-                exhaustionGap: signal.qualityFlags?.exhaustionGap ?? false,
-                priceEfficiencyHigh:
-                    signal.qualityFlags?.priceEfficiency ?? false,
 
                 // Store threshold checks for later use
                 thresholdChecks: thresholdChecks,
@@ -957,17 +719,6 @@ export class SignalValidationLogger {
 
             // Log immediately (partial record)
             this.writeSignalRecord(record, thresholdChecks);
-
-            this.logger.info(
-                "SignalValidationLogger: Signal logged for validation",
-                {
-                    signalId: signal.id,
-                    detectorType: record.detectorType,
-                    signalSide: record.signalSide,
-                    price: record.price,
-                    confidence: record.confidence,
-                }
-            );
         } catch (error) {
             this.logger.error("SignalValidationLogger: Failed to log signal", {
                 signalId: signal.id,
@@ -987,11 +738,6 @@ export class SignalValidationLogger {
             | AbsorptionThresholdChecks
             | ExhaustionThresholdChecks
             | DeltaCVDThresholdChecks,
-        marketContext: {
-            marketVolume: number;
-            marketSpread: number;
-            marketVolatility: number;
-        },
         signalSide: "buy" | "sell"
     ): void {
         try {
@@ -999,19 +745,12 @@ export class SignalValidationLogger {
             this.checkAndRotateFiles();
 
             // Convert thresholdChecks to parameterValues format for CSV output
-            const parameterValues: SuccessfulSignalRecord["parameterValues"] =
-                this.convertThresholdChecksToParameterValues(thresholdChecks);
-
             const record: SuccessfulSignalRecord = {
                 timestamp: event.timestamp,
                 detectorType,
                 signalSide, // Mandatory - a signal without side is useless
                 price: event.price,
-                parameterValues,
                 thresholdChecks, // ✅ Store for CSV alignment
-                marketVolume: marketContext.marketVolume,
-                marketSpread: marketContext.marketSpread,
-                marketVolatility: marketContext.marketVolatility,
             };
 
             // Store for validation tracking
@@ -1023,16 +762,6 @@ export class SignalValidationLogger {
                 recordId,
                 event.price,
                 record
-            );
-
-            this.logger.debug(
-                "SignalValidationLogger: Successful signal parameters logged",
-                {
-                    detectorType,
-                    price: event.price,
-                    timestamp: event.timestamp,
-                    parameterCount: Object.keys(parameterValues).length,
-                }
             );
         } catch (error) {
             this.logger.error(
@@ -1071,20 +800,6 @@ export class SignalValidationLogger {
             // Use the thresholdChecks parameter directly
             const allThresholdChecks = thresholdChecks;
 
-            // Extract basic values for backward compatibility
-            // Note: We're extracting calculated values from the threshold checks
-            const aggressiveVolume =
-                "minAggVolume" in thresholdChecks
-                    ? Number(thresholdChecks.minAggVolume.calculated) || 0
-                    : 0;
-            const passiveVolume = 0; // Not included in new interface
-            const priceEfficiency =
-                "priceEfficiencyThreshold" in thresholdChecks
-                    ? Number(
-                          thresholdChecks.priceEfficiencyThreshold?.calculated
-                      ) || 0
-                    : 0;
-
             const record: SignalRejectionRecord = {
                 timestamp: event.timestamp,
                 detectorType,
@@ -1096,11 +811,6 @@ export class SignalValidationLogger {
                 thresholdType: thresholdDetails.type,
                 thresholdValue: thresholdDetails.threshold,
                 actualValue: thresholdDetails.actual,
-
-                // Basic market context (still needed for backward compatibility)
-                aggressiveVolume,
-                passiveVolume,
-                priceEfficiency,
 
                 // ✅ ALL THRESHOLD CHECKS: Every threshold and calculation the detector made
                 thresholdChecks: allThresholdChecks,
@@ -1118,18 +828,6 @@ export class SignalValidationLogger {
                 rejectionId,
                 event.price,
                 record
-            );
-
-            this.logger.debug(
-                "SignalValidationLogger: Signal rejection logged",
-                {
-                    detectorType,
-                    rejectionReason,
-                    price: event.price,
-                    thresholdType: thresholdDetails.type,
-                    threshold: thresholdDetails.threshold,
-                    actual: thresholdDetails.actual,
-                }
             );
         } catch (error) {
             this.logger.error(
@@ -1701,37 +1399,6 @@ export class SignalValidationLogger {
                 detectorType: record.detectorType,
                 signalSide: record.signalSide,
                 price: record.price,
-                confidence: record.confidence,
-
-                // Market context
-                tradeQuantity: record.tradeQuantity,
-                bestBid: record.bestBid,
-                bestAsk: record.bestAsk,
-                spread: record.spread,
-
-                // Volume analysis
-                totalAggressiveVolume: record.totalAggressiveVolume,
-                totalPassiveVolume: record.totalPassiveVolume,
-                aggressiveBuyVolume: record.aggressiveBuyVolume,
-                aggressiveSellVolume: record.aggressiveSellVolume,
-                passiveBidVolume: record.passiveBidVolume,
-                passiveAskVolume: record.passiveAskVolume,
-                volumeImbalance: record.volumeImbalance,
-                institutionalVolumeRatio: record.institutionalVolumeRatio,
-
-                // Zone analysis
-                activeZones: record.activeZones,
-                zoneTotalVolume: record.zoneTotalVolume,
-                priceEfficiency: record.priceEfficiency,
-                absorptionRatio: record.absorptionRatio,
-                exhaustionRatio: record.exhaustionRatio,
-                depletionRatio: record.depletionRatio,
-
-                // Signal quality metrics
-                signalStrength: record.signalStrength,
-                confluenceScore: record.confluenceScore,
-                institutionalFootprint: record.institutionalFootprint,
-                qualityGrade: record.qualityGrade,
 
                 // Performance validation
                 priceAt5min: record.priceAt5min,
@@ -1747,13 +1414,6 @@ export class SignalValidationLogger {
                 signalAccuracy15min: record.signalAccuracy15min,
                 signalAccuracy1hr: record.signalAccuracy1hr,
                 tpSlStatus: record.tpSlStatus,
-
-                // Quality flags
-                crossTimeframe: record.crossTimeframe,
-                institutionalVolume: record.institutionalVolume,
-                zoneConfluence: record.zoneConfluence,
-                exhaustionGap: record.exhaustionGap,
-                priceEfficiencyHigh: record.priceEfficiencyHigh,
 
                 // Complete threshold checks for analysis
                 thresholdChecks: thresholdChecks,
@@ -1805,14 +1465,6 @@ export class SignalValidationLogger {
                 signalSide: record.signalSide,
                 price: record.price,
 
-                // All parameter values that allowed this signal to pass
-                parameterValues: record.parameterValues,
-
-                // Market context
-                marketVolume: record.marketVolume,
-                marketSpread: record.marketSpread,
-                marketVolatility: record.marketVolatility,
-
                 // Post-signal analysis
                 actualTPPrice: record.actualTPPrice,
                 actualSLPrice: record.actualSLPrice,
@@ -1821,13 +1473,6 @@ export class SignalValidationLogger {
                 wasTopOrBottomSignal: record.wasTopOrBottomSignal,
                 signalQuality: record.signalQuality,
                 tpSlStatus: record.tpSlStatus,
-
-                // Quality flags
-                crossTimeframe: record.crossTimeframe,
-                institutionalVolume: record.institutionalVolume,
-                zoneConfluence: record.zoneConfluence,
-                exhaustionGap: record.exhaustionGap,
-                priceEfficiencyHigh: record.priceEfficiencyHigh,
 
                 // Complete threshold checks for analysis
                 thresholdChecks: thresholdChecks,
@@ -1888,11 +1533,6 @@ export class SignalValidationLogger {
                 thresholdType: record.thresholdType,
                 thresholdValue: record.thresholdValue,
                 actualValue: record.actualValue,
-
-                // Basic market context
-                aggressiveVolume: record.aggressiveVolume,
-                passiveVolume: record.passiveVolume,
-                priceEfficiency: record.priceEfficiency,
 
                 // Post-rejection analysis (why this was a missed opportunity)
                 actualTPPrice: record.actualTPPrice,
@@ -1962,11 +1602,6 @@ export class SignalValidationLogger {
                 thresholdValue: record.thresholdValue,
                 actualValue: record.actualValue,
 
-                // Basic market context
-                aggressiveVolume: record.aggressiveVolume,
-                passiveVolume: record.passiveVolume,
-                priceEfficiency: record.priceEfficiency,
-
                 // Post-rejection analysis
                 actualTPPrice: record.actualTPPrice,
                 actualSLPrice: record.actualSLPrice,
@@ -2014,60 +1649,6 @@ export class SignalValidationLogger {
     }
 
     /**
-     * Calculate volume imbalance ratio
-     */
-    private calculateVolumeImbalance(
-        buyVolume: number,
-        sellVolume: number
-    ): number {
-        const totalVolume = buyVolume + sellVolume;
-        if (totalVolume === 0) return 0;
-
-        const buyRatio = FinancialMath.divideQuantities(buyVolume, totalVolume);
-        return Math.abs(buyRatio - 0.5); // Distance from perfect balance
-    }
-
-    /**
-     * Calculate total volume across all zones
-     */
-    private calculateZoneTotalVolume(zones: unknown[]): number {
-        return zones.reduce((total: number, zone) => {
-            const typedZone = zone as {
-                aggressiveVolume?: number;
-                passiveVolume?: number;
-            };
-            return (
-                total +
-                (typedZone.aggressiveVolume || 0) +
-                (typedZone.passiveVolume || 0)
-            );
-        }, 0);
-    }
-
-    /**
-     * Calculate confluence score based on zone overlap
-     */
-    private calculateConfluenceScore(event: EnrichedTradeEvent): number {
-        if (!event.zoneData) return 0;
-
-        // Simple confluence score based on number of active zones
-        const zoneCount = event.zoneData.zones.length;
-        return Math.min(1.0, zoneCount / 10); // Normalize to 0-1 scale
-    }
-
-    /**
-     * Determine signal quality grade
-     */
-    private determineQualityGrade(
-        confidence: number,
-        institutionalRatio: number
-    ): "premium" | "standard" | "low" {
-        if (confidence > 0.8 && institutionalRatio > 0.7) return "premium";
-        if (confidence > 0.6 && institutionalRatio > 0.5) return "standard";
-        return "low";
-    }
-
-    /**
      * Clean up validation timers and records
      */
     private cleanupValidation(signalId: string): void {
@@ -2080,82 +1661,6 @@ export class SignalValidationLogger {
 
         // Remove from pending validations
         this.pendingValidations.delete(signalId);
-    }
-
-    /**
-     * Convert thresholdChecks to parameterValues format for CSV output
-     * INSTITUTIONAL COMPLIANCE: Maps threshold checks to expected CSV structure
-     */
-    private convertThresholdChecksToParameterValues(
-        thresholdChecks:
-            | AbsorptionThresholdChecks
-            | ExhaustionThresholdChecks
-            | DeltaCVDThresholdChecks
-    ): SuccessfulSignalRecord["parameterValues"] {
-        const result: SuccessfulSignalRecord["parameterValues"] = {};
-
-        try {
-            // Extract common fields that exist across all detector types
-            if ("minAggVolume" in thresholdChecks) {
-                result.minAggVolume = thresholdChecks.minAggVolume.calculated;
-            }
-
-            // Handle Exhaustion-specific fields
-            if ("exhaustionThreshold" in thresholdChecks) {
-                const exhaustionChecks = thresholdChecks;
-                result.exhaustionThreshold =
-                    exhaustionChecks.exhaustionThreshold.calculated;
-                result.passiveRatioBalanceThreshold =
-                    exhaustionChecks.passiveRatioBalanceThreshold.calculated;
-            }
-
-            // Handle Absorption-specific fields
-            if ("priceEfficiencyThreshold" in thresholdChecks) {
-                const absorptionChecks = thresholdChecks;
-                result.priceEfficiencyThreshold =
-                    absorptionChecks.priceEfficiencyThreshold.calculated;
-                result.maxAbsorptionRatio =
-                    absorptionChecks.maxPriceImpactRatio.calculated;
-                result.minPassiveMultiplier =
-                    absorptionChecks.minPassiveMultiplier.calculated;
-                result.passiveAbsorptionThreshold =
-                    absorptionChecks.passiveAbsorptionThreshold.calculated;
-
-                result.balanceThreshold =
-                    absorptionChecks.balanceThreshold.calculated;
-                result.absorptionThreshold =
-                    absorptionChecks.maxPriceImpactRatio.calculated;
-
-                // Set priceEfficiency from threshold for compatibility
-                result.priceEfficiency =
-                    absorptionChecks.priceEfficiencyThreshold.calculated;
-            }
-
-            // Handle DeltaCVD-specific fields
-            if ("minTradesPerSec" in thresholdChecks) {
-                const deltacvdChecks = thresholdChecks;
-                result.minTradesPerSec =
-                    deltacvdChecks.minTradesPerSec.calculated;
-                result.minVolPerSec = deltacvdChecks.minVolPerSec.calculated;
-                result.signalThreshold =
-                    deltacvdChecks.signalThreshold.calculated;
-                result.cvdImbalanceThreshold =
-                    deltacvdChecks.cvdImbalanceThreshold.calculated;
-                result.institutionalThreshold =
-                    deltacvdChecks.institutionalThreshold.calculated;
-            }
-
-            return result;
-        } catch (error) {
-            this.logger.error(
-                "SignalValidationLogger: Failed to convert thresholdChecks to parameterValues",
-                {
-                    error:
-                        error instanceof Error ? error.message : String(error),
-                }
-            );
-            return {};
-        }
     }
 
     /**

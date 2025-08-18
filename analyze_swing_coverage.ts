@@ -413,7 +413,7 @@ async function generateHTMLReport(
 </body>
 </html>`;
 
-    await fs.writeFile("swing_coverage_analysis.html", html, 'utf8');
+    await fs.writeFile("swing_coverage_analysis.html", html, "utf8");
     console.log("\n✅ HTML report saved to: swing_coverage_analysis.html");
 }
 

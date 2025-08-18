@@ -1,0 +1,573 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Binary Threshold Optimization Report - 2025-08-18</title>
+        <style>
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                margin: 20px;
+                background-color: #1a1a1a;
+                color: #e0e0e0;
+                line-height: 1.6;
+            }
+            .container {
+                max-width: 1400px;
+                margin: 0 auto;
+            }
+            h1,
+            h2,
+            h3 {
+                color: #4caf50;
+                border-bottom: 2px solid #4caf50;
+                padding-bottom: 10px;
+            }
+            .phase-section {
+                background-color: #2a2a2a;
+                border-radius: 8px;
+                padding: 20px;
+                margin: 20px 0;
+                border-left: 4px solid #4caf50;
+            }
+            .successful {
+                border-left-color: #4caf50;
+                background-color: #1a4a1a;
+            }
+            .harmful {
+                border-left-color: #f44336;
+                background-color: #4a1a1a;
+            }
+            .harmless {
+                border-left-color: #ffa726;
+                background-color: #4a4a1a;
+            }
+            .mixed {
+                border-left-color: #2196f3;
+                background-color: #1a2a4a;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 15px 0;
+                background-color: #333;
+            }
+            th,
+            td {
+                padding: 12px;
+                text-align: left;
+                border-bottom: 1px solid #555;
+            }
+            th {
+                background-color: #4caf50;
+                color: white;
+                font-weight: bold;
+            }
+            tr:hover {
+                background-color: #444;
+            }
+
+            .metric {
+                display: inline-block;
+                margin: 10px 20px 10px 0;
+                padding: 10px 15px;
+                background-color: #333;
+                border-radius: 5px;
+            }
+            .metric-label {
+                color: #999;
+                font-size: 0.9em;
+            }
+            .metric-value {
+                font-size: 1.3em;
+                font-weight: bold;
+                color: #4caf50;
+            }
+
+            .threshold-config {
+                background-color: #333;
+                padding: 15px;
+                border-radius: 5px;
+                margin: 10px 0;
+                font-family: "Courier New", monospace;
+            }
+
+            .signal-detail {
+                font-size: 0.9em;
+                background-color: #444;
+                padding: 10px;
+                margin: 5px 0;
+                border-radius: 3px;
+            }
+
+            .pass {
+                color: #4caf50;
+            }
+            .fail {
+                color: #f44336;
+            }
+            .na {
+                color: #999;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🎯 Binary Threshold Optimization Report</h1>
+            <div class="metric">
+                <div class="metric-label">Analysis Date</div>
+                <div class="metric-value">2025-08-18</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Total Phases</div>
+                <div class="metric-value">11</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Cross-Detector Coverage</div>
+                <div class="metric-value">1 phases</div>
+            </div>
+
+            <h2>📊 Phase Categorization</h2>
+
+            <div class="phase-section harmless">
+                <h3>Phase 2 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$117.12 → $116.21 (0.78%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmless">
+                <h3>Phase 3 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.21 → $115.63 (0.50%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmless">
+                <h3>Phase 4 - HARMLESS (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.63 → $116.48 (0.74%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmless">
+                <h3>Phase 5 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.48 → $115.61 (0.75%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmless">
+                <h3>Phase 6 - HARMLESS (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.61 → $116.94 (1.15%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmless">
+                <h3>Phase 7 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.94 → $116.36 (0.50%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmless">
+                <h3>Phase 9 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.37 → $115.56 (0.70%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmless">
+                <h3>Phase 10 - HARMLESS (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.56 → $116.42 (0.74%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmless">
+                <h3>Phase 11 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.42 → $115.51 (0.78%)</div>
+                </div>
+
+                <p>No signals detected in this phase</p>
+            </div>
+
+            <div class="phase-section harmful">
+                <h3>Phase 12 - HARMFUL (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.51 → $118.14 (2.28%)</div>
+                </div>
+
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+
+                    <tr>
+                        <td><strong>ABSORPTION</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">143</td>
+                        <td style="color: #ffa726">0</td>
+                        <td class="fail">92</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="phase-section mixed">
+                <h3>Phase 13 - MIXED (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$118.14 → $117.37 (0.65%)</div>
+                </div>
+
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+
+                    <tr>
+                        <td><strong>ABSORPTION</strong></td>
+                        <td class="pass">28</td>
+                        <td class="fail">285</td>
+                        <td style="color: #ffa726">266</td>
+                        <td class="fail">278</td>
+                    </tr>
+                </table>
+
+                <p><strong>Cross-detector coverage:</strong> absorption</p>
+            </div>
+
+            <h2>⚙️ Detector Optimizations</h2>
+
+            <div class="phase-section">
+                <h3>ABSORPTION Detector</h3>
+
+                <div class="metric">
+                    <div class="metric-label">Harmful Eliminated</div>
+                    <div class="metric-value">1346/1376 (98%)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Successful Kept</div>
+                    <div class="metric-value">6</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Harmless Kept</div>
+                    <div class="metric-value">71</div>
+                </div>
+
+                <h4>Optimal Threshold Configuration</h4>
+                <div class="threshold-config">
+                    minAggVolume: 183.344040<br />passiveAbsorptionThreshold:
+                    0.972296<br />priceEfficiencyThreshold: 0.000568<br />maxPriceImpactRatio:
+                    0.004453<br />minPassiveMultiplier: 19.835765<br />balanceThreshold:
+                    0.180705<br />priceStabilityTicks: 0.000000
+                </div>
+
+                <h4>Phase Analysis</h4>
+                <p>
+                    <strong>Protected Phases:</strong> 13 (must maintain
+                    coverage)
+                </p>
+                <p>
+                    <strong>Dispensable Phases:</strong> None (covered by other
+                    detectors)
+                </p>
+                <p>
+                    <strong>Harmful-Only Phases:</strong> 12 (eliminate signals)
+                </p>
+                <p><strong>Harmless-Only Phases:</strong> None (report only)</p>
+
+                <h4>Remaining Signals Detail</h4>
+
+                <h5>✅ Successful Signals (6)</h5>
+
+                <div class="signal-detail">
+                    <strong>Phase 13:</strong> 2025-08-18T13:52:23.349Z | buy @
+                    $117.4800 | Reached 0.7%+ profit target<br />
+                    <small
+                        >Thresholds: minAggVolume=205.4010,
+                        passiveAbsorptionThreshold=0.9833,
+                        priceEfficiencyThreshold=0.0003,
+                        maxPriceImpactRatio=0.0000,
+                        minPassiveMultiplier=59.0405, balanceThreshold=0.1437,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase 13:</strong> 2025-08-18T13:52:23.354Z | buy @
+                    $117.4800 | Reached 0.7%+ profit target<br />
+                    <small
+                        >Thresholds: minAggVolume=223.3510,
+                        passiveAbsorptionThreshold=0.9819,
+                        priceEfficiencyThreshold=0.0003,
+                        maxPriceImpactRatio=0.0000,
+                        minPassiveMultiplier=54.2956, balanceThreshold=0.1242,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T16:18:42.216Z |
+                    sell @ $117.7000 | Reached 0.7%+ profit target<br />
+                    <small
+                        >Thresholds: minAggVolume=455.1000,
+                        passiveAbsorptionThreshold=0.9747,
+                        priceEfficiencyThreshold=0.0004,
+                        maxPriceImpactRatio=0.0000,
+                        minPassiveMultiplier=38.5825, balanceThreshold=0.1747,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T18:02:50.345Z |
+                    buy @ $117.7600 | Reached 0.7%+ profit target<br />
+                    <small
+                        >Thresholds: minAggVolume=245.9230,
+                        passiveAbsorptionThreshold=0.9778,
+                        priceEfficiencyThreshold=0.0001,
+                        maxPriceImpactRatio=0.0000,
+                        minPassiveMultiplier=43.9853, balanceThreshold=0.1208,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T18:02:54.940Z |
+                    buy @ $117.7600 | Reached 0.7%+ profit target<br />
+                    <small
+                        >Thresholds: minAggVolume=278.8170,
+                        passiveAbsorptionThreshold=0.9749,
+                        priceEfficiencyThreshold=0.0001,
+                        maxPriceImpactRatio=0.0000,
+                        minPassiveMultiplier=38.7961, balanceThreshold=0.1208,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T18:28:53.964Z |
+                    buy @ $117.9200 | Reached 0.7%+ profit target<br />
+                    <small
+                        >Thresholds: minAggVolume=205.2690,
+                        passiveAbsorptionThreshold=0.9725,
+                        priceEfficiencyThreshold=0.0002,
+                        maxPriceImpactRatio=0.0000,
+                        minPassiveMultiplier=35.3462, balanceThreshold=0.1414,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <h5>🔴 Harmful Signals Remaining (30)</h5>
+
+                <div class="signal-detail">
+                    <strong>Phase 12:</strong> 2025-08-18T13:23:42.491Z | buy @
+                    $117.9800 | | Hit stop loss: 0.75%<br />
+                    <small
+                        >Thresholds: minAggVolume=255.3330,
+                        passiveAbsorptionThreshold=0.9795,
+                        priceEfficiencyThreshold=0.0001,
+                        maxPriceImpactRatio=0.0000,
+                        minPassiveMultiplier=47.7079, balanceThreshold=0.1666,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase 12:</strong> 2025-08-18T13:27:23.772Z | buy @
+                    $117.8800 | | Hit stop loss: 0.67%<br />
+                    <small
+                        >Thresholds: minAggVolume=561.7540,
+                        passiveAbsorptionThreshold=0.9787,
+                        priceEfficiencyThreshold=0.0004,
+                        maxPriceImpactRatio=0.0001,
+                        minPassiveMultiplier=45.8391, balanceThreshold=0.1328,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase 12:</strong> 2025-08-18T13:27:26.220Z | buy @
+                    $117.8800 | | Hit stop loss: 0.67%<br />
+                    <small
+                        >Thresholds: minAggVolume=536.2490,
+                        passiveAbsorptionThreshold=0.9796,
+                        priceEfficiencyThreshold=0.0004,
+                        maxPriceImpactRatio=0.0000,
+                        minPassiveMultiplier=48.0193, balanceThreshold=0.1219,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase 13:</strong> 2025-08-18T14:08:12.186Z | buy @
+                    $117.7900 | ⚠️ Wrong-sided | Hit stop loss: 0.36%<br />
+                    <small
+                        >Thresholds: minAggVolume=292.6650,
+                        passiveAbsorptionThreshold=0.9752,
+                        priceEfficiencyThreshold=0.0000,
+                        maxPriceImpactRatio=0.0002,
+                        minPassiveMultiplier=39.3094, balanceThreshold=0.1262,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase 13:</strong> 2025-08-18T14:09:09.634Z | buy @
+                    $117.7900 | ⚠️ Wrong-sided | Hit stop loss: 0.36%<br />
+                    <small
+                        >Thresholds: minAggVolume=303.8730,
+                        passiveAbsorptionThreshold=0.9811,
+                        priceEfficiencyThreshold=0.0001,
+                        maxPriceImpactRatio=0.0001,
+                        minPassiveMultiplier=51.9122, balanceThreshold=0.0901,
+                        priceStabilityTicks=0.0000</small
+                    >
+                </div>
+
+                <p>... and 25 more</p>
+
+                <h5>🟡 Harmless Signals (71)</h5>
+                <p>
+                    Signals that don't hit SL but also don't reach full TP
+                    target
+                </p>
+            </div>
+
+            <div class="phase-section">
+                <h3>DELTACVD Detector</h3>
+
+                <div class="metric">
+                    <div class="metric-label">Harmful Eliminated</div>
+                    <div class="metric-value">0/44 (0%)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Successful Kept</div>
+                    <div class="metric-value">0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Harmless Kept</div>
+                    <div class="metric-value">0</div>
+                </div>
+
+                <h4>Optimal Threshold Configuration</h4>
+                <div class="threshold-config"></div>
+
+                <h4>Phase Analysis</h4>
+                <p>
+                    <strong>Protected Phases:</strong> None (must maintain
+                    coverage)
+                </p>
+                <p>
+                    <strong>Dispensable Phases:</strong> None (covered by other
+                    detectors)
+                </p>
+                <p>
+                    <strong>Harmful-Only Phases:</strong> None (eliminate
+                    signals)
+                </p>
+                <p><strong>Harmless-Only Phases:</strong> None (report only)</p>
+
+                <h4>Remaining Signals Detail</h4>
+
+                <h5>🔴 Harmful Signals Remaining (44)</h5>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T17:33:04.500Z |
+                    buy @ $118.3100 | | Hit stop loss: 0.75%<br />
+                    <small
+                        >Thresholds: minTradesPerSec=3.8056,
+                        minVolPerSec=22.3436, signalThreshold=0.6300,
+                        cvdImbalanceThreshold=1.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T17:33:05.107Z |
+                    buy @ $118.3000 | | Hit stop loss: 0.74%<br />
+                    <small
+                        >Thresholds: minTradesPerSec=3.7389,
+                        minVolPerSec=22.0317, signalThreshold=0.6300,
+                        cvdImbalanceThreshold=1.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T17:33:05.139Z |
+                    buy @ $118.3000 | | Hit stop loss: 0.74%<br />
+                    <small
+                        >Thresholds: minTradesPerSec=3.7444,
+                        minVolPerSec=22.0363, signalThreshold=0.6300,
+                        cvdImbalanceThreshold=1.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T17:33:05.141Z |
+                    buy @ $118.3000 | | Hit stop loss: 0.74%<br />
+                    <small
+                        >Thresholds: minTradesPerSec=3.7500,
+                        minVolPerSec=22.0395, signalThreshold=0.6300,
+                        cvdImbalanceThreshold=1.0000</small
+                    >
+                </div>
+
+                <div class="signal-detail">
+                    <strong>Phase undefined:</strong> 2025-08-18T17:33:05.162Z |
+                    buy @ $118.3000 | | Hit stop loss: 0.74%<br />
+                    <small
+                        >Thresholds: minTradesPerSec=3.7556,
+                        minVolPerSec=22.0502, signalThreshold=0.6300,
+                        cvdImbalanceThreshold=1.0000</small
+                    >
+                </div>
+
+                <p>... and 39 more</p>
+            </div>
+
+            <div style="margin-top: 40px; color: #888; font-size: 12px">
+                <p>Generated: 2025-08-18T20:03:22.652Z</p>
+                <p>Binary optimization: Phase preservation over scoring</p>
+                <p>Cross-detector coverage protection enabled</p>
+            </div>
+        </div>
+    </body>
+</html>

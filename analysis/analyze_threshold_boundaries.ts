@@ -667,7 +667,7 @@ async function generateCombinationReport(
 </html>`;
 
     const htmlPath = "analysis/reports/threshold_boundary_analysis.html";
-    await fs.writeFile(htmlPath, html, 'utf8');
+    await fs.writeFile(htmlPath, html, "utf8");
     console.log(`\n📊 Boundary analysis report saved to: ${htmlPath}`);
 }
 
