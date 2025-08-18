@@ -590,23 +590,51 @@ function evaluateCombination(
                     thresholds.get(thresholdName)!
                 );
             } else {
-                // Use ACTUAL threshold values from SUCCESSFUL signals only - hard lines that let good pass, block bad
+                // FIXED: Use proper boundary finding based on operators instead of calculated values
                 const successfulSignals = thresholdSourceSignals.filter(
                     (s) => s.category === "SUCCESSFUL"
                 );
-                const successfulValues = successfulSignals
-                    .map((s) => s.thresholds.get(thresholdName))
-                    .filter((v) => v !== undefined) as number[];
-                if (successfulValues.length > 0) {
-                    // Use the most common threshold value from successful signals
-                    const valueCounts = new Map<number, number>();
-                    successfulValues.forEach((v) =>
-                        valueCounts.set(v, (valueCounts.get(v) || 0) + 1)
-                    );
-                    const mostCommonValue = Array.from(
-                        valueCounts.entries()
-                    ).sort((a, b) => b[1] - a[1])[0][0];
-                    allThresholds.set(thresholdName, mostCommonValue);
+                const harmfulSignals = thresholdSourceSignals.filter(
+                    (s) => s.category === "HARMFUL"
+                );
+                
+                const successValues = successfulSignals
+                    .map((s) => ({
+                        val: s.thresholds.get(thresholdName),
+                        op: s.thresholdOps.get(thresholdName),
+                    }))
+                    .filter((v) => v.val !== undefined) as { val: number; op?: string }[];
+                
+                const harmfulValues = harmfulSignals
+                    .map((s) => ({
+                        val: s.thresholds.get(thresholdName),
+                        op: s.thresholdOps.get(thresholdName),
+                    }))
+                    .filter((v) => v.val !== undefined) as { val: number; op?: string }[];
+
+                if (successValues.length > 0) {
+                    const operator = successValues[0].op || "EQL";
+                    
+                    if (operator === "NONE") {
+                        // Skip thresholds with NONE operator
+                        continue;
+                    }
+                    
+                    const successVals = successValues.map((v) => v.val);
+                    
+                    if (operator === "EQL") {
+                        // EQL: signal passes if value >= threshold
+                        // Set threshold just below minimum successful to keep all successful signals
+                        const minSuccessful = Math.min(...successVals);
+                        const boundaryThreshold = minSuccessful * 0.99;
+                        allThresholds.set(thresholdName, boundaryThreshold);
+                    } else if (operator === "EQS") {
+                        // EQS: signal passes if value <= threshold  
+                        // Set threshold just above maximum successful to keep all successful signals
+                        const maxSuccessful = Math.max(...successVals);
+                        const boundaryThreshold = maxSuccessful * 1.01;
+                        allThresholds.set(thresholdName, boundaryThreshold);
+                    }
                 }
             }
         }
@@ -1197,24 +1225,90 @@ async function optimizeThresholds(date: string): Promise<void> {
                         `     ${thresholdName}: ${r.thresholds.get(thresholdName)?.toFixed(6)} ← OPTIMIZED`
                     );
                 } else {
-                    // Show ACTUAL threshold value from successful signals - hard line that lets good pass
+                    // Show boundary threshold derived from successful signals with operator awareness
                     const successfulSignals = thresholdSourceSignals.filter(
                         (s) => s.category === "SUCCESSFUL"
                     );
-                    const successfulValues = successfulSignals
-                        .map((s) => s.thresholds.get(thresholdName))
-                        .filter((v) => v !== undefined) as number[];
-                    if (successfulValues.length > 0) {
-                        const valueCounts = new Map<number, number>();
-                        successfulValues.forEach((v) =>
-                            valueCounts.set(v, (valueCounts.get(v) || 0) + 1)
-                        );
-                        const mostCommonValue = Array.from(
-                            valueCounts.entries()
-                        ).sort((a, b) => b[1] - a[1])[0][0];
-                        console.log(
-                            `     ${thresholdName}: ${mostCommonValue.toFixed(6)} (from successful signals)`
-                        );
+                    const successValues = successfulSignals
+                        .map((s) => ({
+                            val: s.thresholds.get(thresholdName),
+                            op: s.thresholdOps.get(thresholdName),
+                        }))
+                        .filter((v) => v.val !== undefined) as { val: number; op?: string }[];
+                    
+                    if (successValues.length > 0) {
+                        const operator = successValues[0].op || "EQL";
+                        const successVals = successValues.map((v) => v.val);
+                        
+                        if (operator === "NONE") {
+                            console.log(
+                                `     ${thresholdName}: SKIPPED (NONE operator)`
+                            );
+                        } else if (operator === "EQL") {
+                            const minSuccessful = Math.min(...successVals);
+                            const boundaryThreshold = minSuccessful * 0.99;
+                            console.log(
+                                `     ${thresholdName}: ${boundaryThreshold.toFixed(6)} (EQL boundary from successful min: ${minSuccessful.toFixed(6)})`
+                            );
+                        } else if (operator === "EQS") {
+                            const maxSuccessful = Math.max(...successVals);
+                            const boundaryThreshold = maxSuccessful * 1.01;
+                            console.log(
+                                `     ${thresholdName}: ${boundaryThreshold.toFixed(6)} (EQS boundary from successful max: ${maxSuccessful.toFixed(6)})`
+                            );
+                        }
+                    }
+                }
+            }
+
+            // VALIDATION: Check for illogical threshold recommendations
+            console.log(`   🔍 VALIDATION CHECKS:`);
+            const allThresholds = r.allThresholds;
+            if (allThresholds) {
+                // Check priceEfficiencyThreshold should be > 0
+                const priceEfficiency = allThresholds.get("priceEfficiencyThreshold");
+                if (priceEfficiency !== undefined) {
+                    if (priceEfficiency <= 0) {
+                        console.log(`     ⚠️  WARNING: priceEfficiencyThreshold=${priceEfficiency} will reject ALL signals (should be > 0)`);
+                    } else if (priceEfficiency < 0.0001) {
+                        console.log(`     ✓ priceEfficiencyThreshold=${priceEfficiency.toFixed(6)} looks reasonable`);
+                    } else {
+                        console.log(`     ⚠️  WARNING: priceEfficiencyThreshold=${priceEfficiency} might be too high (typical range 0.0001-0.01)`);
+                    }
+                }
+
+                // Check maxPriceImpactRatio should be > 0
+                const maxImpact = allThresholds.get("maxPriceImpactRatio");
+                if (maxImpact !== undefined) {
+                    if (maxImpact <= 0) {
+                        console.log(`     ⚠️  WARNING: maxPriceImpactRatio=${maxImpact} will reject ALL signals (should be > 0)`);
+                    } else if (maxImpact < 0.1) {
+                        console.log(`     ✓ maxPriceImpactRatio=${maxImpact.toFixed(6)} looks reasonable`);
+                    } else {
+                        console.log(`     ⚠️  WARNING: maxPriceImpactRatio=${maxImpact} might be too high (typical range 0.001-0.05)`);
+                    }
+                }
+
+                // Check passiveAbsorptionThreshold vs minAbsorptionScore should be different
+                const passiveAbsorption = allThresholds.get("passiveAbsorptionThreshold");
+                const minAbsorption = allThresholds.get("minAbsorptionScore");
+                if (passiveAbsorption !== undefined && minAbsorption !== undefined) {
+                    if (Math.abs(passiveAbsorption - minAbsorption) < 0.001) {
+                        console.log(`     ⚠️  WARNING: passiveAbsorptionThreshold=${passiveAbsorption.toFixed(6)} and minAbsorptionScore=${minAbsorption.toFixed(6)} are nearly identical (should be different thresholds)`);
+                    } else {
+                        console.log(`     ✓ passiveAbsorptionThreshold and minAbsorptionScore are properly differentiated`);
+                    }
+                }
+
+                // Check minAggVolume should be reasonable
+                const minAggVol = allThresholds.get("minAggVolume");
+                if (minAggVol !== undefined) {
+                    if (minAggVol < 1) {
+                        console.log(`     ⚠️  WARNING: minAggVolume=${minAggVol} is too low (should be >= 1)`);
+                    } else if (minAggVol > 10000) {
+                        console.log(`     ⚠️  WARNING: minAggVolume=${minAggVol} might be too high (typical range 50-1000)`);
+                    } else {
+                        console.log(`     ✓ minAggVolume=${minAggVol.toFixed(1)} looks reasonable`);
                     }
                 }
             }
@@ -1681,6 +1775,28 @@ async function generateHTMLReport(
                                       `<div><strong>${key}:</strong> ${val}</div>`
                               )
                               .join("")
+                }
+                ${
+                    combo.allThresholds
+                        ? (() => {
+                              const warnings = [];
+                              // Check for validation issues
+                              const priceEff = combo.allThresholds.priceEfficiencyThreshold;
+                              if (priceEff !== undefined && priceEff <= 0) {
+                                  warnings.push(`⚠️ priceEfficiencyThreshold=${priceEff} will reject ALL signals`);
+                              }
+                              const maxImpact = combo.allThresholds.maxPriceImpactRatio;
+                              if (maxImpact !== undefined && maxImpact <= 0) {
+                                  warnings.push(`⚠️ maxPriceImpactRatio=${maxImpact} will reject ALL signals`);
+                              }
+                              const passiveAbs = combo.allThresholds.passiveAbsorptionThreshold;
+                              const minAbs = combo.allThresholds.minAbsorptionScore;
+                              if (passiveAbs !== undefined && minAbs !== undefined && Math.abs(passiveAbs - minAbs) < 0.001) {
+                                  warnings.push(`⚠️ passiveAbsorptionThreshold and minAbsorptionScore are identical (${passiveAbs.toFixed(6)})`);
+                              }
+                              return warnings.length > 0 ? `<div style="margin-top: 8px; color: #FFA726; font-size: 0.9em;">🔍 VALIDATION:<br>${warnings.join('<br>')}</div>` : '';
+                          })()
+                        : ''
                 }
             </td>
             <td class="success">${(combo.performance.successRate * 100).toFixed(1)}%</td>
