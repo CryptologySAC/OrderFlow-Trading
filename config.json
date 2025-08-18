@@ -243,6 +243,7 @@
                 "minPassiveMultiplier": 20.0,
                 "balanceThreshold": 0.181,
                 "priceStabilityTicks": 5,
+                "maxVolumeMultiplierRatio": 8.0,
 
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,

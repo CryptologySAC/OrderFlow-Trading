@@ -152,6 +152,9 @@ export const AbsorptionDetectorSchema = z.object({
     // Balance detection threshold
     balanceThreshold: z.number().min(0.01).max(0.75),
 
+    // Exhaustion detection threshold (volume/multiplier ratio)
+    maxVolumeMultiplierRatio: z.number().min(1.0).max(50.0),
+
     // Zone tracking configuration for dynamic absorption detection
     maxZonesPerSide: z.number().int().min(3).max(20),
     zoneHistoryWindowMs: z.number().int().min(30000).max(300000),

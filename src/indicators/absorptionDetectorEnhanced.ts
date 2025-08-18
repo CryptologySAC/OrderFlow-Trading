@@ -281,6 +281,18 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const passesThreshold_minPassiveMultiplier =
             actualPassiveMultiplier >= this.settings.minPassiveMultiplier;
 
+        // Check volume/multiplier ratio to detect exhaustion patterns (high ratio = exhaustion, not healthy absorption)
+        // maxVolumeMultiplierRatio: volumeMultiplierRatio <= this.settings.maxVolumeMultiplierRatio
+        const volumeMultiplierRatio =
+            actualPassiveMultiplier > 0
+                ? FinancialMath.divideQuantities(
+                      volumePressure.directionalAggressiveVolume,
+                      actualPassiveMultiplier
+                  )
+                : Number.MAX_SAFE_INTEGER;
+        const passesThreshold_maxVolumeMultiplierRatio =
+            volumeMultiplierRatio <= this.settings.maxVolumeMultiplierRatio;
+
         // NOTE: Removed redundant absorptionScore calculation
         // It was identical to passiveVolumeRatio (directionalPassiveVolume / totalDirectionalVolume)
         // minAbsorptionScore threshold has been removed to eliminate duplicate configuration
@@ -308,6 +320,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             passesThreshold_priceEfficiencyThreshold &&
             passesThreshold_maxPriceImpactRatio &&
             passesThreshold_minPassiveMultiplier &&
+            passesThreshold_maxVolumeMultiplierRatio &&
             passesThreshold_balanceThreshold &&
             passesThreshold_priceStabilityTicks &&
             dominantSide;
@@ -338,6 +351,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 threshold: this.settings.minPassiveMultiplier,
                 calculated: actualPassiveMultiplier,
                 op: "EQL", // Check: actualPassiveMultiplier >= threshold
+            },
+            maxVolumeMultiplierRatio: {
+                threshold: this.settings.maxVolumeMultiplierRatio,
+                calculated: volumeMultiplierRatio,
+                op: "EQS", // Check: volumeMultiplierRatio <= threshold (detect exhaustion)
             },
             balanceThreshold: {
                 threshold: this.settings.balanceThreshold,
@@ -479,6 +497,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 thresholdType = "passive_multiplier";
                 thresholdValue = this.settings.minPassiveMultiplier;
                 actualValue = actualPassiveMultiplier;
+            } else if (!passesThreshold_maxVolumeMultiplierRatio) {
+                rejectionReason = "volume_multiplier_ratio_too_high";
+                thresholdType = "volume_multiplier_ratio";
+                thresholdValue = this.settings.maxVolumeMultiplierRatio;
+                actualValue = volumeMultiplierRatio;
             } else if (!passesThreshold_balanceThreshold) {
                 rejectionReason = "balanced_institutional_flow";
                 thresholdType = "institutional_balance";
