@@ -933,13 +933,37 @@ async function optimizeThresholds(date: string): Promise<void> {
                     Math.floor(harmfulVals.length * 0.75)
                 ];
 
-                // Test strategic separation points
+                // Calculate max threshold that preserves at least 1 signal per phase
+                const successByPhase = new Map();
+                for (const signalData of successValues) {
+                    const signal = successfulSignals.find(s => 
+                        s.thresholds.get(threshold) === signalData.val
+                    );
+                    if (signal) {
+                        const phaseId = signal.phaseId || Math.floor(signal.timestamp / (30 * 60 * 1000)); // fallback: 30min phases
+                        if (!successByPhase.has(phaseId)) {
+                            successByPhase.set(phaseId, []);
+                        }
+                        successByPhase.get(phaseId).push(signalData.val);
+                    }
+                }
+
+                // Find maximum threshold that preserves 1+ signal in each phase
+                let maxViableThreshold = Math.max(...successVals);
+                if (successByPhase.size > 1) {
+                    for (const phaseValues of successByPhase.values()) {
+                        const phaseMax = Math.max(...phaseValues);
+                        maxViableThreshold = Math.min(maxViableThreshold, phaseMax);
+                    }
+                }
+
+                // Test strategic separation points that preserve phase coverage
                 separatingValues.push(
-                    harmfulMax * 1.01, // Just above max harmful
-                    harmful75, // Block 25% of harmful
-                    (harmfulMax + successMin) / 2, // Midpoint
+                    successMin * 0.95, // Keep ALL successful signals
                     success25, // Keep 75% of successful
-                    successMin * 0.99 // Just below min successful
+                    (successMin + harmful75) / 2, // Midpoint compromise
+                    Math.min(harmful75, maxViableThreshold), // Block harmful but preserve phases
+                    maxViableThreshold // Maximum that keeps 1+ per phase
                 );
 
                 // For exhaustion, add lower thresholds to catch phases 2,4,5
