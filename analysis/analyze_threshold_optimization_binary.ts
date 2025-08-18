@@ -118,6 +118,7 @@ const THRESHOLD_FIELD_MAP = {
             "thresholdChecks.priceEfficiencyThreshold.calculated",
         maxPriceImpactRatio: "thresholdChecks.maxPriceImpactRatio.calculated",
         minPassiveMultiplier: "thresholdChecks.minPassiveMultiplier.calculated",
+        maxVolumeMultiplierRatio: "thresholdChecks.maxVolumeMultiplierRatio.calculated",
         balanceThreshold: "thresholdChecks.balanceThreshold.calculated",
         priceStabilityTicks: "thresholdChecks.priceStabilityTicks.calculated",
     },
@@ -354,6 +355,157 @@ function assignSignalsToPhases(
         phaseId: s.phaseId,
     }));
     console.log(`   Sample signal timestamps:`, signalTimes);
+}
+
+interface ClusterAnalysisResult {
+    processedSignals: Signal[];
+    statistics: {
+        totalClusters: number;
+        mixedClusters: number;
+        reclassifiedSignals: number;
+        largestClusterSize: number;
+    };
+}
+
+/**
+ * Analyze signal clusters and select best direction based on quality consensus
+ * Handles mixed-direction clusters by comparing quality scores
+ */
+function analyzeSignalClusters(signals: Signal[]): ClusterAnalysisResult {
+    const CLUSTER_WINDOW = 10000; // 10 seconds in milliseconds
+    const processedSignals: Signal[] = [];
+    const clusters: Signal[][] = [];
+    
+    console.log(`\n🔍 Analyzing signal clusters (${CLUSTER_WINDOW}ms window)...`);
+    
+    // Group signals into clusters by time proximity
+    signals.sort((a, b) => a.timestamp - b.timestamp);
+    
+    for (const signal of signals) {
+        // Find existing cluster within time window
+        let cluster = clusters.find(c => 
+            c.length > 0 && 
+            signal.timestamp - c[c.length - 1].timestamp < CLUSTER_WINDOW
+        );
+        
+        if (!cluster) {
+            cluster = [];
+            clusters.push(cluster);
+        }
+        cluster.push(signal);
+    }
+    
+    console.log(`   Found ${clusters.length} signal clusters`);
+    
+    let mixedClusters = 0;
+    let reclassifiedSignals = 0;
+    let largestClusterSize = 0;
+    
+    // Process each cluster
+    for (const cluster of clusters) {
+        largestClusterSize = Math.max(largestClusterSize, cluster.length);
+        
+        if (cluster.length === 1) {
+            // Single signal cluster - keep as-is
+            processedSignals.push(cluster[0]);
+            continue;
+        }
+        
+        // Check for mixed directions
+        const buySignals = cluster.filter(s => s.signalSide === 'buy');
+        const sellSignals = cluster.filter(s => s.signalSide === 'sell');
+        
+        if (buySignals.length > 0 && sellSignals.length > 0) {
+            // Mixed cluster - resolve using quality consensus
+            mixedClusters++;
+            
+            // Calculate quality scores for each direction
+            const buyQuality = calculateDirectionQuality(buySignals);
+            const sellQuality = calculateDirectionQuality(sellSignals);
+            
+            console.log(`   Mixed cluster at ${new Date(cluster[0].timestamp).toISOString()}: buy(${buySignals.length}, quality=${buyQuality.toFixed(3)}) vs sell(${sellSignals.length}, quality=${sellQuality.toFixed(3)})`);
+            
+            // Select winning direction
+            const winningSide = buyQuality > sellQuality ? 'buy' : 'sell';
+            const winningSignals = cluster.filter(s => s.signalSide === winningSide);
+            const losingSignals = cluster.filter(s => s.signalSide !== winningSide);
+            
+            // Keep first winning signal, mark rest as harmless duplicates
+            if (winningSignals.length > 0) {
+                processedSignals.push(winningSignals[0]);
+                
+                for (let i = 1; i < winningSignals.length; i++) {
+                    winningSignals[i].category = "HARMLESS";
+                    winningSignals[i].categoryReason = "Duplicate direction in cluster";
+                    processedSignals.push(winningSignals[i]);
+                    reclassifiedSignals++;
+                }
+            }
+            
+            // Mark losing direction signals as harmful
+            for (const signal of losingSignals) {
+                signal.category = "HARMFUL";
+                signal.categoryReason = "Lost cluster consensus";
+                processedSignals.push(signal);
+                reclassifiedSignals++;
+            }
+        } else {
+            // Single direction cluster - keep first, mark rest as harmless
+            processedSignals.push(cluster[0]);
+            
+            for (let i = 1; i < cluster.length; i++) {
+                cluster[i].category = "HARMLESS";
+                cluster[i].categoryReason = "Duplicate signal in cluster";
+                processedSignals.push(cluster[i]);
+                reclassifiedSignals++;
+            }
+        }
+    }
+    
+    console.log(`   Resolved ${mixedClusters} mixed-direction clusters`);
+    console.log(`   Reclassified ${reclassifiedSignals} signals due to clustering`);
+    
+    return {
+        processedSignals,
+        statistics: {
+            totalClusters: clusters.length,
+            mixedClusters,
+            reclassifiedSignals,
+            largestClusterSize,
+        }
+    };
+}
+
+/**
+ * Calculate quality score for a direction within a cluster
+ * Uses volume/multiplier ratio for absorption signals
+ */
+function calculateDirectionQuality(signals: Signal[]): number {
+    let totalQuality = 0;
+    
+    for (const signal of signals) {
+        let quality = 1; // Default quality
+        
+        if (signal.detectorType === 'absorption') {
+            // Use volume/multiplier ratio as quality metric
+            const minAggVolume = signal.thresholds.get('minAggVolume');
+            const minPassiveMultiplier = signal.thresholds.get('minPassiveMultiplier');
+            
+            if (minAggVolume && minPassiveMultiplier && minPassiveMultiplier > 0) {
+                const ratio = minAggVolume / minPassiveMultiplier;
+                // Lower ratio = higher quality (successful signals have ratios 3.5-7.3)
+                quality = 1 / Math.max(ratio, 0.1); // Prevent division by zero
+            }
+        } else {
+            // For other detectors, use confidence or default
+            // Could be enhanced with detector-specific quality metrics
+            quality = 1;
+        }
+        
+        totalQuality += quality;
+    }
+    
+    return totalQuality;
 }
 
 /**
@@ -853,7 +1005,13 @@ async function generateHTMLReport(
     date: string,
     phases: PhaseInfo[],
     optimizations: DetectorOptimization[],
-    coverageMatrix: Map<number, Set<string>>
+    coverageMatrix: Map<number, Set<string>>,
+    clusterStats?: {
+        totalClusters: number;
+        mixedClusters: number;
+        reclassifiedSignals: number;
+        largestClusterSize: number;
+    }
 ): Promise<void> {
     const html = `<!DOCTYPE html>
 <html>
@@ -951,6 +1109,23 @@ async function generateHTMLReport(
             <div class="metric-label">Cross-Detector Coverage</div>
             <div class="metric-value">${coverageMatrix.size} phases</div>
         </div>
+        ${clusterStats ? `
+        <div class="metric">
+            <div class="metric-label">Signal Clusters</div>
+            <div class="metric-value">${clusterStats.totalClusters}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Mixed Clusters Resolved</div>
+            <div class="metric-value">${clusterStats.mixedClusters}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Signals Reclassified</div>
+            <div class="metric-value">${clusterStats.reclassifiedSignals}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Largest Cluster</div>
+            <div class="metric-value">${clusterStats.largestClusterSize} signals</div>
+        </div>` : ''}
 
         <h2>📊 Phase Categorization</h2>
         
@@ -1173,14 +1348,18 @@ async function main(): Promise<void> {
     // Process signals
     await enrichSignalsWithPriceMovements(signals, date);
     assignSignalsToPhases(signals, pricePhases);
-    categorizeSignals(signals);
+    
+    // Analyze signal clusters and resolve mixed directions
+    const clusterResult = analyzeSignalClusters(signals);
+    const processedSignals = clusterResult.processedSignals;
+    categorizeSignals(processedSignals);
 
     console.log(
-        `   Categorized signals: ${signals.filter((s) => s.category === "SUCCESSFUL").length} successful, ${signals.filter((s) => s.category === "HARMFUL").length} harmful, ${signals.filter((s) => s.category === "HARMLESS").length} harmless`
+        `   Categorized signals: ${processedSignals.filter((s) => s.category === "SUCCESSFUL").length} successful, ${processedSignals.filter((s) => s.category === "HARMFUL").length} harmful, ${processedSignals.filter((s) => s.category === "HARMLESS").length} harmless`
     );
 
     // Create phase information and coverage matrix
-    const phases = createPhaseInfo(signals, pricePhases);
+    const phases = createPhaseInfo(processedSignals, pricePhases);
     const coverageMatrix = buildCoverageMatrix(phases);
 
     console.log(`\n🎯 Phase Analysis:`);
@@ -1200,14 +1379,14 @@ async function main(): Promise<void> {
     const optimizations: DetectorOptimization[] = [];
 
     for (const detector of detectors) {
-        const detectorSignals = signals.filter(
+        const detectorSignals = processedSignals.filter(
             (s) => s.detectorType === detector
         );
         if (detectorSignals.length === 0) continue;
 
         const optimization = optimizeDetector(
             detector,
-            signals,
+            processedSignals,
             phases,
             coverageMatrix
         );
@@ -1216,7 +1395,7 @@ async function main(): Promise<void> {
 
     // Generate HTML report
     console.log("\n📄 Generating detailed HTML report...");
-    await generateHTMLReport(date, phases, optimizations, coverageMatrix);
+    await generateHTMLReport(date, phases, optimizations, coverageMatrix, clusterResult.statistics);
 
     console.log("\n" + "=".repeat(80));
     console.log("✅ Binary threshold optimization complete!");
