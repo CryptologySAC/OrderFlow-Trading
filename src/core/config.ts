@@ -147,7 +147,6 @@ export const AbsorptionDetectorSchema = z.object({
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
 
     // Confidence and scoring
-    minAbsorptionScore: z.number().min(0.3).max(0.99),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
 
     // Balance detection threshold

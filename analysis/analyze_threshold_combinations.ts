@@ -94,7 +94,7 @@ interface ThresholdCombination {
 // Based on ACTUAL validation log fields - includes ALL thresholds that are not NONE
 const THRESHOLD_FIELD_MAP = {
     absorption: {
-        // All 8 threshold fields found in validation logs
+        // All threshold fields found in validation logs
         minAggVolume: "thresholdChecks.minAggVolume.calculated",
         passiveAbsorptionThreshold:
             "thresholdChecks.passiveAbsorptionThreshold.calculated",
@@ -102,7 +102,6 @@ const THRESHOLD_FIELD_MAP = {
             "thresholdChecks.priceEfficiencyThreshold.calculated",
         maxPriceImpactRatio: "thresholdChecks.maxPriceImpactRatio.calculated",
         minPassiveMultiplier: "thresholdChecks.minPassiveMultiplier.calculated",
-        minAbsorptionScore: "thresholdChecks.minAbsorptionScore.calculated",
         balanceThreshold: "thresholdChecks.balanceThreshold.calculated",
         priceStabilityTicks: "thresholdChecks.priceStabilityTicks.calculated",
     },
@@ -597,31 +596,37 @@ function evaluateCombination(
                 const harmfulSignals = thresholdSourceSignals.filter(
                     (s) => s.category === "HARMFUL"
                 );
-                
+
                 const successValues = successfulSignals
                     .map((s) => ({
                         val: s.thresholds.get(thresholdName),
                         op: s.thresholdOps.get(thresholdName),
                     }))
-                    .filter((v) => v.val !== undefined) as { val: number; op?: string }[];
-                
+                    .filter((v) => v.val !== undefined) as {
+                    val: number;
+                    op?: string;
+                }[];
+
                 const harmfulValues = harmfulSignals
                     .map((s) => ({
                         val: s.thresholds.get(thresholdName),
                         op: s.thresholdOps.get(thresholdName),
                     }))
-                    .filter((v) => v.val !== undefined) as { val: number; op?: string }[];
+                    .filter((v) => v.val !== undefined) as {
+                    val: number;
+                    op?: string;
+                }[];
 
                 if (successValues.length > 0) {
                     const operator = successValues[0].op || "EQL";
-                    
+
                     if (operator === "NONE") {
                         // Skip thresholds with NONE operator
                         continue;
                     }
-                    
+
                     const successVals = successValues.map((v) => v.val);
-                    
+
                     if (operator === "EQL") {
                         // EQL: signal passes if value >= threshold
                         // Set threshold just below minimum successful to keep all successful signals
@@ -629,7 +634,7 @@ function evaluateCombination(
                         const boundaryThreshold = minSuccessful * 0.99;
                         allThresholds.set(thresholdName, boundaryThreshold);
                     } else if (operator === "EQS") {
-                        // EQS: signal passes if value <= threshold  
+                        // EQS: signal passes if value <= threshold
                         // Set threshold just above maximum successful to keep all successful signals
                         const maxSuccessful = Math.max(...successVals);
                         const boundaryThreshold = maxSuccessful * 1.01;
@@ -1053,7 +1058,6 @@ async function optimizeThresholds(date: string): Promise<void> {
         // Test 3-threshold combinations with key thresholds
         const keyThresholds = [
             "balanceThreshold",
-            "minAbsorptionScore",
             "passiveAbsorptionThreshold",
             "minPassiveMultiplier",
         ];
@@ -1234,12 +1238,15 @@ async function optimizeThresholds(date: string): Promise<void> {
                             val: s.thresholds.get(thresholdName),
                             op: s.thresholdOps.get(thresholdName),
                         }))
-                        .filter((v) => v.val !== undefined) as { val: number; op?: string }[];
-                    
+                        .filter((v) => v.val !== undefined) as {
+                        val: number;
+                        op?: string;
+                    }[];
+
                     if (successValues.length > 0) {
                         const operator = successValues[0].op || "EQL";
                         const successVals = successValues.map((v) => v.val);
-                        
+
                         if (operator === "NONE") {
                             console.log(
                                 `     ${thresholdName}: SKIPPED (NONE operator)`
@@ -1266,14 +1273,22 @@ async function optimizeThresholds(date: string): Promise<void> {
             const allThresholds = r.allThresholds;
             if (allThresholds) {
                 // Check priceEfficiencyThreshold should be > 0
-                const priceEfficiency = allThresholds.get("priceEfficiencyThreshold");
+                const priceEfficiency = allThresholds.get(
+                    "priceEfficiencyThreshold"
+                );
                 if (priceEfficiency !== undefined) {
                     if (priceEfficiency <= 0) {
-                        console.log(`     ⚠️  WARNING: priceEfficiencyThreshold=${priceEfficiency} will reject ALL signals (should be > 0)`);
+                        console.log(
+                            `     ⚠️  WARNING: priceEfficiencyThreshold=${priceEfficiency} will reject ALL signals (should be > 0)`
+                        );
                     } else if (priceEfficiency < 0.0001) {
-                        console.log(`     ✓ priceEfficiencyThreshold=${priceEfficiency.toFixed(6)} looks reasonable`);
+                        console.log(
+                            `     ✓ priceEfficiencyThreshold=${priceEfficiency.toFixed(6)} looks reasonable`
+                        );
                     } else {
-                        console.log(`     ⚠️  WARNING: priceEfficiencyThreshold=${priceEfficiency} might be too high (typical range 0.0001-0.01)`);
+                        console.log(
+                            `     ⚠️  WARNING: priceEfficiencyThreshold=${priceEfficiency} might be too high (typical range 0.0001-0.01)`
+                        );
                     }
                 }
 
@@ -1281,34 +1296,37 @@ async function optimizeThresholds(date: string): Promise<void> {
                 const maxImpact = allThresholds.get("maxPriceImpactRatio");
                 if (maxImpact !== undefined) {
                     if (maxImpact <= 0) {
-                        console.log(`     ⚠️  WARNING: maxPriceImpactRatio=${maxImpact} will reject ALL signals (should be > 0)`);
+                        console.log(
+                            `     ⚠️  WARNING: maxPriceImpactRatio=${maxImpact} will reject ALL signals (should be > 0)`
+                        );
                     } else if (maxImpact < 0.1) {
-                        console.log(`     ✓ maxPriceImpactRatio=${maxImpact.toFixed(6)} looks reasonable`);
+                        console.log(
+                            `     ✓ maxPriceImpactRatio=${maxImpact.toFixed(6)} looks reasonable`
+                        );
                     } else {
-                        console.log(`     ⚠️  WARNING: maxPriceImpactRatio=${maxImpact} might be too high (typical range 0.001-0.05)`);
+                        console.log(
+                            `     ⚠️  WARNING: maxPriceImpactRatio=${maxImpact} might be too high (typical range 0.001-0.05)`
+                        );
                     }
                 }
 
-                // Check passiveAbsorptionThreshold vs minAbsorptionScore should be different
-                const passiveAbsorption = allThresholds.get("passiveAbsorptionThreshold");
-                const minAbsorption = allThresholds.get("minAbsorptionScore");
-                if (passiveAbsorption !== undefined && minAbsorption !== undefined) {
-                    if (Math.abs(passiveAbsorption - minAbsorption) < 0.001) {
-                        console.log(`     ⚠️  WARNING: passiveAbsorptionThreshold=${passiveAbsorption.toFixed(6)} and minAbsorptionScore=${minAbsorption.toFixed(6)} are nearly identical (should be different thresholds)`);
-                    } else {
-                        console.log(`     ✓ passiveAbsorptionThreshold and minAbsorptionScore are properly differentiated`);
-                    }
-                }
+                // NOTE: minAbsorptionScore removed as redundant (was identical to passiveVolumeRatio)
 
                 // Check minAggVolume should be reasonable
                 const minAggVol = allThresholds.get("minAggVolume");
                 if (minAggVol !== undefined) {
                     if (minAggVol < 1) {
-                        console.log(`     ⚠️  WARNING: minAggVolume=${minAggVol} is too low (should be >= 1)`);
+                        console.log(
+                            `     ⚠️  WARNING: minAggVolume=${minAggVol} is too low (should be >= 1)`
+                        );
                     } else if (minAggVol > 10000) {
-                        console.log(`     ⚠️  WARNING: minAggVolume=${minAggVol} might be too high (typical range 50-1000)`);
+                        console.log(
+                            `     ⚠️  WARNING: minAggVolume=${minAggVol} might be too high (typical range 50-1000)`
+                        );
                     } else {
-                        console.log(`     ✓ minAggVolume=${minAggVol.toFixed(1)} looks reasonable`);
+                        console.log(
+                            `     ✓ minAggVolume=${minAggVol.toFixed(1)} looks reasonable`
+                        );
                     }
                 }
             }
@@ -1781,22 +1799,26 @@ async function generateHTMLReport(
                         ? (() => {
                               const warnings = [];
                               // Check for validation issues
-                              const priceEff = combo.allThresholds.priceEfficiencyThreshold;
+                              const priceEff =
+                                  combo.allThresholds.priceEfficiencyThreshold;
                               if (priceEff !== undefined && priceEff <= 0) {
-                                  warnings.push(`⚠️ priceEfficiencyThreshold=${priceEff} will reject ALL signals`);
+                                  warnings.push(
+                                      `⚠️ priceEfficiencyThreshold=${priceEff} will reject ALL signals`
+                                  );
                               }
-                              const maxImpact = combo.allThresholds.maxPriceImpactRatio;
+                              const maxImpact =
+                                  combo.allThresholds.maxPriceImpactRatio;
                               if (maxImpact !== undefined && maxImpact <= 0) {
-                                  warnings.push(`⚠️ maxPriceImpactRatio=${maxImpact} will reject ALL signals`);
+                                  warnings.push(
+                                      `⚠️ maxPriceImpactRatio=${maxImpact} will reject ALL signals`
+                                  );
                               }
-                              const passiveAbs = combo.allThresholds.passiveAbsorptionThreshold;
-                              const minAbs = combo.allThresholds.minAbsorptionScore;
-                              if (passiveAbs !== undefined && minAbs !== undefined && Math.abs(passiveAbs - minAbs) < 0.001) {
-                                  warnings.push(`⚠️ passiveAbsorptionThreshold and minAbsorptionScore are identical (${passiveAbs.toFixed(6)})`);
-                              }
-                              return warnings.length > 0 ? `<div style="margin-top: 8px; color: #FFA726; font-size: 0.9em;">🔍 VALIDATION:<br>${warnings.join('<br>')}</div>` : '';
+                              // NOTE: minAbsorptionScore validation removed (threshold eliminated as redundant)
+                              return warnings.length > 0
+                                  ? `<div style="margin-top: 8px; color: #FFA726; font-size: 0.9em;">🔍 VALIDATION:<br>${warnings.join("<br>")}</div>`
+                                  : "";
                           })()
-                        : ''
+                        : ""
                 }
             </td>
             <td class="success">${(combo.performance.successRate * 100).toFixed(1)}%</td>

@@ -20,7 +20,6 @@ import type {
 } from "../types/marketEvents.js";
 import type {
     SignalCandidate,
-    EnhancedAbsorptionSignalData,
     SignalType,
     AbsorptionThresholdChecks,
 } from "../types/signalTypes.js";
@@ -282,19 +281,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const passesThreshold_minPassiveMultiplier =
             actualPassiveMultiplier >= this.settings.minPassiveMultiplier;
 
-        // Calculate absorption Score
-        const absorptionScore =
-            volumePressure.directionalPassiveVolume > 0
-                ? FinancialMath.divideQuantities(
-                      volumePressure.directionalPassiveVolume,
-                      FinancialMath.safeAdd(
-                          volumePressure.directionalAggressiveVolume,
-                          volumePressure.directionalPassiveVolume
-                      )
-                  )
-                : 0;
-        const passesThreshold_minAbsorptionScore =
-            absorptionScore >= this.settings.minAbsorptionScore;
+        // NOTE: Removed redundant absorptionScore calculation
+        // It was identical to passiveVolumeRatio (directionalPassiveVolume / totalDirectionalVolume)
+        // minAbsorptionScore threshold has been removed to eliminate duplicate configuration
 
         // Caluclate balanced flow
         const balancedFlow = this.calculateBalancedFlow(relevantZones);
@@ -319,7 +308,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
             passesThreshold_priceEfficiencyThreshold &&
             passesThreshold_maxPriceImpactRatio &&
             passesThreshold_minPassiveMultiplier &&
-            passesThreshold_minAbsorptionScore &&
             passesThreshold_balanceThreshold &&
             passesThreshold_priceStabilityTicks &&
             dominantSide;
@@ -350,12 +338,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 threshold: this.settings.minPassiveMultiplier,
                 calculated: actualPassiveMultiplier,
                 op: "EQL", // Check: actualPassiveMultiplier >= threshold
-            },
-
-            minAbsorptionScore: {
-                threshold: this.settings.minAbsorptionScore,
-                calculated: absorptionScore,
-                op: "EQL",
             },
             balanceThreshold: {
                 threshold: this.settings.balanceThreshold,
@@ -415,9 +397,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     aggressive: volumePressure.directionalAggressiveVolume,
                     passive: volumePressure.directionalPassiveVolume,
                     refilled: false, // Will be determined later
-                    absorptionScore: absorptionScore,
+                    passiveVolumeRatio: passiveVolumeRatio, // Use the meaningful metric instead
                     passiveMultiplier: actualPassiveMultiplier,
                     priceEfficiency,
+                    confidence: passiveVolumeRatio,
                     spreadImpact:
                         event.bestAsk !== undefined &&
                         event.bestBid !== undefined
@@ -436,8 +419,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
                         timestamp: event.timestamp,
                         institutionalRatio: volumePressure.pressureRatio,
                         enhancementType: "standalone_enhanced",
+                        qualityMetrics: {
+                            absorptionStatisticalSignificance:
+                                passiveVolumeRatio,
+                            institutionalConfirmation: true,
+                            signalPurity: "premium",
+                        },
                     },
-                } as EnhancedAbsorptionSignalData,
+                },
                 qualityFlags: {
                     crossTimeframe: hasCrossTimeframe,
                     zoneConfluence: hasZoneConfluence,
@@ -490,11 +479,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 thresholdType = "passive_multiplier";
                 thresholdValue = this.settings.minPassiveMultiplier;
                 actualValue = actualPassiveMultiplier;
-            } else if (!passesThreshold_minAbsorptionScore) {
-                rejectionReason = "absorption_score_too_low";
-                thresholdType = "absorption_score_threshold";
-                thresholdValue = this.settings.minAbsorptionScore;
-                actualValue = absorptionScore;
             } else if (!passesThreshold_balanceThreshold) {
                 rejectionReason = "balanced_institutional_flow";
                 thresholdType = "institutional_balance";
@@ -657,17 +641,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 zone.passiveVolume,
                 totalVolume
             );
-            const absorptionScore =
-                passiveRatio > this.settings.passiveAbsorptionThreshold
-                    ? passiveRatio
-                    : FinancialMath.multiplyQuantities(
-                          passiveRatio,
-                          0 // confidence boost removed
-                      );
 
+            // Use passive ratio directly instead of redundant absorptionScore calculation
             totalAbsorptionScore = FinancialMath.safeAdd(
                 totalAbsorptionScore,
-                absorptionScore
+                passiveRatio
             );
         }
 

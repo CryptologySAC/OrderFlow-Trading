@@ -70,7 +70,6 @@ export interface EnhancedAbsorptionSignalData {
     passive: number;
     refilled: boolean;
     confidence: number;
-    absorptionScore: number;
     passiveMultiplier: number;
     priceEfficiency: number;
     spreadImpact: number;
@@ -559,7 +558,6 @@ export interface AbsorptionThresholdChecks {
     maxPriceImpactRatio: ThresholdCheck<number>;
     minPassiveMultiplier: ThresholdCheck<number>;
     passiveAbsorptionThreshold: ThresholdCheck<number>;
-    minAbsorptionScore: ThresholdCheck<number>;
     balanceThreshold: ThresholdCheck<number>;
     priceStabilityTicks: ThresholdCheck<number>;
 }

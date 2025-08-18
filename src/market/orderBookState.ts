@@ -360,7 +360,6 @@ export class OrderBookState implements IOrderBookState {
             totalVolume: sumBid + sumAsk,
         });
 
-
         return { bid: sumBid, ask: sumAsk, levels };
     }
 

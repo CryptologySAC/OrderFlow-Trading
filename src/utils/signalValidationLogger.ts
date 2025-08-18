@@ -2132,8 +2132,6 @@ export class SignalValidationLogger {
                     absorptionChecks.minPassiveMultiplier.calculated;
                 result.passiveAbsorptionThreshold =
                     absorptionChecks.passiveAbsorptionThreshold.calculated;
-                result.minAbsorptionScore =
-                    absorptionChecks.minAbsorptionScore.calculated;
 
                 result.balanceThreshold =
                     absorptionChecks.balanceThreshold.calculated;

@@ -619,7 +619,6 @@ export class AutomaticParameterOptimizer {
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
-                minAbsorptionScore: config.minAbsorptionScore,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
                 balanceThreshold: config.balanceThreshold,
             };
@@ -658,7 +657,6 @@ export class AutomaticParameterOptimizer {
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
-                minAbsorptionScore: config.minAbsorptionScore,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
                 balanceThreshold: config.balanceThreshold,
             };

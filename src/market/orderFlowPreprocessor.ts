@@ -952,7 +952,6 @@ export class OrderflowPreprocessor
                 this.tickSize
             );
 
-
             // Volume-weighted price starts as null - first trade in zone will set it
             const volumeWeightedPrice = null;
 

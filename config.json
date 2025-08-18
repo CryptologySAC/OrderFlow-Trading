@@ -236,13 +236,12 @@
             },
 
             "absorption": {
-                "minAggVolume": 100,
-                "passiveAbsorptionThreshold": 0.7,
+                "minAggVolume": 182,
+                "passiveAbsorptionThreshold": 0.877,
                 "priceEfficiencyThreshold": 0.001152,
                 "maxPriceImpactRatio": 0.01,
-                "minPassiveMultiplier": 3.0,
-                "minAbsorptionScore": 0.7,
-                "balanceThreshold": 0.25,
+                "minPassiveMultiplier": 20.0,
+                "balanceThreshold": 0.17892,
                 "priceStabilityTicks": 5,
 
                 "timeWindowIndex": 0,
