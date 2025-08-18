@@ -135,7 +135,7 @@ function getNestedValue(obj: any, path: string): any {
 async function loadSignalsWithDetails(date: string): Promise<Signal[]> {
     const signals: Signal[] = [];
     const detectors = ["absorption", "exhaustion", "deltacvd"];
-    const logTypes = ["successful", "validation", "rejected_missed"];
+    const logTypes = ["successful", "validation"];
 
     for (const detector of detectors) {
         for (const logType of logTypes) {
