@@ -666,6 +666,8 @@ function generateHTML(results: OptimizationResult[], date: string): string {
     const html = `<!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Threshold Optimization Results - ${date}</title>
     <style>
         body {
@@ -981,7 +983,7 @@ async function main(): Promise<void> {
     // Generate HTML report
     const html = generateHTML(results, date);
     const outputPath = `threshold_optimization_${date}.html`;
-    await fs.writeFile(outputPath, html);
+    await fs.writeFile(outputPath, html, 'utf8');
 
     console.log(`\n✅ Report generated: ${outputPath}`);
 }

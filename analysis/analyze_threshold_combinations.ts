@@ -1537,6 +1537,8 @@ async function generateHTMLReport(
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Threshold Optimization Report - ${date}</title>
     <style>
         body {
@@ -1879,7 +1881,7 @@ async function generateHTMLReport(
 </html>`;
 
     const htmlPath = "analysis/reports/threshold_optimization_report.html";
-    await fs.writeFile(htmlPath, html);
+    await fs.writeFile(htmlPath, html, 'utf8');
     console.log(`📊 HTML report saved to: ${htmlPath}`);
 }
 

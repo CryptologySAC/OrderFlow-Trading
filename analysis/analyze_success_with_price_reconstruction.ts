@@ -398,6 +398,8 @@ async function generateHTMLReport(
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Successful Signals - Actual Price Movement Analysis</title>
     <style>
         body {
@@ -544,7 +546,7 @@ async function generateHTMLReport(
 
     const reportPath =
         "analysis/reports/successful_signals_actual_tp_analysis.html";
-    await fs.writeFile(reportPath, html);
+    await fs.writeFile(reportPath, html, 'utf8');
     console.log(`\n✅ HTML report saved to: ${reportPath}`);
 }
 

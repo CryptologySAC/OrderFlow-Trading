@@ -484,6 +484,8 @@ async function generateCombinationReport(
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Threshold Combination Analysis - ${date}</title>
     <style>
         body {
@@ -665,7 +667,7 @@ async function generateCombinationReport(
 </html>`;
 
     const htmlPath = "analysis/reports/threshold_boundary_analysis.html";
-    await fs.writeFile(htmlPath, html);
+    await fs.writeFile(htmlPath, html, 'utf8');
     console.log(`\n📊 Boundary analysis report saved to: ${htmlPath}`);
 }
 

@@ -337,6 +337,8 @@ async function generateHTMLReport(
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Absorption Detector - Optimal Threshold Analysis</title>
     <style>
         body {
@@ -471,7 +473,7 @@ async function generateHTMLReport(
 </body>
 </html>`;
 
-    await fs.writeFile("absorption_threshold_analysis.html", html);
+    await fs.writeFile("absorption_threshold_analysis.html", html, 'utf8');
     console.log(
         "\n✅ HTML report saved to: absorption_threshold_analysis.html"
     );

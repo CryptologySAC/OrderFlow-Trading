@@ -300,6 +300,8 @@ async function generateHTMLReport(
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Swing Movement Coverage Analysis</title>
     <style>
         body {
@@ -411,7 +413,7 @@ async function generateHTMLReport(
 </body>
 </html>`;
 
-    await fs.writeFile("swing_coverage_analysis.html", html);
+    await fs.writeFile("swing_coverage_analysis.html", html, 'utf8');
     console.log("\n✅ HTML report saved to: swing_coverage_analysis.html");
 }
 

@@ -208,6 +208,8 @@ function generateHTMLReport(results: AnalysisResult[]): void {
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Signal Success Verification Report</title>
     <style>
         body {
@@ -303,7 +305,7 @@ function generateHTMLReport(results: AnalysisResult[]): void {
 </body>
 </html>`;
 
-    fs.writeFile("signal_verification_report.html", html);
+    fs.writeFile("signal_verification_report.html", html, 'utf8');
     console.log("\n✅ HTML report saved to: signal_verification_report.html");
 }
 
