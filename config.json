@@ -224,15 +224,15 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 20,
-                "exhaustionThreshold": 0.4,
+                "minAggVolume": 15,
+                "exhaustionThreshold": 0.1,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
-                "maxZonesPerSide": 5,
-                "zoneDepletionThreshold": 0.6,
+                "maxZonesPerSide": 15,
+                "zoneDepletionThreshold": 0.3,
                 "gapDetectionTicks": 3,
-                "passiveRatioBalanceThreshold": 0.95,
-                "zoneHistoryWindowMs": 60000
+                "passiveRatioBalanceThreshold": 0.99,
+                "zoneHistoryWindowMs": 300000
             },
 
             "absorption": {
@@ -240,10 +240,10 @@
                 "passiveAbsorptionThreshold": 0.973,
                 "priceEfficiencyThreshold": 0.000568,
                 "maxPriceImpactRatio": 0.004453,
-                "minPassiveMultiplier": 20.0,
-                "balanceThreshold": 0.181,
+                "minPassiveMultiplier":35.9,
+                "balanceThreshold": 0.182,
                 "priceStabilityTicks": 5,
-                "maxVolumeMultiplierRatio": 8.0,
+                "maxVolumeMultiplierRatio": 5.0,
 
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,

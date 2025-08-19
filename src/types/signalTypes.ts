@@ -560,7 +560,7 @@ export interface AbsorptionThresholdChecks {
     maxVolumeMultiplierRatio: ThresholdCheck<number>;
     passiveAbsorptionThreshold: ThresholdCheck<number>;
     balanceThreshold: ThresholdCheck<number>;
-    priceStabilityTicks: ThresholdCheck<number>; 
+    priceStabilityTicks: ThresholdCheck<number>;
 }
 
 /**
