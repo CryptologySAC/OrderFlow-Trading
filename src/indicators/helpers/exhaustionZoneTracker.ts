@@ -93,10 +93,7 @@ export class ExhaustionZoneTracker {
     public updateZone(zone: ZoneSnapshot, timestamp: number): void {
         const zoneId = zone.zoneId;
 
-        // Skip zones without significant passive volume
-        if (zone.passiveBidVolume === 0 && zone.passiveAskVolume === 0) {
-            return; // No passive liquidity to track
-        }
+        // Track all zones including depleted ones (passive volume = 0) to detect exhaustion patterns
 
         if (!this.currentSpread) {
             return; // Wait for spread to be set
@@ -150,14 +147,19 @@ export class ExhaustionZoneTracker {
             (h) => h.timestamp > timestamp - peakLookbackMs
         );
 
-        // Calculate recent peaks including current values
+        // Calculate recent peaks excluding current values to allow depletion detection
         const recentBidVolumes = recentHistory.map((h) => h.passiveBidVolume);
-        recentBidVolumes.push(currentBidVolume);
         const recentAskVolumes = recentHistory.map((h) => h.passiveAskVolume);
-        recentAskVolumes.push(currentAskVolume);
 
-        tracked.maxPassiveBidVolume = Math.max(...recentBidVolumes, 0);
-        tracked.maxPassiveAskVolume = Math.max(...recentAskVolumes, 0);
+        // Only use historical values for peak calculation - if no history, use current as initial peak
+        tracked.maxPassiveBidVolume =
+            recentBidVolumes.length > 0
+                ? Math.max(...recentBidVolumes, 0)
+                : currentBidVolume;
+        tracked.maxPassiveAskVolume =
+            recentAskVolumes.length > 0
+                ? Math.max(...recentAskVolumes, 0)
+                : currentAskVolume;
 
         // Add history entry with proper defaults
         const entry: ZoneHistoryEntry = {

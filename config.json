@@ -224,14 +224,14 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 50,
+                "minAggVolume": 20,
                 "exhaustionThreshold": 0.4,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
-                "maxZonesPerSide": 15,
+                "maxZonesPerSide": 5,
                 "zoneDepletionThreshold": 0.6,
                 "gapDetectionTicks": 3,
-                "passiveRatioBalanceThreshold": 0.8,
+                "passiveRatioBalanceThreshold": 0.95,
                 "zoneHistoryWindowMs": 60000
             },
 
