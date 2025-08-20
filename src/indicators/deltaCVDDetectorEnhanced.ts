@@ -27,6 +27,10 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
+    TraditionalIndicators,
+    TraditionalIndicatorValues,
+} from "./helpers/traditionalIndicators.js";
+import type {
     EnrichedTradeEvent,
     StandardZoneData,
     ZoneSnapshot,
@@ -118,10 +122,11 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         logger: ILogger,
         metrics: IMetricsCollector,
         validationLogger: SignalValidationLogger,
-        signalLogger: ISignalLogger
+        signalLogger: ISignalLogger,
+        protected override readonly traditionalIndicators: TraditionalIndicators
     ) {
         // STANDALONE VERSION: Initialize Detector base class directly
-        super(id, logger, metrics, signalLogger);
+        super(id, logger, metrics, signalLogger, traditionalIndicators);
 
         // Settings are pre-validated by Config.DELTACVD_DETECTOR getter
         // No validation needed here - trust that settings are correct
@@ -370,6 +375,35 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const passesThreshold_volumeEfficiencyThreshold = hasVolumeEfficiency;
         const hasValidSignalSide = signalSide !== null;
 
+        // MANDATORY: Calculate traditional indicators for ALL signals (pass or reject)
+        const traditionalIndicatorResult = signalSide
+            ? this.traditionalIndicators.validateSignal(event.price, signalSide)
+            : {
+                  vwap: {
+                      value: null,
+                      deviation: null,
+                      deviationPercent: null,
+                      volume: 0,
+                      passed: false,
+                  },
+                  rsi: {
+                      value: null,
+                      condition: "neutral" as const,
+                      passed: false,
+                      periods: 0,
+                  },
+                  oir: {
+                      value: null,
+                      buyVolume: 0,
+                      sellVolume: 0,
+                      totalVolume: 0,
+                      condition: "neutral" as const,
+                      passed: false,
+                  },
+                  overallDecision: "insufficient_data" as const,
+                  filtersTriggered: [] as string[],
+              };
+
         // If any threshold fails, log comprehensive rejection with ALL calculated data
         if (
             !passesThreshold_minTradesPerSec ||
@@ -377,7 +411,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             !passesThreshold_signalThreshold ||
             !passesThreshold_cvdImbalanceThreshold ||
             !passesThreshold_institutionalThreshold ||
-            !passesThreshold_volumeEfficiencyThreshold
+            !passesThreshold_volumeEfficiencyThreshold ||
+            traditionalIndicatorResult.overallDecision === "filter"
         ) {
             this.metricsCollector.incrementCounter(
                 "cvd_signals_rejected_total",
@@ -398,6 +433,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 rejectionReason = "not_hasValidSignalSide";
             else if (!passesThreshold_institutionalThreshold)
                 rejectionReason = "not_passesThreshold_institutionalThreshold";
+            else if (traditionalIndicatorResult.overallDecision === "filter")
+                rejectionReason = "traditional_indicators_filter";
 
             this.logSignalRejection(
                 event,
@@ -407,10 +444,13 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     threshold: this.enhancementConfig.signalThreshold,
                     actual: realConfidence,
                 },
-                thresholds
+                thresholds,
+                traditionalIndicatorResult
             );
             return null;
         }
+
+        // Signal passes all thresholds AND traditional indicators
 
         const signalCandidate: SignalCandidate = {
             id: `deltacvd-${event.timestamp}-${this.getId()}`,
@@ -418,6 +458,13 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             side: signalSide as "buy" | "sell",
             confidence: realConfidence,
             timestamp: event.timestamp,
+            traditionalIndicators: {
+                vwap: traditionalIndicatorResult.vwap.value,
+                rsi: traditionalIndicatorResult.rsi.value,
+                oir: traditionalIndicatorResult.oir.value,
+                decision: traditionalIndicatorResult.overallDecision,
+                filtersTriggered: traditionalIndicatorResult.filtersTriggered,
+            },
             data: {
                 price: event.price,
                 side: signalSide as "buy" | "sell",
@@ -465,12 +512,17 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         this.logSignalForValidation(
             signalCandidate,
             event,
-
-            thresholds
+            thresholds,
+            traditionalIndicatorResult
         );
 
         // Log successful signal with complete parameter data
-        this.logSuccessfulSignalParameters(signalCandidate, event);
+        this.logSuccessfulSignalParameters(
+            signalCandidate,
+            event,
+            thresholds,
+            traditionalIndicatorResult
+        );
 
         return signalCandidate;
     }
@@ -551,7 +603,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             tradesPerSec >= this.enhancementConfig.minTradesPerSec;
 
         const meetsInstitutionalThreshold =
-            event.quantity <= this.enhancementConfig.institutionalThreshold;
+            event.quantity >= this.enhancementConfig.institutionalThreshold;
 
         this.logger.debug(
             "[DeltaCVDDetectorEnhanced DEBUG] calculateDetectionRequirements check",
@@ -738,7 +790,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const relevantZones = this.preprocessor.findZonesNearPrice(
             allZones,
             event.price,
-            15 // TODO Setting!
+            this.enhancementConfig.zoneSearchDistance
         );
 
         this.logger.debug(
@@ -1063,7 +1115,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             threshold: number;
             actual: number;
         },
-        threshold: DeltaCVDThresholdChecks
+        threshold: DeltaCVDThresholdChecks,
+        traditionalIndicatorResult: TraditionalIndicatorValues
     ): void {
         try {
             // Determine signal side for DeltaCVD based on volume imbalance
@@ -1081,7 +1134,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 event,
                 thresholdDetails,
                 threshold,
-                signalSide
+                signalSide,
+                traditionalIndicatorResult
             );
         } catch (error) {
             this.logger.error(
@@ -1220,65 +1274,18 @@ export class DeltaCVDDetectorEnhanced extends Detector {
      */
     private logSuccessfulSignalParameters(
         signal: SignalCandidate,
-        event: EnrichedTradeEvent
+        event: EnrichedTradeEvent,
+        thresholdChecks: DeltaCVDThresholdChecks,
+        traditionalIndicatorResult: TraditionalIndicatorValues
     ): void {
         try {
-            void event;
-            // Calculate zone volume data for logging
-            //const cvdData = this.extractCVDFromZones(
-            //    event.zoneData,
-            //    event.timestamp
-            //);
-
-            // Calculate market context
-            //const marketContext = this.calculateMarketContext(
-            //    event,
-            //    event.zoneData?.zones || []
-            //);
-
-            // Get detection requirements that were calculated and passed validation
-            //const detectionRequirements =
-            //    this.calculateDetectionRequirements(event);
-
-            // Use the signal confidence that was already calculated and passed validation
-
-            // Collect ACTUAL CALCULATED VALUES that were validated against thresholds
-            //const calculatedValues: DeltaCVDCalculatedValues = {
-            //    calculatedMinTradesPerSec: detectionRequirements.tradesPerSec,
-            //    calculatedMinVolPerSec: detectionRequirements.volumePerSec,
-            //    calculatedSignalThreshold: signal.confidence,
-            //    calculatedEventCooldownMs: 0,
-            //    calculatedEnhancementMode:
-            //        this.enhancementConfig.enhancementMode,
-            //   calculatedCvdImbalanceThreshold: 0, // No divergence result available for rejection
-            //    calculatedTimeWindowIndex:
-            //        this.enhancementConfig.timeWindowIndex,
-            //    calculatedInstitutionalThreshold: event.quantity,
-            //    calculatedVolumeEfficiencyThreshold:
-            //        cvdData.totalVolume > 0
-            //            ? Math.abs(cvdData.cvdDelta) / cvdData.totalVolume
-            //            : 0,
-            //};
-
-            // Market context at time of successful signal
-            //const validationMarketContext = {
-            //    marketVolume:
-            //        marketContext.totalAggressiveVolume +
-            //        marketContext.totalPassiveVolume,
-            //    marketSpread:
-            //        event.bestAsk && event.bestBid
-            //            ? event.bestAsk - event.bestBid
-            //            : 0,
-            //    marketVolatility: this.calculateMarketVolatility(event),
-            //};
-
-            //this.validationLogger.logSuccessfulSignal(
-            //    "deltacvd",
-            //    event,
-            //    calculatedValues,
-            //    validationMarketContext,
-            //    signal.side // Signal always has buy/sell
-            //);
+            this.validationLogger.logSuccessfulSignal(
+                "deltacvd",
+                event,
+                thresholdChecks,
+                signal.side,
+                traditionalIndicatorResult
+            );
         } catch (error) {
             this.logger.error(
                 "DeltaCVDDetectorEnhanced: Failed to log successful signal parameters",
@@ -1299,10 +1306,16 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     private logSignalForValidation(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
-        thresholds: DeltaCVDThresholdChecks
+        thresholds: DeltaCVDThresholdChecks,
+        traditionalIndicatorResult: TraditionalIndicatorValues
     ): void {
         try {
-            this.validationLogger.logSignal(signal, event, thresholds);
+            this.validationLogger.logSignal(
+                signal,
+                event,
+                thresholds,
+                traditionalIndicatorResult
+            );
         } catch (error) {
             this.logger.error(
                 "DeltaCVDDetectorEnhanced: Failed to log signal for validation",

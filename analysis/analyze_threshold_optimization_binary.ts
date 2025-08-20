@@ -24,6 +24,7 @@ import {
     createTradingPhases,
     createCompletePricePhases,
     printPhaseSummary,
+    convertToLimaTime,
     PHASE_DETECTION_CONFIG,
 } from "./shared/phaseDetection.js";
 
@@ -36,9 +37,10 @@ const SMALL_TP_THRESHOLD = 0.004; // 0.4% for small TP
 interface Signal extends BaseSignal {
     logType: "successful" | "validation";
 
-    // All threshold values extracted from JSON
-    thresholds: Map<string, number>;
-    thresholdOps: Map<string, "EQL" | "EQS" | "NONE">;
+    // Threshold values extracted from JSON
+    thresholds: Map<string, number>; // The calculated values from the signal
+    thresholdOps: Map<string, "EQL" | "EQS" | "NONE">; // The operators used
+    actualThresholds: Map<string, number>; // The actual threshold values that were checked against
 
     // Price movements (for validation signals)
     maxFavorableMove?: number;
@@ -51,11 +53,36 @@ interface Signal extends BaseSignal {
     // Phase assignment
     phaseId?: number;
     isWrongSided?: boolean; // Signal direction vs phase direction mismatch
+
+    // Traditional indicators (if present)
+    traditionalIndicators?: {
+        vwap: {
+            value: number | null;
+            passed: boolean;
+            reason?: string;
+        };
+        rsi: {
+            value: number | null;
+            condition: string;
+            passed: boolean;
+            reason?: string;
+        };
+        oir: {
+            value: number | null;
+            condition: string;
+            passed: boolean;
+            reason?: string;
+        };
+        overallDecision: "pass" | "filter" | "insufficient_data";
+        filtersTriggered: string[];
+    };
 }
 
 interface PhaseInfo {
     id: number;
     direction: "UP" | "DOWN";
+    startTime: number;
+    endTime: number;
     startPrice: number;
     endPrice: number;
     sizePercent: number;
@@ -93,6 +120,7 @@ interface DetectorOptimization {
 
     // Optimization results
     optimalThresholds: Map<string, number>;
+    allThresholds: Map<string, { value: number; optimized: boolean }>; // All thresholds including non-optimized
     remainingSignals: {
         successful: Signal[];
         harmful: Signal[];
@@ -135,13 +163,108 @@ const THRESHOLD_FIELD_MAP = {
         signalThreshold: "thresholdChecks.signalThreshold.calculated",
         cvdImbalanceThreshold:
             "thresholdChecks.cvdImbalanceThreshold.calculated",
+        institutionalThreshold:
+            "thresholdChecks.institutionalThreshold.calculated",
+        volumeEfficiencyThreshold:
+            "thresholdChecks.volumeEfficiencyThreshold.calculated",
     },
+};
+
+// Traditional indicator fields for extraction
+const TRADITIONAL_INDICATOR_FIELDS = {
+    vwapValue: "traditionalIndicators.vwap.value",
+    vwapPassed: "traditionalIndicators.vwap.passed",
+    rsiValue: "traditionalIndicators.rsi.value",
+    rsiPassed: "traditionalIndicators.rsi.passed",
+    oirValue: "traditionalIndicators.oir.value",
+    oirPassed: "traditionalIndicators.oir.passed",
+    traditionalDecision: "traditionalIndicators.overallDecision",
+    traditionalFiltersTriggered: "traditionalIndicators.filtersTriggered",
 };
 
 function getNestedValue(obj: any, path: string): any {
     return path.split(".").reduce((current, key) => {
         return current && current[key] !== undefined ? current[key] : undefined;
     }, obj);
+}
+
+/**
+ * Load current thresholds from config.json
+ */
+async function loadCurrentConfig(): Promise<Map<string, Map<string, number>>> {
+    const configMap = new Map<string, Map<string, number>>();
+
+    try {
+        const configContent = await fs.readFile("config.json", "utf-8");
+        const config = JSON.parse(configContent);
+
+        // Extract thresholds for each detector
+        const detectorConfigs = {
+            absorption: config.symbols?.LTCUSDT?.absorption,
+            exhaustion: config.symbols?.LTCUSDT?.exhaustion,
+            deltacvd: config.symbols?.LTCUSDT?.deltaCVD,
+        };
+
+        // Map config fields to our threshold names
+        const configFieldMap = {
+            absorption: {
+                minAggVolume: "minAggVolume",
+                passiveAbsorptionThreshold: "passiveAbsorptionThreshold",
+                priceEfficiencyThreshold: "priceEfficiencyThreshold",
+                maxPriceImpactRatio: "maxPriceImpactRatio",
+                minPassiveMultiplier: "minPassiveMultiplier",
+                maxVolumeMultiplierRatio: "maxVolumeMultiplierRatio",
+                balanceThreshold: "balanceThreshold",
+                priceStabilityTicks: "priceStabilityTicks",
+            },
+            exhaustion: {
+                minAggVolume: "minAggVolume",
+                exhaustionThreshold: "exhaustionThreshold",
+            },
+            deltacvd: {
+                minTradesPerSec: "minTradesPerSec",
+                minVolPerSec: "minVolPerSec",
+                signalThreshold: "signalThreshold",
+                cvdImbalanceThreshold: "cvdImbalanceThreshold",
+                institutionalThreshold: "institutionalThreshold",
+                volumeEfficiencyThreshold: "volumeEfficiencyThreshold",
+            },
+        };
+
+        for (const [detector, fieldMap] of Object.entries(configFieldMap)) {
+            const detectorConfig =
+                detectorConfigs[detector as keyof typeof detectorConfigs];
+            if (!detectorConfig) continue;
+
+            const thresholds = new Map<string, number>();
+            for (const [thresholdName, configField] of Object.entries(
+                fieldMap
+            )) {
+                const value = detectorConfig[configField];
+                if (typeof value === "number") {
+                    thresholds.set(thresholdName, value);
+                }
+            }
+
+            if (thresholds.size > 0) {
+                configMap.set(detector, thresholds);
+            }
+        }
+
+        console.log("\n📋 Loaded current config.json thresholds:");
+        for (const [detector, thresholds] of configMap) {
+            console.log(`   ${detector}:`);
+            for (const [name, value] of thresholds) {
+                console.log(`     ${name}: ${value}`);
+            }
+        }
+    } catch (error) {
+        console.log(
+            "\n⚠️ Could not load config.json - will use optimized values only"
+        );
+    }
+
+    return configMap;
 }
 
 /**
@@ -176,6 +299,7 @@ async function loadSignals(date: string): Promise<Signal[]> {
                             price: jsonRecord.price,
                             thresholds: new Map(),
                             thresholdOps: new Map(),
+                            actualThresholds: new Map(),
                             logType: logType,
                             category:
                                 logType === "successful"
@@ -213,6 +337,67 @@ async function loadSignals(date: string): Promise<Signal[]> {
                                 if (op && ["EQL", "EQS", "NONE"].includes(op)) {
                                     signal.thresholdOps.set(thresholdName, op);
                                 }
+
+                                // Extract actual threshold value that was used
+                                const thresholdPath = jsonPath.replace(
+                                    ".calculated",
+                                    ".threshold"
+                                );
+                                const thresholdValue = getNestedValue(
+                                    jsonRecord,
+                                    thresholdPath
+                                );
+                                if (
+                                    typeof thresholdValue === "number" &&
+                                    !isNaN(thresholdValue)
+                                ) {
+                                    signal.actualThresholds.set(
+                                        thresholdName,
+                                        thresholdValue
+                                    );
+                                }
+                            }
+                        }
+
+                        // Extract traditional indicators if present
+                        if (jsonRecord.traditionalIndicators) {
+                            signal.traditionalIndicators =
+                                jsonRecord.traditionalIndicators;
+
+                            // Add traditional indicator values to thresholds map for optimization
+                            // This allows us to analyze their distribution alongside other thresholds
+                            if (
+                                jsonRecord.traditionalIndicators.vwap?.value !==
+                                    null &&
+                                jsonRecord.traditionalIndicators.vwap?.value !==
+                                    undefined
+                            ) {
+                                signal.thresholds.set(
+                                    "vwap",
+                                    jsonRecord.traditionalIndicators.vwap.value
+                                );
+                            }
+                            if (
+                                jsonRecord.traditionalIndicators.rsi?.value !==
+                                    null &&
+                                jsonRecord.traditionalIndicators.rsi?.value !==
+                                    undefined
+                            ) {
+                                signal.thresholds.set(
+                                    "rsi",
+                                    jsonRecord.traditionalIndicators.rsi.value
+                                );
+                            }
+                            if (
+                                jsonRecord.traditionalIndicators.oir?.value !==
+                                    null &&
+                                jsonRecord.traditionalIndicators.oir?.value !==
+                                    undefined
+                            ) {
+                                signal.thresholds.set(
+                                    "oir",
+                                    jsonRecord.traditionalIndicators.oir.value
+                                );
                             }
                         }
 
@@ -568,6 +753,61 @@ function categorizeSignals(signals: Signal[]): void {
 }
 
 /**
+ * Identify critical signals considering trade flow (1 active trade at a time)
+ * Returns set of signal timestamps that are critical for maintaining trading flow
+ */
+function identifyCriticalSignals(
+    signals: Signal[],
+    phases: PhaseInfo[]
+): Set<number> {
+    const criticalSignals = new Set<number>();
+
+    // For each phase, find the first successful signal across all detectors
+    for (const phase of phases) {
+        let earliestSuccessful: Signal | null = null;
+        let earliestTimestamp = Infinity;
+
+        // Check all detectors for this phase
+        for (const [detector, coverage] of phase.detectorCoverage) {
+            for (const signal of coverage.successfulSignals) {
+                if (signal.timestamp < earliestTimestamp) {
+                    earliestTimestamp = signal.timestamp;
+                    earliestSuccessful = signal;
+                }
+            }
+        }
+
+        // Mark the earliest successful signal as critical
+        if (earliestSuccessful) {
+            criticalSignals.add(earliestSuccessful.timestamp);
+            console.log(
+                `   Critical signal in Phase ${phase.id}: ${earliestSuccessful.detectorType} at ${convertToLimaTime(earliestSuccessful.timestamp)}`
+            );
+        }
+    }
+
+    // Also consider trade overlap - if trades are 90 minutes long,
+    // we can't take another signal within that window
+    const sortedSignals = [...signals]
+        .filter((s) => s.category === "SUCCESSFUL")
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+    let lastTradeEnd = 0;
+    for (const signal of sortedSignals) {
+        if (signal.timestamp >= lastTradeEnd) {
+            // This signal could be taken (no overlap)
+            criticalSignals.add(signal.timestamp);
+            lastTradeEnd = signal.timestamp + 90 * 60 * 1000; // 90 minutes trade duration
+        }
+    }
+
+    console.log(
+        `   Identified ${criticalSignals.size} critical signals considering trade flow`
+    );
+    return criticalSignals;
+}
+
+/**
  * Create phase information with detector coverage analysis
  */
 function createPhaseInfo(
@@ -580,6 +820,8 @@ function createPhaseInfo(
         const phaseInfo: PhaseInfo = {
             id: pricePhase.id,
             direction: pricePhase.direction,
+            startTime: pricePhase.startTime,
+            endTime: pricePhase.endTime,
             startPrice: pricePhase.startPrice,
             endPrice: pricePhase.endPrice,
             sizePercent: pricePhase.sizePercent,
@@ -762,12 +1004,18 @@ function generateThresholdCombinations(
     const thresholdRanges = new Map<string, number[]>();
 
     for (const thresholdName of thresholdNames) {
+        // Get calculated values (what the signals had)
         const successfulValues = successfulSignals
             .map((s) => s.thresholds.get(thresholdName))
             .filter((v) => v !== undefined) as number[];
 
         const harmfulValues = harmfulSignals
             .map((s) => s.thresholds.get(thresholdName))
+            .filter((v) => v !== undefined) as number[];
+
+        // Get actual threshold values that were used
+        const actualThresholdValues = [...successfulSignals, ...harmfulSignals]
+            .map((s) => s.actualThresholds.get(thresholdName))
             .filter((v) => v !== undefined) as number[];
 
         if (successfulValues.length === 0 || harmfulValues.length === 0) {
@@ -783,44 +1031,106 @@ function generateThresholdCombinations(
             continue;
         }
 
+        // Get the max threshold that was actually used (all signals passed this)
+        const maxUsedThreshold =
+            actualThresholdValues.length > 0
+                ? Math.max(...actualThresholdValues)
+                : 0;
+
         const separatingValues: number[] = [];
 
         if (operator === "EQL") {
-            // For EQL: signal passes if value >= threshold
-            // To keep successful: threshold <= min successful
-            // To block harmful: threshold > harmful values
+            // For EQL: signal passes if calculated >= threshold
+            // All signals in logs have calculated >= threshold
+            // To filter harmful: need threshold > some harmful calculated values
             const minSuccessful = Math.min(...successfulValues);
+            const maxSuccessful = Math.max(...successfulValues);
+            const minHarmful = Math.min(...harmfulValues);
             const maxHarmful = Math.max(...harmfulValues);
 
             console.log(
-                `       ${thresholdName} (EQL): successful range [${Math.min(...successfulValues).toFixed(4)} - ${Math.max(...successfulValues).toFixed(4)}], harmful range [${Math.min(...harmfulValues).toFixed(4)} - ${Math.max(...harmfulValues).toFixed(4)}]`
+                `       ${thresholdName} (EQL): successful range [${minSuccessful.toFixed(4)} - ${maxSuccessful.toFixed(4)}], harmful range [${minHarmful.toFixed(4)} - ${maxHarmful.toFixed(4)}]`
+            );
+            console.log(
+                `       Original threshold used: ${maxUsedThreshold.toFixed(4)}`
             );
 
-            // Always add some separating values, even if not perfect separation
-            separatingValues.push(
-                minSuccessful * 0.99, // Keep all successful (safest)
-                minSuccessful * 0.95, // Keep all successful (more restrictive)
-                Math.max(minSuccessful * 0.9, maxHarmful * 1.1), // Try to block some harmful
-                (minSuccessful + maxHarmful) / 2 // Middle ground
-            );
+            // Generate STRICTER thresholds (higher values for EQL)
+            // Start from above the minimum harmful value
+            if (minHarmful > minSuccessful) {
+                // There's separation - we can filter some harmful without losing successful
+                separatingValues.push(
+                    minHarmful, // Filter all harmful below this
+                    (minSuccessful + minHarmful) / 2, // Middle ground
+                    minHarmful * 1.1, // Even stricter
+                    minHarmful * 1.25 // More strict
+                );
+            } else {
+                // No clear separation - need to sacrifice some signals
+                // Try percentiles of harmful distribution
+                const harmfulSorted = [...harmfulValues].sort((a, b) => a - b);
+                separatingValues.push(
+                    harmfulSorted[Math.floor(harmfulSorted.length * 0.25)], // Filter bottom 25% of harmful
+                    harmfulSorted[Math.floor(harmfulSorted.length * 0.5)], // Filter bottom 50% of harmful
+                    harmfulSorted[Math.floor(harmfulSorted.length * 0.75)], // Filter bottom 75% of harmful
+                    maxHarmful * 1.01 // Filter almost none (baseline)
+                );
+            }
+
+            // Ensure all values are stricter than what was used
+            separatingValues.forEach((val, idx) => {
+                if (val <= maxUsedThreshold) {
+                    separatingValues[idx] = maxUsedThreshold * 1.01; // At least 1% stricter
+                }
+            });
         } else if (operator === "EQS") {
-            // For EQS: signal passes if value <= threshold
-            // To keep successful: threshold >= max successful
-            // To block harmful: threshold < harmful values
+            // For EQS: signal passes if calculated <= threshold
+            // All signals in logs have calculated <= threshold
+            // To filter harmful: need threshold < some harmful calculated values
+            const minSuccessful = Math.min(...successfulValues);
             const maxSuccessful = Math.max(...successfulValues);
             const minHarmful = Math.min(...harmfulValues);
+            const maxHarmful = Math.max(...harmfulValues);
 
             console.log(
-                `       ${thresholdName} (EQS): successful range [${Math.min(...successfulValues).toFixed(4)} - ${Math.max(...successfulValues).toFixed(4)}], harmful range [${Math.min(...harmfulValues).toFixed(4)} - ${Math.max(...harmfulValues).toFixed(4)}]`
+                `       ${thresholdName} (EQS): successful range [${minSuccessful.toFixed(4)} - ${maxSuccessful.toFixed(4)}], harmful range [${minHarmful.toFixed(4)} - ${maxHarmful.toFixed(4)}]`
+            );
+            console.log(
+                `       Original threshold used: ${maxUsedThreshold.toFixed(4)}`
             );
 
-            // Always add some separating values
-            separatingValues.push(
-                maxSuccessful * 1.01, // Keep all successful (safest)
-                maxSuccessful * 1.05, // Keep all successful (more lenient)
-                Math.min(maxSuccessful * 1.1, minHarmful * 0.9), // Try to block some harmful
-                (maxSuccessful + minHarmful) / 2 // Middle ground
-            );
+            // Generate STRICTER thresholds (lower values for EQS)
+            // Start from below the maximum harmful value
+            if (maxHarmful < maxSuccessful) {
+                // There's separation - we can filter some harmful without losing successful
+                separatingValues.push(
+                    maxHarmful, // Filter all harmful above this
+                    (maxSuccessful + maxHarmful) / 2, // Middle ground
+                    maxHarmful * 0.9, // Even stricter
+                    maxHarmful * 0.75 // More strict
+                );
+            } else {
+                // No clear separation - need to sacrifice some signals
+                // Try percentiles of harmful distribution
+                const harmfulSorted = [...harmfulValues].sort((a, b) => b - a);
+                separatingValues.push(
+                    harmfulSorted[Math.floor(harmfulSorted.length * 0.25)], // Filter top 25% of harmful
+                    harmfulSorted[Math.floor(harmfulSorted.length * 0.5)], // Filter top 50% of harmful
+                    harmfulSorted[Math.floor(harmfulSorted.length * 0.75)], // Filter top 75% of harmful
+                    minHarmful * 0.99 // Filter almost none (baseline)
+                );
+            }
+
+            // Ensure all values are stricter than what was used (for EQS, stricter means lower)
+            const minUsedThreshold =
+                actualThresholdValues.length > 0
+                    ? Math.min(...actualThresholdValues)
+                    : Infinity;
+            separatingValues.forEach((val, idx) => {
+                if (val >= minUsedThreshold) {
+                    separatingValues[idx] = minUsedThreshold * 0.99; // At least 1% stricter
+                }
+            });
         }
 
         if (separatingValues.length > 0) {
@@ -877,7 +1187,8 @@ function optimizeDetector(
     detector: string,
     signals: Signal[],
     phases: PhaseInfo[],
-    coverageMatrix: Map<number, Set<string>>
+    coverageMatrix: Map<number, Set<string>>,
+    currentConfigThresholds?: Map<string, number>
 ): DetectorOptimization {
     const detectorSignals = signals.filter((s) => s.detectorType === detector);
 
@@ -985,15 +1296,116 @@ function optimizeDetector(
         `   ✅ Best combination eliminates ${bestHarmfulEliminated}/${originalSignals.harmful.length} harmful signals`
     );
 
-    if (bestCombination.size > 0) {
-        console.log(`   📋 Optimal thresholds found:`);
-        for (const [name, value] of bestCombination) {
-            console.log(`     ${name}: ${value.toFixed(6)}`);
+    // Compare with current config and use stricter values
+    const finalThresholds = new Map<string, number>(bestCombination);
+
+    if (currentConfigThresholds && currentConfigThresholds.size > 0) {
+        console.log(`   📋 Comparing with current config.json thresholds:`);
+
+        for (const [name, optimizedValue] of bestCombination) {
+            const currentValue = currentConfigThresholds.get(name);
+            if (currentValue !== undefined) {
+                const operator = detectorSignals[0]?.thresholdOps.get(name);
+                let finalValue = optimizedValue;
+
+                if (operator === "EQL") {
+                    // For EQL (>=): stricter means HIGHER value
+                    finalValue = Math.max(optimizedValue, currentValue);
+                    if (finalValue !== optimizedValue) {
+                        console.log(
+                            `     ${name}: ${optimizedValue.toFixed(6)} → ${finalValue.toFixed(6)} (using stricter config value)`
+                        );
+                    }
+                } else if (operator === "EQS") {
+                    // For EQS (<=): stricter means LOWER value
+                    finalValue = Math.min(optimizedValue, currentValue);
+                    if (finalValue !== optimizedValue) {
+                        console.log(
+                            `     ${name}: ${optimizedValue.toFixed(6)} → ${finalValue.toFixed(6)} (using stricter config value)`
+                        );
+                    }
+                }
+
+                finalThresholds.set(name, finalValue);
+            }
+        }
+    }
+
+    if (finalThresholds.size > 0) {
+        console.log(
+            `   📋 Final thresholds (stricter of optimized and current):`
+        );
+        for (const [name, value] of finalThresholds) {
+            const currentValue = currentConfigThresholds?.get(name);
+            const marker = currentValue && value !== currentValue ? " ⚡" : "";
+            console.log(`     ${name}: ${value.toFixed(6)}${marker}`);
         }
     } else {
         console.log(
             `   ⚠️ No threshold combination found that preserves protected phases`
         );
+    }
+
+    // Re-test with final thresholds if they changed
+    let finalRemainingSignals = bestRemainingSignals;
+    if (
+        finalThresholds.size > 0 &&
+        [...finalThresholds.entries()].some(
+            ([k, v]) => v !== bestCombination.get(k)
+        )
+    ) {
+        console.log(`   🔄 Re-testing with final stricter thresholds...`);
+        const result = testThresholdCombination(
+            detector,
+            finalThresholds,
+            signals,
+            coverageMatrix
+        );
+
+        finalRemainingSignals = {
+            successful: result.kept.filter((s) => s.category === "SUCCESSFUL"),
+            harmful: result.kept.filter((s) => s.category === "HARMFUL"),
+            harmless: result.kept.filter((s) => s.category === "HARMLESS"),
+        };
+
+        console.log(
+            `   📊 Final results: ${finalRemainingSignals.harmful.length} harmful kept (eliminated ${originalSignals.harmful.length - finalRemainingSignals.harmful.length})`
+        );
+    }
+
+    // Create complete threshold map including non-optimized values
+    const allThresholds = new Map<
+        string,
+        { value: number; optimized: boolean }
+    >();
+    const thresholdFields =
+        THRESHOLD_FIELD_MAP[detector as keyof typeof THRESHOLD_FIELD_MAP];
+
+    if (thresholdFields && currentConfigThresholds) {
+        // Add all thresholds from config, marking which ones were optimized
+        for (const [thresholdName] of Object.entries(thresholdFields)) {
+            const optimizedValue = finalThresholds.get(thresholdName);
+            const configValue = currentConfigThresholds.get(thresholdName);
+
+            if (optimizedValue !== undefined) {
+                // This threshold was optimized
+                allThresholds.set(thresholdName, {
+                    value: optimizedValue,
+                    optimized: true,
+                });
+            } else if (configValue !== undefined) {
+                // Use config value for non-optimized threshold
+                allThresholds.set(thresholdName, {
+                    value: configValue,
+                    optimized: false,
+                });
+            }
+        }
+    } else {
+        // Just use optimized values if no config available
+        for (const [name, value] of finalThresholds) {
+            allThresholds.set(name, { value, optimized: true });
+        }
     }
 
     return {
@@ -1004,16 +1416,91 @@ function optimizeDetector(
         harmlessOnlyPhases,
         protectedPhases,
         dispensablePhases,
-        optimalThresholds: bestCombination,
-        remainingSignals: bestRemainingSignals,
+        optimalThresholds: finalThresholds,
+        allThresholds,
+        remainingSignals: finalRemainingSignals,
         eliminationStats: {
             harmfulEliminated:
                 originalSignals.harmful.length -
-                bestRemainingSignals.harmful.length,
-            harmfulKept: bestRemainingSignals.harmful.length,
-            successfulKept: bestRemainingSignals.successful.length,
-            harmlessKept: bestRemainingSignals.harmless.length,
+                finalRemainingSignals.harmful.length,
+            harmfulKept: finalRemainingSignals.harmful.length,
+            successfulKept: finalRemainingSignals.successful.length,
+            harmlessKept: finalRemainingSignals.harmless.length,
         },
+    };
+}
+
+/**
+ * Analyze traditional indicators impact
+ */
+function analyzeTraditionalIndicators(signals: Signal[]): {
+    totalSignals: number;
+    withTraditional: number;
+    filteredByTraditional: number;
+    filterBreakdown: Map<string, number>;
+    successfulWithTraditional: number;
+    harmfulWithTraditional: number;
+    harmlessWithTraditional: number;
+    potentialHarmfulFiltered: number;
+    potentialSuccessfulLost: number;
+} {
+    let totalSignals = 0;
+    let withTraditional = 0;
+    let filteredByTraditional = 0;
+    const filterBreakdown = new Map<string, number>();
+    let successfulWithTraditional = 0;
+    let harmfulWithTraditional = 0;
+    let harmlessWithTraditional = 0;
+    let potentialHarmfulFiltered = 0;
+    let potentialSuccessfulLost = 0;
+
+    for (const signal of signals) {
+        totalSignals++;
+
+        if (signal.traditionalIndicators) {
+            withTraditional++;
+
+            if (signal.traditionalIndicators.overallDecision === "filter") {
+                filteredByTraditional++;
+
+                // Track which filters triggered
+                for (const filter of signal.traditionalIndicators
+                    .filtersTriggered || []) {
+                    filterBreakdown.set(
+                        filter,
+                        (filterBreakdown.get(filter) || 0) + 1
+                    );
+                }
+
+                // Track what type of signal would be filtered
+                if (signal.category === "HARMFUL") {
+                    potentialHarmfulFiltered++;
+                } else if (signal.category === "SUCCESSFUL") {
+                    potentialSuccessfulLost++;
+                }
+            } else {
+                // Signal passed traditional indicators
+                if (signal.category === "SUCCESSFUL") {
+                    successfulWithTraditional++;
+                } else if (signal.category === "HARMFUL") {
+                    harmfulWithTraditional++;
+                } else if (signal.category === "HARMLESS") {
+                    harmlessWithTraditional++;
+                }
+            }
+        }
+    }
+
+    return {
+        totalSignals,
+        withTraditional,
+        filteredByTraditional,
+        filterBreakdown,
+        successfulWithTraditional,
+        harmfulWithTraditional,
+        harmlessWithTraditional,
+        potentialHarmfulFiltered,
+        potentialSuccessfulLost,
     };
 }
 
@@ -1030,8 +1517,14 @@ async function generateHTMLReport(
         mixedClusters: number;
         reclassifiedSignals: number;
         largestClusterSize: number;
-    }
+    },
+    signals?: Signal[]
 ): Promise<void> {
+    // Analyze traditional indicators if signals provided
+    const traditionalAnalysis = signals
+        ? analyzeTraditionalIndicators(signals)
+        : null;
+
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -1150,6 +1643,77 @@ async function generateHTMLReport(
                 : ""
         }
 
+        ${
+            traditionalAnalysis
+                ? `
+        <h2>📈 Traditional Indicators Analysis</h2>
+        <div class="phase-section">
+            <div class="metric">
+                <div class="metric-label">Total Signals</div>
+                <div class="metric-value">${traditionalAnalysis.totalSignals}</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">With Traditional Indicators</div>
+                <div class="metric-value">${traditionalAnalysis.withTraditional} (${Math.round((traditionalAnalysis.withTraditional / traditionalAnalysis.totalSignals) * 100)}%)</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Filtered by Traditional</div>
+                <div class="metric-value">${traditionalAnalysis.filteredByTraditional} (${Math.round((traditionalAnalysis.filteredByTraditional / (traditionalAnalysis.withTraditional || 1)) * 100)}%)</div>
+            </div>
+            
+            <h4>Filter Breakdown</h4>
+            ${
+                traditionalAnalysis.filterBreakdown.size > 0
+                    ? `<ul>
+                ${Array.from(traditionalAnalysis.filterBreakdown.entries())
+                    .map(
+                        ([filter, count]) =>
+                            `<li>${filter}: ${count} signals</li>`
+                    )
+                    .join("")}
+                </ul>`
+                    : "<p>No filters triggered</p>"
+            }
+            
+            <h4>Signal Categories (After Traditional Filter)</h4>
+            <div class="metric">
+                <div class="metric-label">Successful Signals</div>
+                <div class="metric-value">${traditionalAnalysis.successfulWithTraditional}</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Harmful Signals</div>
+                <div class="metric-value">${traditionalAnalysis.harmfulWithTraditional}</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Harmless Signals</div>
+                <div class="metric-value">${traditionalAnalysis.harmlessWithTraditional}</div>
+            </div>
+            
+            <h4>Traditional Indicators Impact on Optimization</h4>
+            ${
+                traditionalAnalysis.filteredByTraditional > 0
+                    ? `
+            <div class="metric">
+                <div class="metric-label">Harmful Signals Filtered</div>
+                <div class="metric-value">${traditionalAnalysis.potentialHarmfulFiltered} 🎯</div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">Successful Signals Lost</div>
+                <div class="metric-value">${traditionalAnalysis.potentialSuccessfulLost} ⚠️</div>
+            </div>
+            <p><strong>Impact:</strong> Traditional indicators would filter ${traditionalAnalysis.potentialHarmfulFiltered} harmful signals 
+            (${Math.round((traditionalAnalysis.potentialHarmfulFiltered / (traditionalAnalysis.harmfulWithTraditional + traditionalAnalysis.potentialHarmfulFiltered)) * 100)}% reduction)
+            at the cost of ${traditionalAnalysis.potentialSuccessfulLost} successful signals.</p>
+            `
+                    : `
+            <p><em>Traditional indicators currently not filtering any signals. All signals passing traditional indicator checks.</em></p>
+            `
+            }
+        </div>
+        `
+                : ""
+        }
+
         <h2>📊 Phase Categorization</h2>
         
         ${phases
@@ -1166,6 +1730,10 @@ async function generateHTMLReport(
                 return `
             <div class="phase-section ${phase.phaseType.toLowerCase()}">
                 <h3>Phase ${phase.id} - ${phase.phaseType} (${phase.direction})</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">${convertToLimaTime(phase.startTime)} → ${convertToLimaTime(phase.endTime)}</div>
+                </div>
                 <div class="metric">
                     <div class="metric-label">Price Movement</div>
                     <div class="metric-value">$${phase.startPrice.toFixed(2)} → $${phase.endPrice.toFixed(2)} (${(phase.sizePercent * 100).toFixed(2)}%)</div>
@@ -1233,13 +1801,18 @@ async function generateHTMLReport(
                 <div class="metric-value">${opt.eliminationStats.harmlessKept}</div>
             </div>
             
-            <h4>Optimal Threshold Configuration</h4>
+            <h4>Complete Threshold Configuration</h4>
             <div class="threshold-config">
-${Array.from(opt.optimalThresholds.entries())
-    .map(
-        ([name, value]) =>
-            `${name}: ${typeof value === "number" ? value.toFixed(6) : value}`
-    )
+${Array.from(opt.allThresholds?.entries() || opt.optimalThresholds.entries())
+    .map(([name, data]) => {
+        if (typeof data === "object" && "value" in data) {
+            const marker = data.optimized ? " ⚡" : "";
+            return `${name}: ${data.value.toFixed(6)}${marker}`;
+        } else {
+            // Fallback for old format
+            return `${name}: ${typeof data === "number" ? data.toFixed(6) : data}`;
+        }
+    })
     .join("<br>")}
             </div>
             
@@ -1335,6 +1908,9 @@ async function main(): Promise<void> {
     console.log("=".repeat(80));
     console.log("Phase-first approach with cross-detector coverage protection");
 
+    // Load current config.json thresholds
+    const currentConfig = await loadCurrentConfig();
+
     // Load and process signals
     console.log("\n📊 Loading signals...");
     const signals = await loadSignals(date);
@@ -1411,7 +1987,8 @@ async function main(): Promise<void> {
             detector,
             processedSignals,
             phases,
-            coverageMatrix
+            coverageMatrix,
+            currentConfig.get(detector)
         );
         optimizations.push(optimization);
     }
@@ -1423,7 +2000,8 @@ async function main(): Promise<void> {
         phases,
         optimizations,
         coverageMatrix,
-        clusterResult.statistics
+        clusterResult.statistics,
+        processedSignals // Pass signals for traditional indicator analysis
     );
 
     console.log("\n" + "=".repeat(80));

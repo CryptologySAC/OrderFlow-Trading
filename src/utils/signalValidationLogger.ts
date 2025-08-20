@@ -27,6 +27,7 @@ import type {
     ExhaustionThresholdChecks,
     DeltaCVDThresholdChecks,
 } from "../types/signalTypes.js";
+import type { TraditionalIndicatorValues } from "../indicators/helpers/traditionalIndicators.js";
 import type { EnrichedTradeEvent } from "../types/marketEvents.js";
 
 /**
@@ -61,6 +62,9 @@ export interface SignalValidationRecord {
         | ExhaustionThresholdChecks
         | DeltaCVDThresholdChecks;
 
+    // Traditional Indicators (for signal filtering analysis)
+    traditionalIndicators: TraditionalIndicatorValues;
+
     // Rejection Analysis (for failed signals)
     rejectionReason?: string;
     thresholdValue?: number;
@@ -88,6 +92,9 @@ export interface SignalRejectionRecord {
         | AbsorptionThresholdChecks
         | ExhaustionThresholdChecks
         | DeltaCVDThresholdChecks;
+
+    // Traditional Indicators (for signal filtering analysis)
+    traditionalIndicators: TraditionalIndicatorValues | undefined;
 
     // Post-rejection analysis (filled later)
     actualTPPrice?: number; // The price where TP would have been hit (if reached)
@@ -120,6 +127,9 @@ export interface SuccessfulSignalRecord {
         | AbsorptionThresholdChecks
         | ExhaustionThresholdChecks
         | DeltaCVDThresholdChecks;
+
+    // Traditional Indicators (for signal filtering analysis)
+    traditionalIndicators: TraditionalIndicatorValues;
 
     // Post-signal analysis (filled later)
     actualTPPrice?: number; // The price where TP was hit (if reached)
@@ -688,7 +698,8 @@ export class SignalValidationLogger {
         thresholdChecks:
             | AbsorptionThresholdChecks
             | ExhaustionThresholdChecks
-            | DeltaCVDThresholdChecks
+            | DeltaCVDThresholdChecks,
+        traditionalIndicators: TraditionalIndicatorValues
     ): void {
         try {
             // Check for daily rotation before logging
@@ -709,6 +720,9 @@ export class SignalValidationLogger {
 
                 // Store threshold checks for later use
                 thresholdChecks: thresholdChecks,
+
+                // Traditional indicators (if provided)
+                traditionalIndicators: traditionalIndicators,
             };
 
             // Store for validation tracking
@@ -738,7 +752,8 @@ export class SignalValidationLogger {
             | AbsorptionThresholdChecks
             | ExhaustionThresholdChecks
             | DeltaCVDThresholdChecks,
-        signalSide: "buy" | "sell"
+        signalSide: "buy" | "sell",
+        traditionalIndicators: TraditionalIndicatorValues
     ): void {
         try {
             // Check for daily rotation before logging
@@ -751,6 +766,7 @@ export class SignalValidationLogger {
                 signalSide, // Mandatory - a signal without side is useless
                 price: event.price,
                 thresholdChecks, // ✅ Store for CSV alignment
+                traditionalIndicators, // Traditional indicators (if provided)
             };
 
             // Store for validation tracking
@@ -791,7 +807,8 @@ export class SignalValidationLogger {
             | AbsorptionThresholdChecks
             | ExhaustionThresholdChecks
             | DeltaCVDThresholdChecks,
-        signalSide: "buy" | "sell"
+        signalSide: "buy" | "sell",
+        traditionalIndicators: TraditionalIndicatorValues
     ): void {
         try {
             // Check for daily rotation before logging
@@ -814,6 +831,9 @@ export class SignalValidationLogger {
 
                 // ✅ ALL THRESHOLD CHECKS: Every threshold and calculation the detector made
                 thresholdChecks: allThresholdChecks,
+
+                // Traditional indicators (if provided)
+                traditionalIndicators,
             };
 
             // Store rejection for later validation
@@ -1417,6 +1437,9 @@ export class SignalValidationLogger {
 
                 // Complete threshold checks for analysis
                 thresholdChecks: thresholdChecks,
+
+                // Traditional indicators for signal filtering analysis
+                traditionalIndicators: record.traditionalIndicators,
             };
 
             // Convert to JSON string + newline (JSON Lines format)
@@ -1476,6 +1499,9 @@ export class SignalValidationLogger {
 
                 // Complete threshold checks for analysis
                 thresholdChecks: thresholdChecks,
+
+                // Traditional indicators for successful signal analysis
+                traditionalIndicators: record.traditionalIndicators,
             };
 
             // Convert to JSON string + newline (JSON Lines format)
@@ -1619,6 +1645,9 @@ export class SignalValidationLogger {
 
                 // Complete threshold checks for analysis
                 thresholdChecks: record.thresholdChecks,
+
+                // Traditional indicators for rejection analysis
+                traditionalIndicators: record.traditionalIndicators,
             };
 
             // Convert to JSON string + newline (JSON Lines format)

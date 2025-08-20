@@ -69,6 +69,9 @@ import type {
     DetectorErrorEvent,
 } from "./utils/types.js";
 
+// Traditional Indicators
+import { TraditionalIndicators } from "./indicators/helpers/traditionalIndicators.js";
+
 // Storage and processors
 import {
     MarketDataStorageService,
@@ -124,6 +127,9 @@ export class OrderFlowDashboard {
 
     // Indicators (initialized in initializeDetectors)
     private deltaCVDConfirmation!: DeltaCVDDetectorEnhanced;
+
+    // Traditional Indicators (initialized in initializeDetectors)
+    private traditionalIndicators!: TraditionalIndicators;
 
     // State
     private isShuttingDown = false;
@@ -318,6 +324,14 @@ export class OrderFlowDashboard {
             );
         }
 
+        // Initialize Traditional Indicators for signal filtering
+        const traditionalIndicatorsConfig =
+            Config.TRADITIONAL_INDICATORS_CONFIG;
+        this.traditionalIndicators = new TraditionalIndicators(
+            traditionalIndicatorsConfig,
+            dependencies.logger
+        );
+
         const detectorDependencies: DetectorDependencies = {
             logger: dependencies.logger,
             spoofingDetector: dependencies.spoofingDetector,
@@ -325,6 +339,7 @@ export class OrderFlowDashboard {
             signalLogger: dependencies.signalLogger,
             preprocessor: this.preprocessor,
             signalValidationLogger: dependencies.signalValidationLogger,
+            traditionalIndicators: this.traditionalIndicators,
         };
 
         DetectorFactory.initialize(detectorDependencies);
@@ -818,6 +833,9 @@ export class OrderFlowDashboard {
                     if (this.marketDataStorage?.isActive()) {
                         this.marketDataStorage.storeTrade(enrichedTrade);
                     }
+
+                    // Update traditional indicators with trade data (MANDATORY)
+                    this.traditionalIndicators.updateIndicators(enrichedTrade);
 
                     // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);

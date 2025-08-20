@@ -280,6 +280,13 @@ export interface SignalCandidate {
     timestamp: number;
     data: DetectorResultType;
     qualityFlags?: SignalQualityFlags; // Optional quality indicators
+    traditionalIndicators?: {
+        vwap: number | null;
+        rsi: number | null;
+        oir: number | null;
+        decision: "pass" | "filter" | "insufficient_data";
+        filtersTriggered: string[];
+    };
 }
 
 export interface ProcessedSignal {
@@ -582,4 +589,47 @@ export interface DeltaCVDThresholdChecks {
     cvdImbalanceThreshold: ThresholdCheck<number>;
     institutionalThreshold: ThresholdCheck<number>;
     volumeEfficiencyThreshold: ThresholdCheck<number>;
+}
+
+/**
+ * Traditional indicators threshold checks for signal filtering
+ */
+export interface TraditionalIndicatorThresholdChecks {
+    vwap: {
+        value: ThresholdCheck<number>;
+        deviation: ThresholdCheck<number>;
+        deviationPercent: ThresholdCheck<number>;
+        maxDeviationThreshold: ThresholdCheck<number>;
+        passed: ThresholdCheck<boolean>;
+        enabled: ThresholdCheck<boolean>;
+        timeframeMs: ThresholdCheck<number>;
+    };
+    rsi: {
+        value: ThresholdCheck<number>;
+        overboughtThreshold: ThresholdCheck<number>;
+        oversoldThreshold: ThresholdCheck<number>;
+        extremeOverbought: ThresholdCheck<number>;
+        extremeOversold: ThresholdCheck<number>;
+        condition: ThresholdCheck<string>; // 'overbought' | 'oversold' | 'neutral' | 'extreme_overbought' | 'extreme_oversold'
+        passed: ThresholdCheck<boolean>;
+        enabled: ThresholdCheck<boolean>;
+        periods: ThresholdCheck<number>;
+        timeframeMs: ThresholdCheck<number>;
+    };
+    oir: {
+        value: ThresholdCheck<number>;
+        buyVolume: ThresholdCheck<number>;
+        sellVolume: ThresholdCheck<number>;
+        totalVolume: ThresholdCheck<number>;
+        buyDominanceThreshold: ThresholdCheck<number>;
+        sellDominanceThreshold: ThresholdCheck<number>;
+        minVolumeThreshold: ThresholdCheck<number>;
+        condition: ThresholdCheck<string>; // 'buy_dominant' | 'sell_dominant' | 'neutral'
+        passed: ThresholdCheck<boolean>;
+        enabled: ThresholdCheck<boolean>;
+        windowMs: ThresholdCheck<number>;
+    };
+    overallDecision: ThresholdCheck<string>; // 'pass' | 'filter' | 'insufficient_data'
+    filtersTriggered: ThresholdCheck<string[]>;
+    combinationMode: ThresholdCheck<string>; // 'all' | 'majority' | 'any'
 }

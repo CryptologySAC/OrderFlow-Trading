@@ -8,6 +8,10 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
+import type {
+    TraditionalIndicators,
+    TraditionalIndicatorValues,
+} from "./helpers/traditionalIndicators.js";
 import {
     AbsorptionZoneTracker,
     type AbsorptionTrackerConfig,
@@ -81,9 +85,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
         logger: ILogger,
         metrics: IMetricsCollector,
         private readonly validationLogger: SignalValidationLogger,
-        signalLogger: ISignalLogger
+        signalLogger: ISignalLogger,
+        protected override readonly traditionalIndicators: TraditionalIndicators
     ) {
-        super(id, logger, metrics, signalLogger);
+        super(id, logger, metrics, signalLogger, traditionalIndicators);
         this.windowMs = Config.getTimeWindow(settings.timeWindowIndex);
         this.enhancementStats = this.initEnhancementStats();
 
@@ -372,7 +377,17 @@ export class AbsorptionDetectorEnhanced extends Detector {
         // Update current price for signal validation
         this.validationLogger.updateCurrentPrice(event.price);
 
-        if (isCoreAbosrption) {
+        // MANDATORY: Calculate traditional indicators for ALL signals (pass or reject)
+        const traditionalIndicatorResult =
+            this.traditionalIndicators.validateSignal(
+                event.price,
+                (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy"
+            );
+
+        if (
+            isCoreAbosrption &&
+            traditionalIndicatorResult.overallDecision !== "filter"
+        ) {
             // Core Absorption: return a Signal Candidate
             // Create Signal Enhancements (Track signal quality indicators)
             const confluenceResult = this.analyzeZoneConfluence(
@@ -398,11 +413,21 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     this.enhancementStats.callCount;
             }
 
+            // Signal passes all thresholds AND traditional indicators
+
             // Create signal candidate with correct interface structure
             const signalCandidate: SignalCandidate = {
                 id: `absorption-${this.getId()}-${event.timestamp}`,
                 type: "absorption" as SignalType,
                 side: dominantSide, // Follow institutional flow direction
+                traditionalIndicators: {
+                    vwap: traditionalIndicatorResult.vwap.value,
+                    rsi: traditionalIndicatorResult.rsi.value,
+                    oir: traditionalIndicatorResult.oir.value,
+                    decision: traditionalIndicatorResult.overallDecision,
+                    filtersTriggered:
+                        traditionalIndicatorResult.filtersTriggered,
+                },
                 timestamp: event.timestamp,
                 confidence: 1, //todo
                 data: {
@@ -455,12 +480,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
             this.logSignalForValidation(
                 signalCandidate,
                 event,
-                thresholdChecks
+                thresholdChecks,
+                traditionalIndicatorResult
             );
             void this.logSuccessfulSignalParameters(
                 signalCandidate,
                 event,
-                thresholdChecks
+                thresholdChecks,
+                traditionalIndicatorResult
             );
 
             return signalCandidate;
@@ -517,6 +544,13 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 thresholdType = "side_determination";
                 thresholdValue = 1;
                 actualValue = 0;
+            } else if (
+                traditionalIndicatorResult.overallDecision === "filter"
+            ) {
+                rejectionReason = "traditional_indicators_filter";
+                thresholdType = "traditional_indicators";
+                thresholdValue = 1;
+                actualValue = 0;
             }
 
             // Log the rejection
@@ -530,7 +564,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
                     actual: actualValue,
                 },
                 thresholdChecks,
-                (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy"
+                (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy",
+                traditionalIndicatorResult
             );
             return null;
         }
@@ -753,7 +788,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
     private logSuccessfulSignalParameters(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
-        thresholdChecks: AbsorptionThresholdChecks
+        thresholdChecks: AbsorptionThresholdChecks,
+        traditionalIndicatorResult: TraditionalIndicatorValues
     ): void {
         try {
             // Collect ACTUAL VALUES that each parameter was checked against when signal passed
@@ -764,7 +800,8 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 "absorption",
                 event,
                 thresholdChecks,
-                signal.side // Signal always has buy/sell
+                signal.side,
+                traditionalIndicatorResult
             );
         } catch (error) {
             this.logger.error(
@@ -784,10 +821,16 @@ export class AbsorptionDetectorEnhanced extends Detector {
     private logSignalForValidation(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
-        thresholdChecks: AbsorptionThresholdChecks
+        thresholdChecks: AbsorptionThresholdChecks,
+        traditionalIndicatorResult: TraditionalIndicatorValues
     ): void {
         try {
-            this.validationLogger.logSignal(signal, event, thresholdChecks);
+            this.validationLogger.logSignal(
+                signal,
+                event,
+                thresholdChecks,
+                traditionalIndicatorResult
+            );
         } catch (error) {
             this.logger.error(
                 "AbsorptionDetectorEnhanced: Failed to log signal for validation",

@@ -12,6 +12,10 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import type { ISignalLogger } from "../infrastructure/signalLoggerInterface.js";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import type {
+    TraditionalIndicators,
+    TraditionalIndicatorValues,
+} from "./helpers/traditionalIndicators.js";
+import type {
     EnrichedTradeEvent,
     StandardZoneData,
     ZoneSnapshot,
@@ -79,10 +83,17 @@ export class ExhaustionDetectorEnhanced extends Detector {
         logger: ILogger,
         metricsCollector: IMetricsCollector,
         signalLogger: ISignalLogger,
-        private readonly validationLogger: SignalValidationLogger
+        private readonly validationLogger: SignalValidationLogger,
+        protected override readonly traditionalIndicators: TraditionalIndicators
     ) {
         // Initialize parent Detector (not ExhaustionDetector)
-        super(id, logger, metricsCollector, signalLogger);
+        super(
+            id,
+            logger,
+            metricsCollector,
+            signalLogger,
+            traditionalIndicators
+        );
 
         // Initialize enhancement statistics
         this.enhancementStats = {
@@ -293,13 +304,33 @@ export class ExhaustionDetectorEnhanced extends Detector {
         // Update current price for signal validation
         this.validationLogger.updateCurrentPrice(event.price);
 
-        if (isExhaustion) {
+        const signalSide =
+            (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy";
+
+        // MANDATORY: Calculate traditional indicators for ALL signals (pass or reject)
+        const traditionalIndicatorResult =
+            this.traditionalIndicators.validateSignal(event.price, signalSide);
+
+        if (
+            isExhaustion &&
+            traditionalIndicatorResult.overallDecision !== "filter"
+        ) {
+            // Signal passes all thresholds AND traditional indicators
+
             const signalCandidate: SignalCandidate = {
                 id: `core-exhaustion-${event.timestamp}-${event.price}-${depletionResult.depletionRatio}}`,
                 type: "exhaustion" as SignalType,
-                side: (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy",
+                side: signalSide,
                 confidence: 1,
                 timestamp: event.timestamp,
+                traditionalIndicators: {
+                    vwap: traditionalIndicatorResult.vwap.value,
+                    rsi: traditionalIndicatorResult.rsi.value,
+                    oir: traditionalIndicatorResult.oir.value,
+                    decision: traditionalIndicatorResult.overallDecision,
+                    filtersTriggered:
+                        traditionalIndicatorResult.filtersTriggered,
+                },
                 data: {
                     price: event.price,
                     side: (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy",
@@ -317,12 +348,14 @@ export class ExhaustionDetectorEnhanced extends Detector {
             this.logSignalForValidation(
                 signalCandidate,
                 event,
-                thresholdChecks
+                thresholdChecks,
+                traditionalIndicatorResult
             );
             void this.logSuccessfulSignalParameters(
                 signalCandidate,
                 event,
-                thresholdChecks
+                thresholdChecks,
+                traditionalIndicatorResult
             );
 
             return signalCandidate;
@@ -354,6 +387,13 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 thresholdType = "depletion_ratio";
                 thresholdValue = this.settings.exhaustionThreshold;
                 actualValue = depletionResult.depletionRatio;
+            } else if (
+                traditionalIndicatorResult.overallDecision === "filter"
+            ) {
+                rejectionReason = "traditional_indicators_filter";
+                thresholdType = "traditional_indicators";
+                thresholdValue = 1;
+                actualValue = 0;
             }
 
             // Log the rejection
@@ -367,7 +407,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
                     actual: actualValue,
                 },
                 thresholdChecks,
-                (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy"
+                signalSide,
+                traditionalIndicatorResult
             );
             return null;
         }
@@ -398,10 +439,16 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private logSignalForValidation(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
-        thresholdChecks: ExhaustionThresholdChecks
+        thresholdChecks: ExhaustionThresholdChecks,
+        traditionalIndicatorResult: TraditionalIndicatorValues
     ): void {
         try {
-            this.validationLogger.logSignal(signal, event, thresholdChecks);
+            this.validationLogger.logSignal(
+                signal,
+                event,
+                thresholdChecks,
+                traditionalIndicatorResult
+            );
         } catch (error) {
             this.logger.error(
                 "ExhaustionDetectorEnhanced: Failed to log signal for validation",
@@ -420,7 +467,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private logSuccessfulSignalParameters(
         signal: SignalCandidate,
         event: EnrichedTradeEvent,
-        thresholdChecks: ExhaustionThresholdChecks
+        thresholdChecks: ExhaustionThresholdChecks,
+        traditionalIndicatorResult: TraditionalIndicatorValues
     ): void {
         try {
             // Collect ACTUAL VALUES that each parameter was checked against when signal passed
@@ -429,7 +477,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 "exhaustion",
                 event,
                 thresholdChecks,
-                signal.side // Signal always has buy/sell
+                signal.side,
+                traditionalIndicatorResult
             );
         } catch (error) {
             this.logger.error(
