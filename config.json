@@ -113,7 +113,7 @@
                 "maxBufferSize": 100000
             },
             "tradesProcessor": {
-                "storageTime": 5400000,
+                "storageTime": 108000000,
                 "maxBacklogRetries": 3,
                 "backlogBatchSize": 500,
                 "maxMemoryTrades": 100000,
@@ -224,14 +224,14 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 15,
-                "exhaustionThreshold": 0.1,
+                "minAggVolume": 25,
+                "exhaustionThreshold": 0.25,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
                 "maxZonesPerSide": 15,
-                "zoneDepletionThreshold": 0.3,
+                "zoneDepletionThreshold": 0.15,
                 "gapDetectionTicks": 3,
-                "passiveRatioBalanceThreshold": 0.99,
+                "passiveRatioBalanceThreshold": 0.85,
                 "zoneHistoryWindowMs": 300000
             },
 

@@ -21,7 +21,7 @@
         "clean": "rm -r dist",
         "format": "yarn prettier && yarn lint",
         "lint": "eslint \"src/**/*.{ts,tsx}\" --fix",
-        "prettier": "npx prettier --write './**/*.{ts,tsx,js,json,css,html,md}'",
+        "prettier": "npx prettier --write './**/*.{ts,tsx}'",
         "updates": "npx npm-check-updates",
         "update": "npx npm-check-updates -u",
         "build": "yarn format && tsc -p tsconfig.build.json",
@@ -31,7 +31,8 @@
         "typecheck": "tsc --noEmit",
         "build:watch": "tsc -p tsconfig.build.json --watch",
         "analyze:signals": "npx tsx analysis/analyze_success_with_price_reconstruction.ts",
-        "analyze:thresholds": "npx tsx analysis/analyze_threshold_optimization_binary.ts"
+        "analyze:thresholds": "npx tsx analysis/analyze_threshold_optimization_binary.ts",
+        "analyze:traditional": "npx  --node-options='--max-old-space-size=16384' tsx analysis/analyze_traditional_indicators.ts"
     },
     "devDependencies": {
         "@types/better-sqlite3": "7.6.13",

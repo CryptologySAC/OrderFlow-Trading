@@ -96,6 +96,9 @@ export class TraditionalIndicators {
         private readonly config: TraditionalIndicatorsConfig,
         private readonly logger: ILogger
     ) {
+        // Dynamic config validation
+        this.validateConfig();
+
         if (!config.enabled) {
             this.logger.info(
                 "Traditional indicators disabled via configuration"
@@ -121,28 +124,90 @@ export class TraditionalIndicators {
         });
     }
 
+    private validateConfig(): void {
+        if (this.config.timeframeMs <= 0) {
+            throw new Error("timeframeMs must be positive");
+        }
+        if (this.config.vwap.windowMs <= 0) {
+            throw new Error("vwap.windowMs must be positive");
+        }
+        if (this.config.rsi.period <= 0) {
+            throw new Error("rsi.period must be positive");
+        }
+        if (this.config.oir.windowMs <= 0) {
+            throw new Error("oir.windowMs must be positive");
+        }
+        if (this.config.oir.minVolumeThreshold < 0) {
+            throw new Error("oir.minVolumeThreshold must be non-negative");
+        }
+        // Add more validations as needed
+    }
+
     /**
      * Update indicators with new trade data
      */
     public updateIndicators(trade: EnrichedTradeEvent): void {
         if (!this.config.enabled) return;
 
-        const now = trade.timestamp;
+        try {
+            // Input validation for trade data
+            if (
+                !trade ||
+                typeof trade.timestamp !== "number" ||
+                trade.timestamp <= 0
+            ) {
+                throw new Error("Invalid trade timestamp");
+            }
+            if (typeof trade.price !== "number" || trade.price <= 0) {
+                throw new Error("Invalid trade price");
+            }
+            if (typeof trade.quantity !== "number" || trade.quantity < 0) {
+                throw new Error("Invalid trade quantity");
+            }
 
-        // Update indicators based on timeframe
-        if (this.shouldUpdateVWAP(now)) {
-            this.updateVWAP(trade);
-            this.lastVWAPUpdate = now;
-        }
+            const now = trade.timestamp;
 
-        if (this.shouldUpdateRSI(now)) {
-            this.updateRSI(trade);
-            this.lastRSIUpdate = now;
-        }
+            // Update indicators based on timeframe with error handling
+            if (this.shouldUpdateVWAP(now)) {
+                this.updateVWAP(trade);
+                this.lastVWAPUpdate = now;
+                this.logger.debug("VWAP updated", {
+                    timestamp: now,
+                    price: trade.price,
+                    volume: trade.quantity,
+                });
+            }
 
-        if (this.shouldUpdateOIR(now)) {
-            this.updateOIR(trade);
-            this.lastOIRUpdate = now;
+            if (this.shouldUpdateRSI(now)) {
+                this.updateRSI(trade);
+                this.lastRSIUpdate = now;
+                this.logger.debug("RSI updated", {
+                    timestamp: now,
+                    price: trade.price,
+                });
+            }
+
+            if (this.shouldUpdateOIR(now)) {
+                this.updateOIR(trade);
+                this.lastOIRUpdate = now;
+                this.logger.debug("OIR updated", {
+                    timestamp: now,
+                    volume: trade.quantity,
+                    buyerIsMaker: trade.buyerIsMaker,
+                });
+            }
+        } catch (error) {
+            const errorMessage =
+                error instanceof Error ? error.message : "Unknown error";
+            this.logger.error("Error updating indicators", {
+                error: errorMessage,
+                trade: {
+                    timestamp: trade.timestamp,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                },
+            });
+            // Continue processing other indicators if possible
         }
     }
 
@@ -153,51 +218,101 @@ export class TraditionalIndicators {
         price: number,
         side: "buy" | "sell"
     ): TraditionalIndicatorValues {
-        if (!this.config.enabled) {
-            return this.createPassResult("traditional_indicators_disabled");
-        }
+        try {
+            // Input validation
+            if (typeof price !== "number" || price <= 0) {
+                throw new Error("Invalid price for signal validation");
+            }
+            if (side !== "buy" && side !== "sell") {
+                throw new Error("Invalid side for signal validation");
+            }
 
-        const vwapResult = this.validateVWAP(price, side);
-        const rsiResult = this.validateRSI(side);
-        const oirResult = this.validateOIR(side);
+            if (!this.config.enabled) {
+                const result = this.createPassResult(
+                    "traditional_indicators_disabled"
+                );
+                this.logger.info("Signal validation bypassed", {
+                    reason: "disabled",
+                    price,
+                    side,
+                });
+                return result;
+            }
 
-        // Determine overall decision based on combination mode
-        const overallDecision = this.determineOverallDecision(
-            vwapResult.passed,
-            rsiResult.passed,
-            oirResult.passed
-        );
+            const vwapResult = this.validateVWAP(price, side);
+            const rsiResult = this.validateRSI(side);
+            const oirResult = this.validateOIR(side);
 
-        const filtersTriggered = [];
-        if (
-            !vwapResult.passed &&
-            this.config.vwap.enabled &&
-            this.config.filterStrength.vwapWeight > 0
-        ) {
-            filtersTriggered.push("vwap");
-        }
-        if (
-            !rsiResult.passed &&
-            this.config.rsi.enabled &&
-            this.config.filterStrength.rsiWeight > 0
-        ) {
-            filtersTriggered.push("rsi");
-        }
-        if (
-            !oirResult.passed &&
-            this.config.oir.enabled &&
-            this.config.filterStrength.oirWeight > 0
-        ) {
-            filtersTriggered.push("oir");
-        }
+            // Determine overall decision based on combination mode
+            const overallDecision = this.determineOverallDecision(
+                vwapResult.passed,
+                rsiResult.passed,
+                oirResult.passed
+            );
 
-        return {
-            vwap: vwapResult,
-            rsi: rsiResult,
-            oir: oirResult,
-            overallDecision,
-            filtersTriggered,
-        };
+            const filtersTriggered = [];
+            if (
+                !vwapResult.passed &&
+                this.config.vwap.enabled &&
+                this.config.filterStrength.vwapWeight > 0
+            ) {
+                filtersTriggered.push("vwap");
+            }
+            if (
+                !rsiResult.passed &&
+                this.config.rsi.enabled &&
+                this.config.filterStrength.rsiWeight > 0
+            ) {
+                filtersTriggered.push("rsi");
+            }
+            if (
+                !oirResult.passed &&
+                this.config.oir.enabled &&
+                this.config.filterStrength.oirWeight > 0
+            ) {
+                filtersTriggered.push("oir");
+            }
+
+            const result = {
+                vwap: vwapResult,
+                rsi: rsiResult,
+                oir: oirResult,
+                overallDecision,
+                filtersTriggered,
+            };
+
+            // Audit trail logging
+            this.logger.info("Signal validation completed", {
+                price,
+                side,
+                overallDecision,
+                filtersTriggered,
+                vwap: { value: vwapResult.value, passed: vwapResult.passed },
+                rsi: {
+                    value: rsiResult.value,
+                    condition: rsiResult.condition,
+                    passed: rsiResult.passed,
+                },
+                oir: {
+                    value: oirResult.value,
+                    condition: oirResult.condition,
+                    passed: oirResult.passed,
+                },
+            });
+
+            return result;
+        } catch (error) {
+            const errorMessage =
+                error instanceof Error ? error.message : "Unknown error";
+            this.logger.error("Error validating signal", {
+                error: errorMessage,
+                price,
+                side,
+            });
+
+            // Return a safe default on error
+            return this.createPassResult("validation_error");
+        }
     }
 
     /**
@@ -471,9 +586,30 @@ export class TraditionalIndicators {
     private updateOIR(trade: EnrichedTradeEvent): void {
         if (!this.config.oir.enabled) return;
 
-        const buyVolume = !trade.buyerIsMaker ? trade.quantity || 0 : 0;
-        const sellVolume = trade.buyerIsMaker ? trade.quantity || 0 : 0;
-        const totalVolume = trade.quantity || 0;
+        // Refined order classification based on buyerIsMaker and trade characteristics
+        let buyVolume = 0;
+        let sellVolume = 0;
+        const quantity = trade.quantity || 0;
+
+        if (!trade.buyerIsMaker) {
+            // Buyer is taker (aggressive buy)
+            buyVolume = quantity;
+        } else {
+            // Seller is taker (aggressive sell)
+            sellVolume = quantity;
+        }
+
+        // Additional refinement: Consider large trades as more significant
+        // This helps distinguish between retail and institutional activity
+        const isLargeTrade = quantity > this.config.oir.minVolumeThreshold * 10; // Use 10x min threshold as large trade indicator
+        if (isLargeTrade) {
+            // Weight large trades more heavily in the imbalance calculation
+            const weight = 2; // Default weight for large trades
+            buyVolume = FinancialMath.multiplyQuantities(buyVolume, weight);
+            sellVolume = FinancialMath.multiplyQuantities(sellVolume, weight);
+        }
+
+        const totalVolume = FinancialMath.safeAdd(buyVolume, sellVolume);
 
         const oirData: OIRData = {
             timestamp: trade.timestamp,

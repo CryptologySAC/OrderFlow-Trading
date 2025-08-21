@@ -20,7 +20,4 @@ logs/
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
-analysis/reports/successful_signals_actual_tp_analysis.html
-analysis/reports/threshold_optimization_report.json
-analysis/reports/threshold_optimization_report.html
-analysis/reports/threshold_optimization_binary.html
+analysis/reports/*

@@ -1808,9 +1808,6 @@ ${Array.from(opt.allThresholds?.entries() || opt.optimalThresholds.entries())
         if (typeof data === "object" && "value" in data) {
             const marker = data.optimized ? " ⚡" : "";
             return `${name}: ${data.value.toFixed(6)}${marker}`;
-        } else {
-            // Fallback for old format
-            return `${name}: ${typeof data === "number" ? data.toFixed(6) : data}`;
         }
     })
     .join("<br>")}

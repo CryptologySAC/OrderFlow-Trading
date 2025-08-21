@@ -375,7 +375,7 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
     public async fillBacklog(): Promise<void> {
         const startWall = Date.now();
         const targetCoverageMs = this.storageTime + 10 * 60 * 1000; // 90min + 10min buffer = 100min
-        const maxBlocks = 50; // Safety limit
+        const maxBlocks = 500; // Safety limit
         const tradesPerBlock = 1000;
         let retries = 0;
 

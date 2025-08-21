@@ -1607,8 +1607,8 @@ export class OrderFlowDashboard {
             const correlationId = randomUUID();
             this.logger.info("Starting scheduled purge", {}, correlationId);
 
-            // 🔧 ANALYSIS: Use 24 hours retention for signal analysis, startup still loads 90 minutes
-            const retentionHours = 24; // Full day retention for retrospective signal analysis
+            // 🔧 ANALYSIS: Use 72 hours retention for signal analysis, startup still loads 90 minutes
+            const retentionHours = 72; // 3-day retention for retrospective signal analysis
 
             this.threadManager
                 .callStorage("purgeOldEntries", correlationId, retentionHours)

@@ -93,8 +93,8 @@ export interface SignalRejectionRecord {
         | ExhaustionThresholdChecks
         | DeltaCVDThresholdChecks;
 
-    // Traditional Indicators (for signal filtering analysis)
-    traditionalIndicators: TraditionalIndicatorValues | undefined;
+    // Traditional Indicators (for signal filtering analysis) - MANDATORY for analysis
+    traditionalIndicators: TraditionalIndicatorValues;
 
     // Post-rejection analysis (filled later)
     actualTPPrice?: number; // The price where TP would have been hit (if reached)
@@ -792,7 +792,14 @@ export class SignalValidationLogger {
     }
 
     /**
-     * ✅ Log rejected signal with ALL CALCULATED VALUES
+     * ✅ Log rejected signal with ALL CALCULATED VALUES including MANDATORY traditional indicators
+     *
+     * CRITICAL: traditionalIndicators parameter is MANDATORY for precision analysis.
+     * All callers MUST provide traditional indicator values to enable:
+     * - Signal filtering accuracy analysis
+     * - Traditional indicator optimization
+     * - Phase direction correlation studies
+     * - Dynamic color-changing line analysis
      */
     public logRejection(
         detectorType: "exhaustion" | "absorption" | "deltacvd",
@@ -1702,6 +1709,48 @@ export class SignalValidationLogger {
         return {
             pendingValidations: this.pendingValidations.size,
             totalLogged: this.pendingValidations.size, // Simplified for this implementation
+        };
+    }
+
+    /**
+     * ✅ Create default traditional indicator values for backwards compatibility
+     *
+     * USAGE: When traditional indicators are not available but logging is required.
+     * This ensures all logs have traditional indicator data while indicating insufficient data.
+     *
+     * @param reason - Reason why traditional indicators are not available
+     * @returns TraditionalIndicatorValues with null values and appropriate reasons
+     */
+    public static createDefaultTraditionalIndicators(
+        reason: string = "insufficient_data"
+    ): TraditionalIndicatorValues {
+        return {
+            vwap: {
+                value: null,
+                deviation: null,
+                deviationPercent: null,
+                volume: 0,
+                passed: true,
+                reason,
+            },
+            rsi: {
+                value: null,
+                condition: "neutral",
+                passed: true,
+                periods: 14,
+                reason,
+            },
+            oir: {
+                value: null,
+                buyVolume: 0,
+                sellVolume: 0,
+                totalVolume: 0,
+                condition: "neutral",
+                passed: true,
+                reason,
+            },
+            overallDecision: "insufficient_data",
+            filtersTriggered: [],
         };
     }
 }
