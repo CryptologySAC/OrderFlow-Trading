@@ -367,13 +367,18 @@ export class ExhaustionDetectorEnhanced extends Detector {
             let thresholdValue = 0;
             let actualValue = 0;
 
-            if (!passesThreshold_minAggVolume) {
+            if (traditionalIndicatorResult.overallDecision === "filter") {
+                rejectionReason = "traditional_indicators_filter";
+                thresholdType = "traditional_indicators";
+                thresholdValue = 1;
+                actualValue = 0;
+            } else if (!passesThreshold_minAggVolume) {
                 rejectionReason = "insufficient_aggressive_volume";
                 thresholdType = "aggressive_volume";
                 thresholdValue = this.settings.minAggVolume;
                 actualValue = volumePressure.directionalAggressiveVolume;
             } else if (!passesThreshold_passiveRatioBalanceThreshold) {
-                rejectionReason = "passive_volume_ratio_too_low";
+                rejectionReason = "passive_volume_ratio_too_high";
                 thresholdType = "passive_volume_ratio";
                 thresholdValue = this.settings.passiveRatioBalanceThreshold;
                 actualValue = volumePressure.accumulatedPassiveRatio;
@@ -387,13 +392,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 thresholdType = "depletion_ratio";
                 thresholdValue = this.settings.exhaustionThreshold;
                 actualValue = depletionResult.depletionRatio;
-            } else if (
-                traditionalIndicatorResult.overallDecision === "filter"
-            ) {
-                rejectionReason = "traditional_indicators_filter";
-                thresholdType = "traditional_indicators";
-                thresholdValue = 1;
-                actualValue = 0;
             }
 
             // Log the rejection

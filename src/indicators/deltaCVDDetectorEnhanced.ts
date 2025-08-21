@@ -368,7 +368,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const passesThreshold_signalThreshold =
             realConfidence >= this.enhancementConfig.signalThreshold;
         const passesThreshold_cvdImbalanceThreshold =
-            divergenceResult.maxVolumeRatio >=
+            divergenceResult.maxVolumeRatio <=
             this.enhancementConfig.cvdImbalanceThreshold;
         const passesThreshold_institutionalThreshold =
             event.quantity >= this.enhancementConfig.institutionalThreshold;
@@ -421,7 +421,9 @@ export class DeltaCVDDetectorEnhanced extends Detector {
 
             // Determine primary rejection reason
             let rejectionReason = "comprehensive_cvd_rejection";
-            if (!passesThreshold_minTradesPerSec)
+            if (traditionalIndicatorResult.overallDecision === "filter")
+                rejectionReason = "traditional_indicators_filter";
+            else if (!passesThreshold_minTradesPerSec)
                 rejectionReason = "not_passesThreshold_minTradesPerSec";
             else if (!passesThreshold_minVolPerSec)
                 rejectionReason = "not_passesThreshold_minVolPerSec";
@@ -433,8 +435,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 rejectionReason = "not_hasValidSignalSide";
             else if (!passesThreshold_institutionalThreshold)
                 rejectionReason = "not_passesThreshold_institutionalThreshold";
-            else if (traditionalIndicatorResult.overallDecision === "filter")
-                rejectionReason = "traditional_indicators_filter";
 
             this.logSignalRejection(
                 event,

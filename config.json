@@ -224,7 +224,7 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 25,
+                "minAggVolume": 10,
                 "exhaustionThreshold": 0.25,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
@@ -236,11 +236,11 @@
             },
 
             "absorption": {
-                "minAggVolume": 300,
+                "minAggVolume": 50,
                 "passiveAbsorptionThreshold": 0.975,
                 "priceEfficiencyThreshold": 0.000387,
                 "maxPriceImpactRatio": 0.000421,
-                "minPassiveMultiplier": 38,
+                "minPassiveMultiplier": 38.4,
                 "balanceThreshold": 0.0085,
                 "priceStabilityTicks": 5,
                 "maxVolumeMultiplierRatio": 4.44,
@@ -313,13 +313,13 @@
             },
             "deltaCVD": {
                 "minTradesPerSec": 0.4,
-                "minVolPerSec": 0.5,
+                "minVolPerSec": 5.25,
                 "signalThreshold": 0.79,
                 "eventCooldownMs": 1000,
                 "cvdImbalanceThreshold": 0.18,
                 "timeWindowIndex": 0,
-                "institutionalThreshold": 25.0,
-                "volumeEfficiencyThreshold": 0.375,
+                "institutionalThreshold": 45.0,
+                "volumeEfficiencyThreshold": 0.425,
                 "zoneSearchDistance": 15
             },
             "accumulation": {
@@ -419,8 +419,8 @@
                 "oir": {
                     "enabled": true,
                     "windowMs": 300000,
-                    "buyDominanceThreshold": 0.6,
-                    "sellDominanceThreshold": 0.4,
+                    "buyDominanceThreshold": 0.8,
+                    "sellDominanceThreshold": 0.2,
                     "neutralZone": 0.1,
                     "minVolumeThreshold": 100
                 },

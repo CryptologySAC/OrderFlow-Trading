@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Binary Threshold Optimization Report - 2025-08-20</title>
+    <title>Binary Threshold Optimization Report - 2025-08-21</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -84,11 +84,11 @@
         <h1>🎯 Binary Threshold Optimization Report</h1>
         <div class="metric">
             <div class="metric-label">Analysis Date</div>
-            <div class="metric-value">2025-08-20</div>
+            <div class="metric-value">2025-08-21</div>
         </div>
         <div class="metric">
             <div class="metric-label">Total Phases</div>
-            <div class="metric-value">5</div>
+            <div class="metric-value">19</div>
         </div>
         <div class="metric">
             <div class="metric-label">Cross-Detector Coverage</div>
@@ -97,19 +97,19 @@
         
         <div class="metric">
             <div class="metric-label">Signal Clusters</div>
-            <div class="metric-value">808</div>
+            <div class="metric-value">68</div>
         </div>
         <div class="metric">
             <div class="metric-label">Mixed Clusters Resolved</div>
-            <div class="metric-value">25</div>
+            <div class="metric-value">1</div>
         </div>
         <div class="metric">
             <div class="metric-label">Signals Reclassified</div>
-            <div class="metric-value">4055</div>
+            <div class="metric-value">170</div>
         </div>
         <div class="metric">
             <div class="metric-label">Largest Cluster</div>
-            <div class="metric-value">176 signals</div>
+            <div class="metric-value">22 signals</div>
         </div>
 
         
@@ -117,11 +117,11 @@
         <div class="phase-section">
             <div class="metric">
                 <div class="metric-label">Total Signals</div>
-                <div class="metric-value">4863</div>
+                <div class="metric-value">238</div>
             </div>
             <div class="metric">
                 <div class="metric-label">With Traditional Indicators</div>
-                <div class="metric-value">4711 (97%)</div>
+                <div class="metric-value">238 (100%)</div>
             </div>
             <div class="metric">
                 <div class="metric-label">Filtered by Traditional</div>
@@ -134,15 +134,15 @@
             <h4>Signal Categories (After Traditional Filter)</h4>
             <div class="metric">
                 <div class="metric-label">Successful Signals</div>
-                <div class="metric-value">439</div>
+                <div class="metric-value">21</div>
             </div>
             <div class="metric">
                 <div class="metric-label">Harmful Signals</div>
-                <div class="metric-value">2221</div>
+                <div class="metric-value">117</div>
             </div>
             <div class="metric">
                 <div class="metric-label">Harmless Signals</div>
-                <div class="metric-value">2051</div>
+                <div class="metric-value">100</div>
             </div>
             
             <h4>Traditional Indicators Impact on Optimization</h4>
@@ -155,15 +155,15 @@
         <h2>📊 Phase Categorization</h2>
         
         
-            <div class="phase-section harmful">
-                <h3>Phase 1 - HARMFUL (UP)</h3>
+            <div class="phase-section harmless">
+                <h3>Phase 1 - HARMLESS (DOWN)</h3>
                 <div class="metric">
                     <div class="metric-label">Time Range (Lima)</div>
-                    <div class="metric-value">08/19/2025, 19:27:41 → 08/19/2025, 19:36:00</div>
+                    <div class="metric-value">08/20/2025, 19:00:00 → 08/20/2025, 19:19:31</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">Price Movement</div>
-                    <div class="metric-value">$113.19 → $113.86 (0.59%)</div>
+                    <div class="metric-value">$116.06 → $115.57 (0.42%)</div>
                 </div>
                 
                 
@@ -179,7 +179,112 @@
                     <tr>
                         <td><strong>DELTACVD</strong></td>
                         <td class="pass">0</td>
-                        <td class="fail">16</td>
+                        <td class="fail">0</td>
+                        <td style="color: #FFA726">9</td>
+                        <td class="fail">3</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section mixed">
+                <h3>Phase 2 - MIXED (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/20/2025, 19:19:31 → 08/20/2025, 19:45:58</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.57 → $116.53 (0.83%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">1</td>
+                        <td style="color: #FFA726">5</td>
+                        <td class="fail">1</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section harmful">
+                <h3>Phase 3 - HARMFUL (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/20/2025, 19:45:58 → 08/20/2025, 20:20:15</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.53 → $115.91 (0.53%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">25</td>
+                        <td style="color: #FFA726">0</td>
+                        <td class="fail">25</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section harmful">
+                <h3>Phase 4 - HARMFUL (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/20/2025, 20:20:15 → 08/20/2025, 21:01:50</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.91 → $117.19 (1.10%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">14</td>
                         <td style="color: #FFA726">0</td>
                         <td class="fail">1</td>
                     </tr>
@@ -191,59 +296,14 @@
             </div>
             
             <div class="phase-section mixed">
-                <h3>Phase 4 - MIXED (UP)</h3>
-                <div class="metric">
-                    <div class="metric-label">Time Range (Lima)</div>
-                    <div class="metric-value">08/19/2025, 22:07:04 → 08/19/2025, 22:34:45</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Price Movement</div>
-                    <div class="metric-value">$113.66 → $114.36 (0.62%)</div>
-                </div>
-                
-                
-                <table>
-                    <tr>
-                        <th>Detector</th>
-                        <th>Successful</th>
-                        <th>Harmful</th>
-                        <th>Harmless</th>
-                        <th>Wrong-Sided</th>
-                    </tr>
-                    
-                    <tr>
-                        <td><strong>ABSORPTION</strong></td>
-                        <td class="pass">8</td>
-                        <td class="fail">8</td>
-                        <td style="color: #FFA726">8</td>
-                        <td class="fail">8</td>
-                    </tr>
-                    
-                    <tr>
-                        <td><strong>DELTACVD</strong></td>
-                        <td class="pass">6</td>
-                        <td class="fail">92</td>
-                        <td style="color: #FFA726">24</td>
-                        <td class="fail">38</td>
-                    </tr>
-                    
-                </table>
-                
-                
-                
-                <p><strong>Cross-detector coverage:</strong> absorption, deltacvd</p>
-                
-            </div>
-            
-            <div class="phase-section mixed">
                 <h3>Phase 5 - MIXED (DOWN)</h3>
                 <div class="metric">
                     <div class="metric-label">Time Range (Lima)</div>
-                    <div class="metric-value">08/19/2025, 22:34:45 → 08/19/2025, 22:42:53</div>
+                    <div class="metric-value">08/20/2025, 21:01:50 → 08/20/2025, 21:39:17</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">Price Movement</div>
-                    <div class="metric-value">$114.36 → $113.67 (0.60%)</div>
+                    <div class="metric-value">$117.19 → $115.56 (1.39%)</div>
                 </div>
                 
                 
@@ -257,62 +317,11 @@
                     </tr>
                     
                     <tr>
-                        <td><strong>ABSORPTION</strong></td>
-                        <td class="pass">0</td>
-                        <td class="fail">0</td>
-                        <td style="color: #FFA726">2</td>
-                        <td class="fail">2</td>
-                    </tr>
-                    
-                    <tr>
                         <td><strong>DELTACVD</strong></td>
-                        <td class="pass">0</td>
-                        <td class="fail">5</td>
-                        <td style="color: #FFA726">0</td>
-                        <td class="fail">5</td>
-                    </tr>
-                    
-                </table>
-                
-                
-                
-            </div>
-            
-            <div class="phase-section mixed">
-                <h3>Phase 6 - MIXED (UP)</h3>
-                <div class="metric">
-                    <div class="metric-label">Time Range (Lima)</div>
-                    <div class="metric-value">08/19/2025, 22:42:53 → 08/19/2025, 23:32:29</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-label">Price Movement</div>
-                    <div class="metric-value">$113.67 → $114.53 (0.76%)</div>
-                </div>
-                
-                
-                <table>
-                    <tr>
-                        <th>Detector</th>
-                        <th>Successful</th>
-                        <th>Harmful</th>
-                        <th>Harmless</th>
-                        <th>Wrong-Sided</th>
-                    </tr>
-                    
-                    <tr>
-                        <td><strong>ABSORPTION</strong></td>
-                        <td class="pass">0</td>
-                        <td class="fail">28</td>
-                        <td style="color: #FFA726">0</td>
-                        <td class="fail">28</td>
-                    </tr>
-                    
-                    <tr>
-                        <td><strong>DELTACVD</strong></td>
-                        <td class="pass">27</td>
-                        <td class="fail">61</td>
-                        <td style="color: #FFA726">207</td>
-                        <td class="fail">115</td>
+                        <td class="pass">14</td>
+                        <td class="fail">48</td>
+                        <td style="color: #FFA726">26</td>
+                        <td class="fail">31</td>
                     </tr>
                     
                 </table>
@@ -324,14 +333,14 @@
             </div>
             
             <div class="phase-section mixed">
-                <h3>Phase 7 - MIXED (UP)</h3>
+                <h3>Phase 6 - MIXED (UP)</h3>
                 <div class="metric">
                     <div class="metric-label">Time Range (Lima)</div>
-                    <div class="metric-value">08/19/2025, 23:32:29 → 08/20/2025, 03:41:42</div>
+                    <div class="metric-value">08/20/2025, 21:39:17 → 08/20/2025, 22:10:30</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">Price Movement</div>
-                    <div class="metric-value">$114.53 → $115.33 (0.70%)</div>
+                    <div class="metric-value">$115.56 → $117.30 (1.51%)</div>
                 </div>
                 
                 
@@ -345,26 +354,399 @@
                     </tr>
                     
                     <tr>
-                        <td><strong>ABSORPTION</strong></td>
-                        <td class="pass">24</td>
-                        <td class="fail">30</td>
-                        <td style="color: #FFA726">81</td>
-                        <td class="fail">63</td>
-                    </tr>
-                    
-                    <tr>
                         <td><strong>DELTACVD</strong></td>
-                        <td class="pass">90</td>
-                        <td class="fail">395</td>
-                        <td style="color: #FFA726">554</td>
-                        <td class="fail">340</td>
+                        <td class="pass">0</td>
+                        <td class="fail">8</td>
+                        <td style="color: #FFA726">9</td>
+                        <td class="fail">0</td>
                     </tr>
                     
                 </table>
                 
                 
                 
-                <p><strong>Cross-detector coverage:</strong> absorption, deltacvd</p>
+            </div>
+            
+            <div class="phase-section mixed">
+                <h3>Phase 7 - MIXED (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/20/2025, 22:10:30 → 08/20/2025, 23:22:46</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$117.30 → $115.81 (1.27%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">1</td>
+                        <td class="fail">6</td>
+                        <td style="color: #FFA726">17</td>
+                        <td class="fail">15</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+                <p><strong>Cross-detector coverage:</strong> deltacvd</p>
+                
+            </div>
+            
+            <div class="phase-section harmless">
+                <h3>Phase 8 - HARMLESS (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/20/2025, 23:22:46 → 08/20/2025, 23:49:13</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.81 → $116.43 (0.54%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">0</td>
+                        <td style="color: #FFA726">4</td>
+                        <td class="fail">0</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section mixed">
+                <h3>Phase 9 - MIXED (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/20/2025, 23:49:13 → 08/21/2025, 00:22:39</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.43 → $115.57 (0.74%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">4</td>
+                        <td style="color: #FFA726">1</td>
+                        <td class="fail">0</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section harmless">
+                <h3>Phase 10 - HARMLESS (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 00:22:39 → 08/21/2025, 00:59:57</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.57 → $116.36 (0.68%)</div>
+                </div>
+                
+                <p>No signals detected in this phase</p>
+                
+                
+            </div>
+            
+            <div class="phase-section mixed">
+                <h3>Phase 11 - MIXED (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 00:59:57 → 08/21/2025, 01:24:13</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.36 → $115.57 (0.68%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">6</td>
+                        <td class="fail">0</td>
+                        <td style="color: #FFA726">6</td>
+                        <td class="fail">0</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+                <p><strong>Cross-detector coverage:</strong> deltacvd</p>
+                
+            </div>
+            
+            <div class="phase-section harmless">
+                <h3>Phase 12 - HARMLESS (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 01:24:13 → 08/21/2025, 01:36:45</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.57 → $116.03 (0.40%)</div>
+                </div>
+                
+                <p>No signals detected in this phase</p>
+                
+                
+            </div>
+            
+            <div class="phase-section harmless">
+                <h3>Phase 13 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 01:36:45 → 08/21/2025, 02:01:23</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.03 → $115.60 (0.37%)</div>
+                </div>
+                
+                <p>No signals detected in this phase</p>
+                
+                
+            </div>
+            
+            <div class="phase-section harmful">
+                <h3>Phase 14 - HARMFUL (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 02:01:23 → 08/21/2025, 02:08:20</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.60 → $116.08 (0.42%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">1</td>
+                        <td style="color: #FFA726">0</td>
+                        <td class="fail">0</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section harmful">
+                <h3>Phase 15 - HARMFUL (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 02:08:20 → 08/21/2025, 02:21:39</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.08 → $115.11 (0.84%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">7</td>
+                        <td style="color: #FFA726">0</td>
+                        <td class="fail">0</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section harmful">
+                <h3>Phase 16 - HARMFUL (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 02:21:39 → 08/21/2025, 03:08:55</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.11 → $116.36 (1.09%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">3</td>
+                        <td style="color: #FFA726">0</td>
+                        <td class="fail">0</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section harmless">
+                <h3>Phase 17 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 03:08:55 → 08/21/2025, 04:18:48</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$116.36 → $114.82 (1.32%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">0</td>
+                        <td style="color: #FFA726">20</td>
+                        <td class="fail">3</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section harmless">
+                <h3>Phase 18 - HARMLESS (UP)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 04:18:48 → 08/21/2025, 04:41:25</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$114.82 → $115.65 (0.72%)</div>
+                </div>
+                
+                
+                <table>
+                    <tr>
+                        <th>Detector</th>
+                        <th>Successful</th>
+                        <th>Harmful</th>
+                        <th>Harmless</th>
+                        <th>Wrong-Sided</th>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>DELTACVD</strong></td>
+                        <td class="pass">0</td>
+                        <td class="fail">0</td>
+                        <td style="color: #FFA726">2</td>
+                        <td class="fail">0</td>
+                    </tr>
+                    
+                </table>
+                
+                
+                
+            </div>
+            
+            <div class="phase-section harmless">
+                <h3>Phase 19 - HARMLESS (DOWN)</h3>
+                <div class="metric">
+                    <div class="metric-label">Time Range (Lima)</div>
+                    <div class="metric-value">08/21/2025, 04:41:25 → 08/21/2025, 05:04:34</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Price Movement</div>
+                    <div class="metric-value">$115.65 → $115.01 (0.55%)</div>
+                </div>
+                
+                <p>No signals detected in this phase</p>
+                
                 
             </div>
             
@@ -373,173 +755,159 @@
         
         
         <div class="phase-section">
-            <h3>ABSORPTION Detector</h3>
-            
-            <div class="metric">
-                <div class="metric-label">Harmful Eliminated</div>
-                <div class="metric-value">272/272 (100%)</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Successful Kept</div>
-                <div class="metric-value">0</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Harmless Kept</div>
-                <div class="metric-value">0</div>
-            </div>
-            
-            <h4>Complete Threshold Configuration</h4>
-            <div class="threshold-config">
-minAggVolume: 300.000000 ⚡<br>passiveAbsorptionThreshold: 0.975000 ⚡<br>priceEfficiencyThreshold: 0.000387 ⚡<br>maxPriceImpactRatio: 0.000421 ⚡<br>minPassiveMultiplier: 38.487464 ⚡<br>maxVolumeMultiplierRatio: 4.398852 ⚡<br>balanceThreshold: 0.008478 ⚡<br>priceStabilityTicks: 3.000000 ⚡
-            </div>
-            
-            <h4>Phase Analysis</h4>
-            <p><strong>Protected Phases:</strong> None (must maintain coverage)</p>
-            <p><strong>Dispensable Phases:</strong> 4, 7 (covered by other detectors)</p>
-            <p><strong>Harmful-Only Phases:</strong> 6 (eliminate signals)</p>
-            <p><strong>Harmless-Only Phases:</strong> 5 (report only)</p>
-            
-            <h4>Remaining Signals Detail</h4>
-            
-            
-            
-            
-            
-        </div>
-        
-        <div class="phase-section">
             <h3>DELTACVD Detector</h3>
             
             <div class="metric">
                 <div class="metric-label">Harmful Eliminated</div>
-                <div class="metric-value">1963/2086 (94%)</div>
+                <div class="metric-value">76/117 (65%)</div>
             </div>
             <div class="metric">
                 <div class="metric-label">Successful Kept</div>
-                <div class="metric-value">7</div>
+                <div class="metric-value">12</div>
             </div>
             <div class="metric">
                 <div class="metric-label">Harmless Kept</div>
-                <div class="metric-value">87</div>
+                <div class="metric-value">31</div>
             </div>
             
             <h4>Complete Threshold Configuration</h4>
             <div class="threshold-config">
-minTradesPerSec: 0.400000<br>minVolPerSec: 0.500000<br>signalThreshold: 0.797900 ⚡<br>cvdImbalanceThreshold: 0.180000<br>institutionalThreshold: 25.250000 ⚡<br>volumeEfficiencyThreshold: 0.378750 ⚡
+minTradesPerSec: 0.400000<br>minVolPerSec: 5.254111 ⚡<br>signalThreshold: 0.790000<br>cvdImbalanceThreshold: 1.000000 ⚡<br>institutionalThreshold: 45.447000 ⚡<br>volumeEfficiencyThreshold: 0.426354 ⚡
             </div>
             
             <h4>Phase Analysis</h4>
-            <p><strong>Protected Phases:</strong> 6 (must maintain coverage)</p>
-            <p><strong>Dispensable Phases:</strong> 4, 7 (covered by other detectors)</p>
-            <p><strong>Harmful-Only Phases:</strong> 1, 5 (eliminate signals)</p>
-            <p><strong>Harmless-Only Phases:</strong> None (report only)</p>
+            <p><strong>Protected Phases:</strong> 5, 7, 11 (must maintain coverage)</p>
+            <p><strong>Dispensable Phases:</strong> None (covered by other detectors)</p>
+            <p><strong>Harmful-Only Phases:</strong> 3, 4, 14, 15, 16 (eliminate signals)</p>
+            <p><strong>Harmless-Only Phases:</strong> 1, 8, 17, 18 (report only)</p>
             
             <h4>Remaining Signals Detail</h4>
             
-            <h5>✅ Successful Signals (7)</h5>
+            <h5>✅ Successful Signals (12)</h5>
             
             <div class="signal-detail">
-                <strong>Phase 6:</strong> 2025-08-20T03:49:02.158Z | 
-                buy @ $113.6300 | 
+                <strong>Phase 5:</strong> 2025-08-21T02:25:50.227Z | 
+                buy @ $115.8500 | 
                 Reached 0.7%+ profit target<br>
-                <small>Thresholds: minTradesPerSec=0.7222, minVolPerSec=2.0234, signalThreshold=0.8300, cvdImbalanceThreshold=0.9921, institutionalThreshold=32.7200, volumeEfficiencyThreshold=0.5218, vwap=113.6900, rsi=40.6393</small>
+                <small>Thresholds: minTradesPerSec=1.1389, minVolPerSec=5.6830, signalThreshold=0.8100, cvdImbalanceThreshold=1.0000, institutionalThreshold=169.0690, volumeEfficiencyThreshold=0.4361, vwap=115.7100</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase 7:</strong> 2025-08-20T08:06:43.790Z | 
-                buy @ $114.0600 | 
+                <strong>Phase 5:</strong> 2025-08-21T02:25:50.227Z | 
+                buy @ $115.8600 | 
                 Reached 0.7%+ profit target<br>
-                <small>Thresholds: minTradesPerSec=1.6056, minVolPerSec=11.3316, signalThreshold=0.8100, cvdImbalanceThreshold=1.0000, institutionalThreshold=49.9620, volumeEfficiencyThreshold=0.5225, vwap=113.9000, rsi=41.2214</small>
+                <small>Thresholds: minTradesPerSec=1.1500, minVolPerSec=6.5479, signalThreshold=0.8200, cvdImbalanceThreshold=1.0000, institutionalThreshold=155.6480, volumeEfficiencyThreshold=0.5106, vwap=115.7100</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T08:51:10.082Z | 
-                sell @ $115.1700 | 
+                <strong>Phase 5:</strong> 2025-08-21T02:26:34.467Z | 
+                buy @ $115.8800 | 
                 Reached 0.7%+ profit target<br>
-                <small>Thresholds: minTradesPerSec=1.5500, minVolPerSec=9.8261, signalThreshold=0.8200, cvdImbalanceThreshold=1.0000, institutionalThreshold=43.5430, volumeEfficiencyThreshold=0.3923, vwap=115.2300, rsi=69.7115</small>
+                <small>Thresholds: minTradesPerSec=1.3667, minVolPerSec=7.9910, signalThreshold=0.8000, cvdImbalanceThreshold=1.0000, institutionalThreshold=47.5790, volumeEfficiencyThreshold=0.5501, vwap=115.8500</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T10:12:08.646Z | 
-                buy @ $114.4000 | 
+                <strong>Phase 5:</strong> 2025-08-21T02:26:34.467Z | 
+                buy @ $115.8900 | 
                 Reached 0.7%+ profit target<br>
-                <small>Thresholds: minTradesPerSec=1.6222, minVolPerSec=8.8275, signalThreshold=0.8700, cvdImbalanceThreshold=1.0000, institutionalThreshold=50.1180, volumeEfficiencyThreshold=0.4546, vwap=114.5500, rsi=29.8851</small>
+                <small>Thresholds: minTradesPerSec=1.3722, minVolPerSec=8.2553, signalThreshold=0.8100, cvdImbalanceThreshold=1.0000, institutionalThreshold=47.5790, volumeEfficiencyThreshold=0.5646, vwap=115.8500</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T13:02:50.050Z | 
-                sell @ $114.6200 | 
+                <strong>Phase 5:</strong> 2025-08-21T02:26:34.468Z | 
+                buy @ $115.9100 | 
                 Reached 0.7%+ profit target<br>
-                <small>Thresholds: minTradesPerSec=1.3333, minVolPerSec=3.7093, signalThreshold=0.9300, cvdImbalanceThreshold=1.0000, institutionalThreshold=66.2810, volumeEfficiencyThreshold=0.4335, vwap=115.1100</small>
+                <small>Thresholds: minTradesPerSec=1.3944, minVolPerSec=8.6389, signalThreshold=0.8400, cvdImbalanceThreshold=1.0000, institutionalThreshold=46.1010, volumeEfficiencyThreshold=0.5839, vwap=115.8500</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T13:03:12.810Z | 
-                sell @ $114.6700 | 
+                <strong>Phase 5:</strong> 2025-08-21T02:26:41.617Z | 
+                buy @ $115.9200 | 
                 Reached 0.7%+ profit target<br>
-                <small>Thresholds: minTradesPerSec=1.1833, minVolPerSec=2.9605, signalThreshold=0.8900, cvdImbalanceThreshold=1.0000, institutionalThreshold=32.0690, volumeEfficiencyThreshold=0.6549, vwap=115.1100</small>
+                <small>Thresholds: minTradesPerSec=1.4389, minVolPerSec=9.4464, signalThreshold=0.8200, cvdImbalanceThreshold=1.0000, institutionalThreshold=63.9140, volumeEfficiencyThreshold=0.6158, vwap=115.8500</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T13:04:25.740Z | 
-                sell @ $114.7000 | 
+                <strong>Phase 5:</strong> 2025-08-21T02:27:11.747Z | 
+                buy @ $115.9100 | 
                 Reached 0.7%+ profit target<br>
-                <small>Thresholds: minTradesPerSec=1.6056, minVolPerSec=4.5630, signalThreshold=0.8400, cvdImbalanceThreshold=1.0000, institutionalThreshold=35.8980, volumeEfficiencyThreshold=0.6251, vwap=114.7200</small>
-            </div>
-            
-            
-            
-            
-            
-            <h5>🔴 Harmful Signals Remaining (123)</h5>
-            
-            <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T00:04:49.842Z | 
-                buy @ $113.2300 | 
-                 | Hit stop loss: 0.44%<br>
-                <small>Thresholds: minTradesPerSec=0.6889, minVolPerSec=1.5092, signalThreshold=0.8900, cvdImbalanceThreshold=1.0000, institutionalThreshold=27.0090, volumeEfficiencyThreshold=0.7158</small>
+                <small>Thresholds: minTradesPerSec=1.4611, minVolPerSec=10.2826, signalThreshold=0.8200, cvdImbalanceThreshold=1.0000, institutionalThreshold=83.6820, volumeEfficiencyThreshold=0.5388, vwap=115.8500</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T00:04:49.842Z | 
-                buy @ $113.2400 | 
-                 | Hit stop loss: 0.45%<br>
-                <small>Thresholds: minTradesPerSec=0.6944, minVolPerSec=1.9100, signalThreshold=0.8900, cvdImbalanceThreshold=1.0000, institutionalThreshold=72.1380, volumeEfficiencyThreshold=0.7754</small>
+                <strong>Phase 7:</strong> 2025-08-21T03:11:41.257Z | 
+                sell @ $116.8900 | 
+                Reached 0.7%+ profit target<br>
+                <small>Thresholds: minTradesPerSec=2.9556, minVolPerSec=22.9286, signalThreshold=0.8100, cvdImbalanceThreshold=1.0000, institutionalThreshold=60.3690, volumeEfficiencyThreshold=0.5378, vwap=116.9500, rsi=56.2278</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T00:04:49.842Z | 
-                buy @ $113.2500 | 
-                 | Hit stop loss: 0.46%<br>
-                <small>Thresholds: minTradesPerSec=0.7000, minVolPerSec=2.5031, signalThreshold=0.9000, cvdImbalanceThreshold=1.0000, institutionalThreshold=106.7720, volumeEfficiencyThreshold=0.8286</small>
+                <strong>Phase 11:</strong> 2025-08-21T06:02:48.976Z | 
+                sell @ $116.1200 | 
+                Reached 0.7%+ profit target<br>
+                <small>Thresholds: minTradesPerSec=1.0556, minVolPerSec=6.4021, signalThreshold=0.8000, cvdImbalanceThreshold=1.0000, institutionalThreshold=51.7860, volumeEfficiencyThreshold=0.4929, vwap=116.1400, rsi=47.0899</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T00:04:49.842Z | 
-                buy @ $113.2600 | 
-                 | Hit stop loss: 0.47%<br>
-                <small>Thresholds: minTradesPerSec=0.7056, minVolPerSec=3.4431, signalThreshold=0.9000, cvdImbalanceThreshold=1.0000, institutionalThreshold=169.1870, volumeEfficiencyThreshold=0.8754</small>
+                <strong>Phase 11:</strong> 2025-08-21T06:02:48.976Z | 
+                sell @ $116.1200 | 
+                Reached 0.7%+ profit target<br>
+                <small>Thresholds: minTradesPerSec=1.0667, minVolPerSec=6.8454, signalThreshold=0.8000, cvdImbalanceThreshold=1.0000, institutionalThreshold=75.5600, volumeEfficiencyThreshold=0.5258, vwap=116.1400, rsi=47.0899</small>
+            </div>
+            
+            <p>... and 2 more</p>
+            
+            
+            
+            <h5>🔴 Harmful Signals Remaining (41)</h5>
+            
+            <div class="signal-detail">
+                <strong>Phase 3:</strong> 2025-08-21T00:48:46.343Z | 
+                buy @ $116.2200 | 
+                ⚠️ Wrong-sided | Hit stop loss: 0.48%<br>
+                <small>Thresholds: minTradesPerSec=3.5778, minVolPerSec=24.4585, signalThreshold=0.8500, cvdImbalanceThreshold=1.0000, institutionalThreshold=45.4470, volumeEfficiencyThreshold=0.4289, vwap=116.3000</small>
             </div>
             
             <div class="signal-detail">
-                <strong>Phase undefined:</strong> 2025-08-20T00:04:49.842Z | 
-                buy @ $113.2700 | 
-                 | Hit stop loss: 0.48%<br>
-                <small>Thresholds: minTradesPerSec=0.7111, minVolPerSec=3.6238, signalThreshold=0.9000, cvdImbalanceThreshold=1.0000, institutionalThreshold=32.5220, volumeEfficiencyThreshold=0.8816</small>
+                <strong>Phase 3:</strong> 2025-08-21T00:48:50.793Z | 
+                buy @ $116.2300 | 
+                ⚠️ Wrong-sided | Hit stop loss: 0.49%<br>
+                <small>Thresholds: minTradesPerSec=3.6111, minVolPerSec=25.3340, signalThreshold=0.8000, cvdImbalanceThreshold=1.0000, institutionalThreshold=48.1440, volumeEfficiencyThreshold=0.4275, vwap=116.3000</small>
             </div>
             
-            <p>... and 118 more</p>
+            <div class="signal-detail">
+                <strong>Phase 4:</strong> 2025-08-21T01:51:04.889Z | 
+                sell @ $116.8200 | 
+                ⚠️ Wrong-sided | Hit stop loss: 0.41%<br>
+                <small>Thresholds: minTradesPerSec=1.3111, minVolPerSec=10.0656, signalThreshold=0.8700, cvdImbalanceThreshold=1.0000, institutionalThreshold=82.0790, volumeEfficiencyThreshold=0.4994, vwap=116.7300, rsi=60.8939</small>
+            </div>
+            
+            <div class="signal-detail">
+                <strong>Phase 5:</strong> 2025-08-21T02:17:43.012Z | 
+                sell @ $115.8000 | 
+                 | Hit stop loss: 1.30%<br>
+                <small>Thresholds: minTradesPerSec=1.3000, minVolPerSec=9.3066, signalThreshold=0.8800, cvdImbalanceThreshold=1.0000, institutionalThreshold=115.9990, volumeEfficiencyThreshold=0.4322, vwap=116.0000</small>
+            </div>
+            
+            <div class="signal-detail">
+                <strong>Phase 5:</strong> 2025-08-21T02:17:43.012Z | 
+                sell @ $115.7900 | 
+                 | Hit stop loss: 1.30%<br>
+                <small>Thresholds: minTradesPerSec=1.3056, minVolPerSec=11.0682, signalThreshold=0.8800, cvdImbalanceThreshold=1.0000, institutionalThreshold=317.0890, volumeEfficiencyThreshold=0.5226, vwap=116.0000</small>
+            </div>
+            
+            <p>... and 36 more</p>
             
             
             
-            <h5>🟡 Harmless Signals (87)</h5>
+            <h5>🟡 Harmless Signals (31)</h5>
             <p>Signals that don't hit SL but also don't reach full TP target</p>
             
         </div>
         
 
         <div style="margin-top: 40px; color: #888; font-size: 12px;">
-            <p>Generated: 2025-08-20T16:07:47.733Z</p>
+            <p>Generated: 2025-08-21T10:49:13.517Z</p>
             <p>Binary optimization: Phase preservation over scoring</p>
             <p>Cross-detector coverage protection enabled</p>
         </div>

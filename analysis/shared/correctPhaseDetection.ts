@@ -39,7 +39,7 @@ export function createCorrectPhases(
 
     const phases: CorrectPhase[] = [];
     let phaseId = 1;
-    
+
     // Start first phase from first price point
     let phaseStartTime = pricePoints[0].timestamp;
     let phaseStartPrice = pricePoints[0].price;
@@ -47,7 +47,7 @@ export function createCorrectPhases(
     let low = pricePoints[0].price;
     let highTime = pricePoints[0].timestamp;
     let lowTime = pricePoints[0].timestamp;
-    
+
     // Track whether extremes were reached after phase start
     let highReachedAfterStart = false;
     let lowReachedAfterStart = false;
@@ -70,20 +70,24 @@ export function createCorrectPhases(
         }
 
         // Check for 0.35% contra moves - only from extremes we actually reached
-        const downMove = highReachedAfterStart ? (high - currentPrice) / high : 0;
+        const downMove = highReachedAfterStart
+            ? (high - currentPrice) / high
+            : 0;
         const upMove = lowReachedAfterStart ? (currentPrice - low) / low : 0;
 
         if (downMove > PHASE_THRESHOLD || upMove > PHASE_THRESHOLD) {
             // Phase closes - determine direction by which move triggered the reversal
             // If downMove triggered: we went UP to high, then reversed DOWN = UP phase
             // If upMove triggered: we went DOWN to low, then reversed UP = DOWN phase
-            const direction: "UP" | "DOWN" = downMove > PHASE_THRESHOLD ? "UP" : "DOWN";
-            
+            const direction: "UP" | "DOWN" =
+                downMove > PHASE_THRESHOLD ? "UP" : "DOWN";
+
             // Phase ends at the extreme point
             const phaseEndTime = direction === "UP" ? highTime : lowTime;
             const phaseEndPrice = direction === "UP" ? high : low;
-            
-            const sizePercent = Math.abs(phaseEndPrice - phaseStartPrice) / phaseStartPrice;
+
+            const sizePercent =
+                Math.abs(phaseEndPrice - phaseStartPrice) / phaseStartPrice;
 
             phases.push({
                 id: phaseId++,
@@ -102,17 +106,17 @@ export function createCorrectPhases(
             // Next phase starts at the same extreme point where previous phase ended
             phaseStartTime = phaseEndTime;
             phaseStartPrice = phaseEndPrice;
-            
+
             // Reset highs/lows for new phase, starting from the extreme point
             high = phaseEndPrice;
             low = phaseEndPrice;
             highTime = phaseEndTime;
             lowTime = phaseEndTime;
-            
+
             // Reset flags - no extremes reached yet in new phase
             highReachedAfterStart = false;
             lowReachedAfterStart = false;
-            
+
             // Update with current price if it's beyond the extreme
             if (currentPrice > high) {
                 high = currentPrice;

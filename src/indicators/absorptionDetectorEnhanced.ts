@@ -499,7 +499,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
             let thresholdValue = 0;
             let actualValue = 0;
 
-            if (!passesThreshold_minAggVolume) {
+            if (traditionalIndicatorResult.overallDecision === "filter") {
+                rejectionReason = "traditional_indicators_filter";
+                thresholdType = "traditional_indicators";
+                thresholdValue = 1;
+                actualValue = 0;
+            } else if (!passesThreshold_minAggVolume) {
                 rejectionReason = "insufficient_aggressive_volume";
                 thresholdType = "aggressive_volume";
                 thresholdValue = this.settings.minAggVolume;
@@ -542,13 +547,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
             } else if (!dominantSide) {
                 rejectionReason = "no_dominant_side";
                 thresholdType = "side_determination";
-                thresholdValue = 1;
-                actualValue = 0;
-            } else if (
-                traditionalIndicatorResult.overallDecision === "filter"
-            ) {
-                rejectionReason = "traditional_indicators_filter";
-                thresholdType = "traditional_indicators";
                 thresholdValue = 1;
                 actualValue = 0;
             }

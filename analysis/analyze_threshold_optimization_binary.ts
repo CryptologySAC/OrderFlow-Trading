@@ -19,14 +19,18 @@ import {
     BaseSignal,
     SignalCluster,
     TradingPhase,
-    PricePhase,
     createSignalClusters,
     createTradingPhases,
-    createCompletePricePhases,
-    printPhaseSummary,
     convertToLimaTime,
     PHASE_DETECTION_CONFIG,
 } from "./shared/phaseDetection.js";
+import { getDB } from "../src/infrastructure/db.js";
+
+import {
+    CorrectPhase,
+    createCorrectPhases,
+    printCorrectPhaseSummary,
+} from "./shared/correctPhaseDetection.js";
 
 // Configuration
 const TARGET_TP = 0.007; // 0.7% profit target
@@ -494,7 +498,7 @@ async function enrichSignalsWithPriceMovements(
  */
 function assignSignalsToPhases(
     signals: Signal[],
-    pricePhases: PricePhase<Signal>[]
+    pricePhases: CorrectPhase[]
 ): void {
     let assignedCount = 0;
 
@@ -812,7 +816,7 @@ function identifyCriticalSignals(
  */
 function createPhaseInfo(
     signals: Signal[],
-    pricePhases: PricePhase<Signal>[]
+    pricePhases: CorrectPhase[]
 ): PhaseInfo[] {
     const phases: PhaseInfo[] = [];
 
@@ -1896,6 +1900,43 @@ ${Array.from(opt.allThresholds?.entries() || opt.optimalThresholds.entries())
 }
 
 /**
+ * Load price data from aggregated_trades database table
+ */
+async function loadPriceData(date: string): Promise<Map<number, number>> {
+    const priceMap = new Map<number, number>();
+    const db = getDB();
+
+    try {
+        // Calculate start and end timestamps for the date
+        const startOfDay = new Date(date).getTime();
+        const endOfDay = startOfDay + 24 * 60 * 60 * 1000; // Add 24 hours
+
+        // Query aggregated_trades table for tradeTime and price
+        const stmt = db.prepare(`
+            SELECT tradeTime, price 
+            FROM aggregated_trades 
+            WHERE tradeTime >= ? AND tradeTime < ?
+            ORDER BY tradeTime ASC
+        `);
+
+        const rows = stmt.all(startOfDay, endOfDay) as Array<{
+            tradeTime: number;
+            price: number;
+        }>;
+
+        for (const row of rows) {
+            priceMap.set(row.tradeTime, row.price);
+        }
+
+        console.log(`   Loaded ${rows.length} price data points from database`);
+    } catch (error) {
+        console.error(`Error loading price data from database:`, error);
+    }
+
+    return priceMap;
+}
+
+/**
  * Main execution function
  */
 async function main(): Promise<void> {
@@ -1914,31 +1955,9 @@ async function main(): Promise<void> {
     console.log(`   Loaded ${signals.length} signals`);
 
     // Load price data and create phases
-    const priceData = new Map<number, number>();
-    // Load price data from rejection logs as before...
-    for (const detector of ["absorption", "exhaustion"]) {
-        const filePath = `logs/signal_validation/${detector}_rejected_missed_${date}.jsonl`;
-        try {
-            const content = await fs.readFile(filePath, "utf-8");
-            const lines = content.trim().split("\n");
+    const priceData = await loadPriceData(date);
 
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                    const jsonRecord = JSON.parse(line);
-                    if (jsonRecord.timestamp && jsonRecord.price) {
-                        priceData.set(jsonRecord.timestamp, jsonRecord.price);
-                    }
-                } catch (e) {
-                    continue;
-                }
-            }
-        } catch (e) {
-            continue;
-        }
-    }
-
-    const pricePhases = createCompletePricePhases(priceData, signals);
+    const pricePhases = createCorrectPhases(priceData);
     console.log(`   Created ${pricePhases.length} price phases`);
 
     // Process signals
