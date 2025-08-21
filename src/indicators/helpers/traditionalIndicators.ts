@@ -213,10 +213,14 @@ export class TraditionalIndicators {
 
     /**
      * Validate signal against traditional indicators
+     * @param price - Current price
+     * @param side - Signal side (buy/sell)
+     * @param signalType - Type of signal: "reversal" for absorption/exhaustion, "trend" for momentum
      */
     public validateSignal(
         price: number,
-        side: "buy" | "sell"
+        side: "buy" | "sell",
+        signalType: "reversal" | "trend" = "trend"
     ): TraditionalIndicatorValues {
         try {
             // Input validation
@@ -239,9 +243,9 @@ export class TraditionalIndicators {
                 return result;
             }
 
-            const vwapResult = this.validateVWAP(price, side);
-            const rsiResult = this.validateRSI(side);
-            const oirResult = this.validateOIR(side);
+            const vwapResult = this.validateVWAP(price, side, signalType);
+            const rsiResult = this.validateRSI(side, signalType);
+            const oirResult = this.validateOIR(side, signalType);
 
             // Determine overall decision based on combination mode
             const overallDecision = this.determineOverallDecision(
@@ -360,7 +364,8 @@ export class TraditionalIndicators {
 
     private validateVWAP(
         price: number,
-        side: "buy" | "sell"
+        side: "buy" | "sell",
+        signalType: "reversal" | "trend"
     ): TraditionalIndicatorValues["vwap"] {
         if (
             !this.config.vwap.enabled ||
@@ -396,22 +401,48 @@ export class TraditionalIndicators {
         let passed = true;
         let reason: string | undefined;
 
-        if (
-            side === "buy" &&
-            deviation > 0 &&
-            deviationPercent > maxDeviation
-        ) {
-            // Price too far above VWAP for buy signal
-            passed = false;
-            reason = `price_too_far_above_vwap: ${deviationPercent.toFixed(2)}% > ${maxDeviation}%`;
-        } else if (
-            side === "sell" &&
-            deviation < 0 &&
-            deviationPercent > maxDeviation
-        ) {
-            // Price too far below VWAP for sell signal
-            passed = false;
-            reason = `price_too_far_below_vwap: ${deviationPercent.toFixed(2)}% > ${maxDeviation}%`;
+        if (signalType === "reversal") {
+            // For reversal signals, large deviations from VWAP are FAVORABLE
+            // They indicate overextension and potential mean reversion
+
+            if (side === "buy" && deviation < 0) {
+                // Buy reversal: price below VWAP is GOOD (oversold bounce opportunity)
+                passed = true;
+                const quality = Math.min(deviationPercent / maxDeviation, 2.0); // Cap at 2x for extreme moves
+                reason = `reversal_oversold_opportunity: ${deviationPercent.toFixed(2)}% below VWAP (quality: ${quality.toFixed(2)})`;
+            } else if (side === "sell" && deviation > 0) {
+                // Sell reversal: price above VWAP is GOOD (overbought reversal opportunity)
+                passed = true;
+                const quality = Math.min(deviationPercent / maxDeviation, 2.0);
+                reason = `reversal_overbought_opportunity: ${deviationPercent.toFixed(2)}% above VWAP (quality: ${quality.toFixed(2)})`;
+            } else if (side === "buy" && deviation > 0) {
+                // Buy reversal when already above VWAP - less ideal but not filtered
+                passed = true;
+                reason = `reversal_buy_above_vwap: ${deviationPercent.toFixed(2)}% above VWAP (neutral)`;
+            } else if (side === "sell" && deviation < 0) {
+                // Sell reversal when already below VWAP - less ideal but not filtered
+                passed = true;
+                reason = `reversal_sell_below_vwap: ${deviationPercent.toFixed(2)}% below VWAP (neutral)`;
+            }
+        } else {
+            // Trend-following signals: keep existing logic
+            if (
+                side === "buy" &&
+                deviation > 0 &&
+                deviationPercent > maxDeviation
+            ) {
+                // Price too far above VWAP for buy signal
+                passed = false;
+                reason = `price_too_far_above_vwap: ${deviationPercent.toFixed(2)}% > ${maxDeviation}%`;
+            } else if (
+                side === "sell" &&
+                deviation < 0 &&
+                deviationPercent > maxDeviation
+            ) {
+                // Price too far below VWAP for sell signal
+                passed = false;
+                reason = `price_too_far_below_vwap: ${deviationPercent.toFixed(2)}% > ${maxDeviation}%`;
+            }
         }
 
         return {
@@ -515,7 +546,8 @@ export class TraditionalIndicators {
     }
 
     private validateRSI(
-        side: "buy" | "sell"
+        side: "buy" | "sell",
+        signalType: "reversal" | "trend"
     ): TraditionalIndicatorValues["rsi"] {
         if (
             !this.config.rsi.enabled ||
@@ -556,19 +588,62 @@ export class TraditionalIndicators {
             condition = "oversold";
         }
 
-        // Apply filtering logic
-        if (
-            side === "buy" &&
-            (condition === "overbought" || condition === "extreme_overbought")
-        ) {
-            passed = false;
-            reason = `rsi_overbought_buy_filtered: ${this.currentRSI.toFixed(1)} >= ${this.config.rsi.overboughtThreshold}`;
-        } else if (
-            side === "sell" &&
-            (condition === "oversold" || condition === "extreme_oversold")
-        ) {
-            passed = false;
-            reason = `rsi_oversold_sell_filtered: ${this.currentRSI.toFixed(1)} <= ${this.config.rsi.oversoldThreshold}`;
+        // Apply filtering logic based on signal type
+        if (signalType === "reversal") {
+            // For reversal signals, RSI extremes are actually FAVORABLE
+            // The existing logic already works correctly - we just add better messaging
+
+            if (
+                side === "buy" &&
+                (condition === "oversold" || condition === "extreme_oversold")
+            ) {
+                // Buy reversal from oversold - IDEAL
+                passed = true;
+                reason = `reversal_oversold_bounce: RSI ${this.currentRSI.toFixed(1)} (excellent reversal setup)`;
+            } else if (
+                side === "sell" &&
+                (condition === "overbought" ||
+                    condition === "extreme_overbought")
+            ) {
+                // Sell reversal from overbought - IDEAL
+                passed = true;
+                reason = `reversal_overbought_top: RSI ${this.currentRSI.toFixed(1)} (excellent reversal setup)`;
+            } else if (
+                side === "buy" &&
+                (condition === "overbought" ||
+                    condition === "extreme_overbought")
+            ) {
+                // Buy reversal when already overbought - counterintuitive, filter it
+                passed = false;
+                reason = `reversal_buy_at_overbought: RSI ${this.currentRSI.toFixed(1)} (poor reversal setup)`;
+            } else if (
+                side === "sell" &&
+                (condition === "oversold" || condition === "extreme_oversold")
+            ) {
+                // Sell reversal when already oversold - counterintuitive, filter it
+                passed = false;
+                reason = `reversal_sell_at_oversold: RSI ${this.currentRSI.toFixed(1)} (poor reversal setup)`;
+            } else {
+                // Neutral RSI for reversal
+                passed = true;
+                reason = `reversal_rsi_neutral: RSI ${this.currentRSI.toFixed(1)}`;
+            }
+        } else {
+            // Trend-following signals: keep existing logic
+            if (
+                side === "buy" &&
+                (condition === "overbought" ||
+                    condition === "extreme_overbought")
+            ) {
+                passed = false;
+                reason = `rsi_overbought_buy_filtered: ${this.currentRSI.toFixed(1)} >= ${this.config.rsi.overboughtThreshold}`;
+            } else if (
+                side === "sell" &&
+                (condition === "oversold" || condition === "extreme_oversold")
+            ) {
+                passed = false;
+                reason = `rsi_oversold_sell_filtered: ${this.currentRSI.toFixed(1)} <= ${this.config.rsi.oversoldThreshold}`;
+            }
         }
 
         return {
@@ -652,7 +727,8 @@ export class TraditionalIndicators {
     }
 
     private validateOIR(
-        side: "buy" | "sell"
+        side: "buy" | "sell",
+        signalType: "reversal" | "trend"
     ): TraditionalIndicatorValues["oir"] {
         if (
             !this.config.oir.enabled ||
@@ -716,13 +792,42 @@ export class TraditionalIndicators {
             condition = "sell_dominant";
         }
 
-        // Apply filtering logic
-        if (side === "buy" && condition === "sell_dominant") {
-            passed = false;
-            reason = `oir_sell_dominant_buy_filtered: ${this.currentOIR.toFixed(3)} <= ${this.config.oir.sellDominanceThreshold}`;
-        } else if (side === "sell" && condition === "buy_dominant") {
-            passed = false;
-            reason = `oir_buy_dominant_sell_filtered: ${this.currentOIR.toFixed(3)} >= ${this.config.oir.buyDominanceThreshold}`;
+        // Apply filtering logic based on signal type
+        if (signalType === "reversal") {
+            // For reversal signals, extreme OIR indicates EXHAUSTION
+            // Extreme selling = buy reversal opportunity
+            // Extreme buying = sell reversal opportunity
+
+            if (side === "buy" && condition === "sell_dominant") {
+                // Buy reversal after sell exhaustion - IDEAL
+                passed = true;
+                reason = `reversal_sell_exhaustion: OIR ${this.currentOIR.toFixed(3)} (excellent buy reversal setup)`;
+            } else if (side === "sell" && condition === "buy_dominant") {
+                // Sell reversal after buy exhaustion - IDEAL
+                passed = true;
+                reason = `reversal_buy_exhaustion: OIR ${this.currentOIR.toFixed(3)} (excellent sell reversal setup)`;
+            } else if (side === "buy" && condition === "buy_dominant") {
+                // Buy reversal when buying is already dominant - less ideal
+                passed = false;
+                reason = `reversal_buy_with_buy_flow: OIR ${this.currentOIR.toFixed(3)} (poor reversal timing)`;
+            } else if (side === "sell" && condition === "sell_dominant") {
+                // Sell reversal when selling is already dominant - less ideal
+                passed = false;
+                reason = `reversal_sell_with_sell_flow: OIR ${this.currentOIR.toFixed(3)} (poor reversal timing)`;
+            } else {
+                // Neutral OIR for reversal - acceptable but not ideal
+                passed = true;
+                reason = `reversal_oir_neutral: OIR ${this.currentOIR.toFixed(3)} (neutral reversal conditions)`;
+            }
+        } else {
+            // Trend-following signals: keep existing logic
+            if (side === "buy" && condition === "sell_dominant") {
+                passed = false;
+                reason = `oir_sell_dominant_buy_filtered: ${this.currentOIR.toFixed(3)} <= ${this.config.oir.sellDominanceThreshold}`;
+            } else if (side === "sell" && condition === "buy_dominant") {
+                passed = false;
+                reason = `oir_buy_dominant_sell_filtered: ${this.currentOIR.toFixed(3)} >= ${this.config.oir.buyDominanceThreshold}`;
+            }
         }
 
         return {

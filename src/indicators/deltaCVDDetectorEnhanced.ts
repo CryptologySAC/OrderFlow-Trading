@@ -356,7 +356,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         };
         const hasVolumeEfficiency =
             cvdData.hasSignificantVolume &&
-            Math.abs(cvdData.cvdDelta) >
+            Math.abs(cvdData.cvdDelta) >=
                 cvdData.totalVolume *
                     this.enhancementConfig.volumeEfficiencyThreshold;
 
@@ -368,7 +368,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const passesThreshold_signalThreshold =
             realConfidence >= this.enhancementConfig.signalThreshold;
         const passesThreshold_cvdImbalanceThreshold =
-            divergenceResult.maxVolumeRatio <=
+            divergenceResult.maxVolumeRatio >=
             this.enhancementConfig.cvdImbalanceThreshold;
         const passesThreshold_institutionalThreshold =
             event.quantity >= this.enhancementConfig.institutionalThreshold;
@@ -376,8 +376,13 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const hasValidSignalSide = signalSide !== null;
 
         // MANDATORY: Calculate traditional indicators for ALL signals (pass or reject)
+        // DeltaCVD signals detect volume divergence which often precedes reversals
         const traditionalIndicatorResult = signalSide
-            ? this.traditionalIndicators.validateSignal(event.price, signalSide)
+            ? this.traditionalIndicators.validateSignal(
+                  event.price,
+                  signalSide,
+                  "reversal" // CVD divergence typically signals reversals
+              )
             : {
                   vwap: {
                       value: null,

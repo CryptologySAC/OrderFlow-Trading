@@ -176,7 +176,7 @@ export const DeltaCVDDetectorSchema = z.object({
     timeWindowIndex: z.number().int().min(0).max(5),
 
     // CVD divergence analysis parameters
-    cvdImbalanceThreshold: z.number().min(0.05).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
+    cvdImbalanceThreshold: z.number().min(0.5).max(1.0), // CVD imbalance ratio for detection (lower than signalThreshold)
 
     // Institutional trade threshold (replace hardcoded 17.8 LTC)
     institutionalThreshold: z.number().min(5).max(5000.0), // LTC threshold for institutional trade detection

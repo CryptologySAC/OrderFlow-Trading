@@ -378,10 +378,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
         this.validationLogger.updateCurrentPrice(event.price);
 
         // MANDATORY: Calculate traditional indicators for ALL signals (pass or reject)
+        // Absorption signals are reversal signals - large orders absorbed at key levels
         const traditionalIndicatorResult =
             this.traditionalIndicators.validateSignal(
                 event.price,
-                (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy"
+                (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy",
+                "reversal" // Absorption detects reversals at support/resistance
             );
 
         if (

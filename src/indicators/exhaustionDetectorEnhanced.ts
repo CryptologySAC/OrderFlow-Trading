@@ -308,8 +308,13 @@ export class ExhaustionDetectorEnhanced extends Detector {
             (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy";
 
         // MANDATORY: Calculate traditional indicators for ALL signals (pass or reject)
+        // Exhaustion signals are reversal signals - liquidity depletion at extremes
         const traditionalIndicatorResult =
-            this.traditionalIndicators.validateSignal(event.price, signalSide);
+            this.traditionalIndicators.validateSignal(
+                event.price,
+                signalSide,
+                "reversal" // Exhaustion detects reversals from liquidity depletion
+            );
 
         if (
             isExhaustion &&

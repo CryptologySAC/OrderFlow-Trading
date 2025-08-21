@@ -13,6 +13,7 @@ import {
     createCorrectPhases,
     printCorrectPhaseSummary,
     CorrectPhase,
+    PricePoint
 } from "./shared/correctPhaseDetection.js";
 import { getDB } from "../src/infrastructure/db.js";
 
@@ -333,7 +334,7 @@ function evaluateRSICorrectness(
 }
 
 /**
- * Evaluate OIR correctness for phase direction (RSI-INSPIRED SIMPLE LOGIC)
+ * Evaluate OIR correctness for phase direction (REVERSAL INDICATOR LOGIC)
  */
 function evaluateOIRCorrectness(
     oir: TraditionalIndicatorData["oir"],
@@ -356,16 +357,20 @@ function evaluateOIRCorrectness(
 
     if (oirValue === null) return null;
 
-    // Simple RSI-inspired logic: avoid extreme opposite volume like RSI avoids extreme levels
-    const EXTREME_BUY_DOMINANCE = 0.8; // 80% buy volume = extremely buy dominant
-    const EXTREME_SELL_DOMINANCE = 0.2; // 20% buy volume = extremely sell dominant
+    // REVERSAL LOGIC: Extreme imbalances suggest potential reversals
+    // When everyone is buying (>80%), reversal down may be coming
+    // When everyone is selling (<20%), reversal up may be coming
+    const EXTREME_BUY_DOMINANCE = 0.8; // 80% buy volume = potential top
+    const EXTREME_SELL_DOMINANCE = 0.2; // 20% buy volume = potential bottom
 
     if (phaseDirection === "UP") {
-        // In UP phase: avoid signals when there's extreme sell dominance (like RSI oversold)
-        return !(oirValue < EXTREME_SELL_DOMINANCE);
-    } else {
-        // In DOWN phase: avoid signals when there's extreme buy dominance (like RSI overbought)
+        // In UP phase: correct when NOT showing extreme buy dominance (potential reversal signal)
+        // Extreme buy dominance in UP phase suggests exhaustion/reversal coming
         return !(oirValue > EXTREME_BUY_DOMINANCE);
+    } else {
+        // In DOWN phase: correct when NOT showing extreme sell dominance (potential reversal signal)  
+        // Extreme sell dominance in DOWN phase suggests exhaustion/reversal coming
+        return !(oirValue < EXTREME_SELL_DOMINANCE);
     }
 }
 
@@ -525,6 +530,7 @@ function analyzeIndicator(
  */
 async function generateHTMLReport(
     date: string,
+    priceData: Map<number, number>,
     dataPoints: IndicatorDataPoint[],
     phases: CorrectPhase[],
     vwapAnalysis: IndicatorAnalysis,
@@ -534,7 +540,10 @@ async function generateHTMLReport(
     // Create continuous phase-colored price datasets
     const phaseDatasets = phases.map((phase) => {
         // Get all price points within this phase
-        const phasePoints = dataPoints.filter(
+        const pricePoints: PricePoint[] = Array.from(priceData.entries())
+                .map(([timestamp, price]) => ({ timestamp, price }))
+                .sort((a, b) => a.timestamp - b.timestamp);
+        const phasePoints = pricePoints.filter(
             (point) =>
                 point.timestamp >= phase.startTime &&
                 point.timestamp <= phase.endTime
@@ -722,7 +731,7 @@ async function generateHTMLReport(
             <canvas id="oirChart"></canvas>
         </div>
         <div class="metric-card">
-            <p><strong>OIR Logic:</strong> Buy dominance (>0.5) correct in UP phases, Sell dominance (<0.5) correct in DOWN phases</p>
+            <p><strong>OIR Logic (Reversal Indicator):</strong> Avoid extreme buy dominance (>80%) in UP phases (exhaustion signal), Avoid extreme sell dominance (<20%) in DOWN phases (exhaustion signal)</p>
             <p><strong>Valid Data Points:</strong> ${oirAnalysis.validDataPoints} / ${oirAnalysis.totalDataPoints}</p>
             <p><strong>Correct Predictions:</strong> ${oirAnalysis.correctPredictions}</p>
             <p><strong>Incorrect Predictions:</strong> ${oirAnalysis.incorrectPredictions}</p>
@@ -1012,25 +1021,25 @@ function generateOptimizationRecommendations(
             "This should resolve 'insufficient_oir_data' issues"
         );
     } else if (oirAnalysis.accuracy < 0.9) {
-        oirRec.changes.push("✅ APPLIED: RSI-inspired simple OIR logic");
+        oirRec.changes.push("✅ APPLIED: OIR configured as REVERSAL indicator");
         oirRec.changes.push(
-            "✅ APPLIED: Avoid extreme opposite volume like RSI avoids extreme levels"
+            "✅ APPLIED: Detect exhaustion patterns through extreme imbalances"
         );
         oirRec.changes.push(
-            "✅ APPLIED: UP phase: avoid signals with extreme sell dominance (<20%)"
+            "✅ APPLIED: UP phase: avoid signals with extreme buy dominance (>80% = exhaustion)"
         );
         oirRec.changes.push(
-            "✅ APPLIED: DOWN phase: avoid signals with extreme buy dominance (>80%)"
+            "✅ APPLIED: DOWN phase: avoid signals with extreme sell dominance (<20% = exhaustion)"
         );
         oirRec.changes.push(
-            "Config: Set oir.extremeBuyDominance = 0.8 (80% buy volume)"
+            "Config: Set oir.extremeBuyDominance = 0.8 (potential reversal down)"
         );
         oirRec.changes.push(
-            "Config: Set oir.extremeSellDominance = 0.2 (20% buy volume)"
+            "Config: Set oir.extremeSellDominance = 0.2 (potential reversal up)"
         );
-        oirRec.changes.push("Config: Set oir.logicType = 'rsi_inspired'");
+        oirRec.changes.push("Config: Set oir.logicType = 'reversal_indicator'");
     } else {
-        oirRec.changes.push("OIR performing well - maintain current settings");
+        oirRec.changes.push("OIR performing well as reversal indicator - maintain current settings");
     }
     recommendations.push(oirRec);
 
@@ -1102,6 +1111,7 @@ async function main(): Promise<void> {
     console.log("\n📄 Generating HTML report...");
     await generateHTMLReport(
         date,
+        priceData,
         dataPoints,
         phases,
         vwapAnalysis,

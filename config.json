@@ -316,7 +316,7 @@
                 "minVolPerSec": 5.25,
                 "signalThreshold": 0.79,
                 "eventCooldownMs": 1000,
-                "cvdImbalanceThreshold": 0.18,
+                "cvdImbalanceThreshold": 1.0,
                 "timeWindowIndex": 0,
                 "institutionalThreshold": 45.0,
                 "volumeEfficiencyThreshold": 0.425,
@@ -419,8 +419,8 @@
                 "oir": {
                     "enabled": true,
                     "windowMs": 300000,
-                    "buyDominanceThreshold": 0.8,
-                    "sellDominanceThreshold": 0.2,
+                    "buyDominanceThreshold": 0.6,
+                    "sellDominanceThreshold": 0.4,
                     "neutralZone": 0.1,
                     "minVolumeThreshold": 100
                 },
