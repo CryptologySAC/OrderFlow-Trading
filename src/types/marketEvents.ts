@@ -64,6 +64,24 @@ export interface StandardZoneData {
     };
 }
 
+export interface PhaseContext {
+    currentPhase: {
+        direction: "UP" | "DOWN" | null;
+        startPrice: number;
+        startTime: number;
+        currentSize: number; // % move from start
+        age: number; // ms since phase started
+    } | null;
+    previousPhase?:
+        | {
+              direction: "UP" | "DOWN";
+              size: number; // total % move
+              duration: number; // ms
+          }
+        | undefined;
+    phaseConfirmed: boolean; // true when 0.35% threshold met
+}
+
 export interface EnrichedTradeEvent extends AggressiveTrade {
     passiveBidVolume: number;
     passiveAskVolume: number;
@@ -75,6 +93,9 @@ export interface EnrichedTradeEvent extends AggressiveTrade {
 
     // NEW: Standardized zone data for all detectors
     zoneData: StandardZoneData;
+
+    // NEW: Phase detection context
+    phaseContext: PhaseContext;
 }
 
 export interface IndividualTrade {

@@ -132,7 +132,10 @@
                 "defaultAggressiveVolumeAbsolute": 10.0,
                 "defaultPassiveVolumeAbsolute": 5.0,
                 "defaultInstitutionalVolumeAbsolute": 50.0,
-                "maxTradesPerZone": 1500
+                "maxTradesPerZone": 1500,
+                "phaseDetectionEnabled": true,
+                "phaseThresholdPercent": 0.35,
+                "minPhaseDurationMs": 30000
             },
             "signalManager": {
                 "confidenceThreshold": 0.5,

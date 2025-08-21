@@ -447,12 +447,27 @@ function renderSignalsList() {
             ).toFixed(0);
             const timeAgo = formatSignalTime(signal.time);
 
+            // Determine classification display
+            const classification = signal.signal_classification || signal.signalClassification || '';
+            const classificationBadge = classification === 'reversal' 
+                ? '<span class="signal-classification reversal">⚡ REVERSAL</span>'
+                : classification === 'trend_following'
+                ? '<span class="signal-classification trend">📈 TREND</span>'
+                : '';
+            
+            const signalClass = classification === 'reversal' 
+                ? 'signal-reversal' 
+                : classification === 'trend_following' 
+                ? 'signal-trend' 
+                : '';
+
             return `
-                <div class="signal-row signal-${signal.side}" 
+                <div class="signal-row signal-${signal.side} ${signalClass}" 
                      data-signal-id="${signal.id}"
                      title="${getSignalSummary(signal)}">
                     <div class="signal-row-header">
                         <span class="signal-type">${signal.type.replace("_confirmed", "").replace("_", " ")}</span>
+                        ${classificationBadge}
                         <span class="signal-side ${signal.side}">${signal.side.toUpperCase()}</span>
                         <span class="signal-time">${timeAgo}</span>
                     </div>

@@ -8,6 +8,7 @@ import type {
     SignalType,
     ConfirmedSignal,
 } from "../types/signalTypes.js";
+import type { PhaseContext } from "../types/marketEvents.js";
 import { AnomalyDetector } from "../services/anomalyDetector.js";
 import { AlertManager } from "../alerts/alertManager.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
@@ -229,6 +230,60 @@ export class SignalManager extends EventEmitter {
     }
 
     /**
+     * Classify signal based on phase context
+     * Determines if signal is reversal or trend-following
+     */
+    private classifySignal(signal: ProcessedSignal): ProcessedSignal {
+        // Get phase context from the original candidate's enriched trade event
+        const enrichedEvent = signal.originalCandidate.enrichedEvent as
+            | { phaseContext?: PhaseContext }
+            | undefined;
+        const phaseContext = enrichedEvent?.phaseContext;
+
+        if (!phaseContext?.currentPhase) {
+            return {
+                ...signal,
+                signalClassification: "unknown",
+                phaseContext: {
+                    phaseDirection: null,
+                },
+            };
+        }
+
+        const phaseDirection = phaseContext.currentPhase.direction;
+        const signalSide = signal.originalCandidate.side;
+
+        // Reversal: signal opposes phase direction
+        // Trend-following: signal aligns with phase direction
+        const isReversal =
+            (phaseDirection === "UP" && signalSide === "sell") ||
+            (phaseDirection === "DOWN" && signalSide === "buy");
+
+        const classification = isReversal ? "reversal" : "trend_following";
+
+        // Log classification for monitoring
+        if (classification === "reversal") {
+            this.logger.info("[SignalManager] Reversal signal detected", {
+                signalId: signal.id,
+                signalSide,
+                phaseDirection,
+                phaseAge: phaseContext.currentPhase.age,
+                phaseSize: phaseContext.currentPhase.currentSize,
+            });
+        }
+
+        return {
+            ...signal,
+            signalClassification: classification,
+            phaseContext: {
+                phaseDirection,
+                phaseAge: phaseContext.currentPhase.age,
+                phaseSize: phaseContext.currentPhase.currentSize,
+            },
+        };
+    }
+
+    /**
      * Simplified signal processing - market health gatekeeper + signal coordination.
      * No complex anomaly enhancement, just health-based allow/block decisions.
      */
@@ -434,6 +489,13 @@ export class SignalManager extends EventEmitter {
                 recentAnomalyTypes: health.recentAnomalyTypes,
                 // Option B: No confidence adjustment in signal manager
             },
+            // Pass through phase-based classification
+            ...(signal.signalClassification && {
+                signalClassification: signal.signalClassification,
+            }),
+            ...(signal.phaseContext && {
+                phaseContext: signal.phaseContext,
+            }),
         };
 
         // Ensure signals are persisted before emitting to prevent backlog issues
@@ -1200,8 +1262,11 @@ export class SignalManager extends EventEmitter {
                 1
             );
 
+            // Classify signal based on phase context
+            const classifiedSignal = this.classifySignal(signal);
+
             // Process signal through simplified pipeline
-            confirmedSignal = this.processSignal(signal);
+            confirmedSignal = this.processSignal(classifiedSignal);
 
             // Store signal for correlation analysis only if it succeeds
             if (confirmedSignal) {

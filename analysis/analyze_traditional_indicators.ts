@@ -13,7 +13,7 @@ import {
     createCorrectPhases,
     printCorrectPhaseSummary,
     CorrectPhase,
-    PricePoint
+    PricePoint,
 } from "./shared/correctPhaseDetection.js";
 import { getDB } from "../src/infrastructure/db.js";
 
@@ -368,7 +368,7 @@ function evaluateOIRCorrectness(
         // Extreme buy dominance in UP phase suggests exhaustion/reversal coming
         return !(oirValue > EXTREME_BUY_DOMINANCE);
     } else {
-        // In DOWN phase: correct when NOT showing extreme sell dominance (potential reversal signal)  
+        // In DOWN phase: correct when NOT showing extreme sell dominance (potential reversal signal)
         // Extreme sell dominance in DOWN phase suggests exhaustion/reversal coming
         return !(oirValue < EXTREME_SELL_DOMINANCE);
     }
@@ -541,8 +541,8 @@ async function generateHTMLReport(
     const phaseDatasets = phases.map((phase) => {
         // Get all price points within this phase
         const pricePoints: PricePoint[] = Array.from(priceData.entries())
-                .map(([timestamp, price]) => ({ timestamp, price }))
-                .sort((a, b) => a.timestamp - b.timestamp);
+            .map(([timestamp, price]) => ({ timestamp, price }))
+            .sort((a, b) => a.timestamp - b.timestamp);
         const phasePoints = pricePoints.filter(
             (point) =>
                 point.timestamp >= phase.startTime &&
@@ -1039,7 +1039,9 @@ function generateOptimizationRecommendations(
         );
         oirRec.changes.push("Config: Set oir.logicType = 'reversal_indicator'");
     } else {
-        oirRec.changes.push("OIR performing well as reversal indicator - maintain current settings");
+        oirRec.changes.push(
+            "OIR performing well as reversal indicator - maintain current settings"
+        );
     }
     recommendations.push(oirRec);
 

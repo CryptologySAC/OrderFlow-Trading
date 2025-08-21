@@ -426,6 +426,9 @@ const BasicSymbolConfigSchema = z
             defaultPassiveVolumeAbsolute: z.number().positive(),
             defaultInstitutionalVolumeAbsolute: z.number().positive(),
             maxTradesPerZone: z.number().int().positive(),
+            phaseDetectionEnabled: z.boolean(),
+            phaseThresholdPercent: z.number().positive(),
+            minPhaseDurationMs: z.number().int().positive(),
         }),
         signalManager: z.object({
             confidenceThreshold: z.number().positive(),
@@ -922,6 +925,11 @@ export class Config {
             defaultInstitutionalVolumeAbsolute:
                 SYMBOL_CFG!.preprocessor.defaultInstitutionalVolumeAbsolute,
             maxTradesPerZone: SYMBOL_CFG!.preprocessor.maxTradesPerZone,
+            phaseDetectionEnabled:
+                SYMBOL_CFG!.preprocessor.phaseDetectionEnabled,
+            phaseThresholdPercent:
+                SYMBOL_CFG!.preprocessor.phaseThresholdPercent,
+            minPhaseDurationMs: SYMBOL_CFG!.preprocessor.minPhaseDurationMs,
         };
     }
 

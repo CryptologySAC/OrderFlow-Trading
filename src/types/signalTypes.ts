@@ -287,6 +287,7 @@ export interface SignalCandidate {
         decision: "pass" | "filter" | "insufficient_data";
         filtersTriggered: string[];
     };
+    enrichedEvent?: unknown; // Carries the enriched trade event with phase context
 }
 
 export interface ProcessedSignal {
@@ -302,6 +303,14 @@ export interface ProcessedSignal {
         enrichments?: Record<string, unknown>[];
     };
     data: DetectorResultType;
+
+    // Phase-based signal classification
+    signalClassification?: "reversal" | "trend_following" | "unknown";
+    phaseContext?: {
+        phaseDirection: "UP" | "DOWN" | null;
+        phaseAge?: number; // ms since phase started
+        phaseSize?: number; // % move in current phase
+    };
 }
 
 // Add these interfaces to your types file
@@ -369,6 +378,14 @@ export interface ConfirmedSignal {
     confirmedAt: number;
     correlationData: CorrelationData;
     anomalyData: AnomalyData;
+
+    // Phase-based signal classification
+    signalClassification?: "reversal" | "trend_following" | "unknown";
+    phaseContext?: {
+        phaseDirection: "UP" | "DOWN" | null;
+        phaseAge?: number;
+        phaseSize?: number;
+    };
 }
 
 // Update TradingSignalData to include correlation data

@@ -10,6 +10,7 @@ import type {
     ZoneSnapshot,
     StandardZoneData,
     ZoneTradeRecord,
+    PhaseContext,
 } from "../types/marketEvents.js";
 import { IOrderBookState } from "./orderBookState.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
@@ -50,6 +51,11 @@ export interface OrderflowPreprocessorOptions {
     defaultPassiveVolumeAbsolute: number; // LTCUSDT: 5+ LTC (top 15% of trades)
     defaultInstitutionalVolumeAbsolute: number; // LTCUSDT: 50+ LTC (<1% whale trades)
     maxTradesPerZone: number; // Maximum individual trades stored per zone for VWAP calculation
+
+    // Phase detection configuration
+    phaseDetectionEnabled: boolean;
+    phaseThresholdPercent: number; // 0.35% default
+    minPhaseDurationMs: number; // Minimum duration for a phase to be valid
 }
 
 export interface IOrderflowPreprocessor {
@@ -123,6 +129,24 @@ export class OrderflowPreprocessor
     private processedTrades = 0;
     private processedDepthUpdates = 0;
 
+    // Phase detection configuration
+    private readonly phaseDetectionEnabled: boolean;
+    private readonly phaseThresholdPercent: number;
+    private readonly minPhaseDurationMs: number;
+
+    // Phase tracking state
+    private phaseTracker = {
+        high: 0,
+        low: 0,
+        highTime: 0,
+        lowTime: 0,
+        currentPhase: null as PhaseContext["currentPhase"],
+        previousPhase: undefined as PhaseContext["previousPhase"],
+        phaseStartTime: 0,
+        highReachedAfterStart: false,
+        lowReachedAfterStart: false,
+    };
+
     constructor(
         opts: OrderflowPreprocessorOptions,
         orderBook: IOrderBookState,
@@ -150,6 +174,11 @@ export class OrderflowPreprocessor
 
         // LTCUSDT volume thresholds - absolute values from trade distribution analysis
         this.maxTradesPerZone = opts.maxTradesPerZone; // Maximum individual trades stored per zone
+
+        // Phase detection configuration
+        this.phaseDetectionEnabled = opts.phaseDetectionEnabled;
+        this.phaseThresholdPercent = opts.phaseThresholdPercent;
+        this.minPhaseDurationMs = opts.minPhaseDurationMs;
 
         // NEW: Initialize standardized zone configuration (LTCUSDT data-driven defaults) - AFTER defaults set
         this.standardZoneConfig = opts.standardZoneConfig;
@@ -302,7 +331,13 @@ export class OrderflowPreprocessor
                 aggressive.timestamp
             );
 
-            // Create basic enriched trade with updated zone data
+            // Get phase context for this trade
+            const phaseContext = this.updatePhaseContext(
+                aggressive.price,
+                aggressive.timestamp
+            );
+
+            // Create basic enriched trade with updated zone data and phase context
             const baseEnriched = {
                 ...aggressive,
                 passiveBidVolume: bookLevel?.bid ?? 0,
@@ -313,6 +348,8 @@ export class OrderflowPreprocessor
                 bestAsk: this.bookState.getBestAsk(),
                 // Zone data will be populated after trade aggregation
                 zoneData: zoneData,
+                // Phase detection context
+                phaseContext: phaseContext,
             };
 
             // Handle depthSnapshot conditionally to satisfy exactOptionalPropertyTypes
@@ -515,6 +552,165 @@ export class OrderflowPreprocessor
      */
     private getLargeTradeThreshold(): number {
         return this.largeTradeThreshold;
+    }
+
+    /**
+     * Update phase context based on current price
+     * Detects phase changes when price moves 0.35% from local extremes
+     */
+    private updatePhaseContext(price: number, timestamp: number): PhaseContext {
+        if (!this.phaseDetectionEnabled) {
+            return {
+                currentPhase: null,
+                previousPhase: undefined,
+                phaseConfirmed: false,
+            };
+        }
+
+        // Initialize on first trade
+        if (this.phaseTracker.high === 0) {
+            this.phaseTracker.high = price;
+            this.phaseTracker.low = price;
+            this.phaseTracker.highTime = timestamp;
+            this.phaseTracker.lowTime = timestamp;
+            this.phaseTracker.phaseStartTime = timestamp;
+        }
+
+        // Update high/low tracking
+        if (price > this.phaseTracker.high) {
+            this.phaseTracker.high = price;
+            this.phaseTracker.highTime = timestamp;
+            this.phaseTracker.highReachedAfterStart = true;
+        }
+        if (price < this.phaseTracker.low) {
+            this.phaseTracker.low = price;
+            this.phaseTracker.lowTime = timestamp;
+            this.phaseTracker.lowReachedAfterStart = true;
+        }
+
+        // Check for phase change (0.35% contra move from extremes)
+        const threshold = this.phaseThresholdPercent / 100; // Convert percentage to decimal
+        const downMove = this.phaseTracker.highReachedAfterStart
+            ? (this.phaseTracker.high - price) / this.phaseTracker.high
+            : 0;
+        const upMove = this.phaseTracker.lowReachedAfterStart
+            ? (price - this.phaseTracker.low) / this.phaseTracker.low
+            : 0;
+
+        if (downMove > threshold || upMove > threshold) {
+            // Phase change detected
+            const newDirection: "UP" | "DOWN" =
+                downMove > threshold ? "DOWN" : "UP";
+            const phaseEndPrice =
+                downMove > threshold
+                    ? this.phaseTracker.high
+                    : this.phaseTracker.low;
+            const phaseEndTime =
+                downMove > threshold
+                    ? this.phaseTracker.highTime
+                    : this.phaseTracker.lowTime;
+
+            this.confirmPhaseChange(
+                newDirection,
+                phaseEndPrice,
+                phaseEndTime,
+                price,
+                timestamp
+            );
+        }
+
+        // Calculate current phase metrics
+        let currentSize = 0;
+        let age = 0;
+
+        if (this.phaseTracker.currentPhase) {
+            currentSize =
+                Math.abs(price - this.phaseTracker.currentPhase.startPrice) /
+                this.phaseTracker.currentPhase.startPrice;
+            age = timestamp - this.phaseTracker.currentPhase.startTime;
+
+            // Update current phase metrics
+            this.phaseTracker.currentPhase.currentSize = currentSize;
+            this.phaseTracker.currentPhase.age = age;
+        }
+
+        return {
+            currentPhase: this.phaseTracker.currentPhase,
+            previousPhase: this.phaseTracker.previousPhase,
+            phaseConfirmed: this.phaseTracker.currentPhase !== null,
+        };
+    }
+
+    /**
+     * Confirm and record a phase change
+     */
+    private confirmPhaseChange(
+        newDirection: "UP" | "DOWN",
+        phaseEndPrice: number,
+        phaseEndTime: number,
+        currentPrice: number,
+        currentTime: number
+    ): void {
+        // Save previous phase if exists and it meets minimum duration
+        if (this.phaseTracker.currentPhase) {
+            const phaseSize =
+                Math.abs(
+                    phaseEndPrice - this.phaseTracker.currentPhase.startPrice
+                ) / this.phaseTracker.currentPhase.startPrice;
+            const phaseDuration =
+                phaseEndTime - this.phaseTracker.currentPhase.startTime;
+
+            // Only save as previous phase if it lasted long enough
+            if (phaseDuration >= this.minPhaseDurationMs) {
+                this.phaseTracker.previousPhase = {
+                    direction: this.phaseTracker.currentPhase.direction as
+                        | "UP"
+                        | "DOWN",
+                    size: phaseSize,
+                    duration: phaseDuration,
+                };
+            }
+        }
+
+        // Start new phase
+        this.phaseTracker.currentPhase = {
+            direction: newDirection,
+            startPrice: phaseEndPrice,
+            startTime: phaseEndTime,
+            currentSize: Math.abs(currentPrice - phaseEndPrice) / phaseEndPrice,
+            age: currentTime - phaseEndTime,
+        };
+
+        // Reset extremes for new phase tracking
+        if (newDirection === "DOWN") {
+            // We're going down from a high, reset low tracking
+            this.phaseTracker.low = currentPrice;
+            this.phaseTracker.lowTime = currentTime;
+            this.phaseTracker.lowReachedAfterStart = false;
+            this.phaseTracker.highReachedAfterStart = false;
+        } else {
+            // We're going up from a low, reset high tracking
+            this.phaseTracker.high = currentPrice;
+            this.phaseTracker.highTime = currentTime;
+            this.phaseTracker.highReachedAfterStart = false;
+            this.phaseTracker.lowReachedAfterStart = false;
+        }
+
+        // Log phase change
+        this.logger.info("[OrderflowPreprocessor] Phase change detected", {
+            newDirection,
+            startPrice: phaseEndPrice,
+            currentPrice,
+            phaseSize: this.phaseTracker.currentPhase.currentSize,
+            previousPhase: this.phaseTracker.previousPhase,
+        });
+
+        // Emit phase change event for monitoring
+        this.emit("phase_change", {
+            timestamp: currentTime,
+            newPhase: this.phaseTracker.currentPhase,
+            previousPhase: this.phaseTracker.previousPhase,
+        });
     }
 
     /**
