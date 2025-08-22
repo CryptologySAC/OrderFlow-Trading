@@ -133,7 +133,10 @@
                 "maxTradesPerZone": 1500,
                 "phaseDetectionEnabled": true,
                 "phaseThresholdPercent": 0.35,
-                "minPhaseDurationMs": 30000
+                "minPhaseDurationMs": 30000,
+                "sidewaysDetectionEnabled": true,
+                "minSidewaysDurationMs": 60000,
+                "sidewaysBreakoutThreshold": 0.35
             },
             "signalManager": {
                 "confidenceThreshold": 0.3,
@@ -233,8 +236,7 @@
                 "zoneDepletionThreshold": 0.15,
                 "gapDetectionTicks": 3,
                 "passiveRatioBalanceThreshold": 0.85,
-                "zoneHistoryWindowMs": 60000,
-                "minPeakVolume": 100
+                "zoneHistoryWindowMs": 60000
             },
             "absorption": {
                 "minAggVolume": 50,

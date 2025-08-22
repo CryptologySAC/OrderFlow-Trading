@@ -208,6 +208,10 @@ const mockPreprocessorConfig = {
     phaseDetectionEnabled: true,
     phaseThresholdPercent: 0.35,
     minPhaseDurationMs: 30000,
+    // SIDEWAYS phase detection configuration
+    sidewaysDetectionEnabled: true,
+    minSidewaysDurationMs: 60000,
+    sidewaysBreakoutThreshold: 0.35,
 };
 
 // CRITICAL: Mock StandardZone configuration matching production schema

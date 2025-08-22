@@ -318,9 +318,9 @@
                 "marketHealthWindowMs": 600000
             },
             "deltaCVD": {
-                "minTradesPerSec": 0.4,
+                "minTradesPerSec": 5.0,
                 "minVolPerSec": 5.25,
-                "signalThreshold": 0.79,
+                "signalThreshold": 1.0,
                 "eventCooldownMs": 1000,
                 "cvdImbalanceThreshold": 1.0,
                 "timeWindowIndex": 0,

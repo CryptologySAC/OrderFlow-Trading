@@ -168,7 +168,7 @@ export const AbsorptionDetectorSchema = z.object({
 // DELTACVD detector - CLEANED UP - Only used settings remain
 export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis parameters (actually used by detector)
-    minTradesPerSec: z.number().min(0.001).max(5.0),
+    minTradesPerSec: z.number().min(1.0).max(50.0),
     minVolPerSec: z.number().min(0.01).max(2000.0),
     signalThreshold: z.number().min(0.01).max(8.0),
     eventCooldownMs: z.number().int().min(1000).max(1800000),
