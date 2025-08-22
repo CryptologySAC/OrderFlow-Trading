@@ -181,6 +181,15 @@ const mockExhaustionConfig = {
     ratioBalanceCenterPoint: 0.5,
     aggressiveVolumeExhaustionThreshold: 0.05, // Very low threshold for testing
     aggressiveVolumeReductionFactor: 0.5,
+    
+    // Enhancement config properties for test compatibility
+    enhancementConfig: {
+        imbalanceMediumThreshold: 0.6,
+        imbalanceHighThreshold: 0.75,
+        depletionAnalysisThreshold: 0.8,
+        zoneVolatilityThreshold: 0.05,
+        passiveVolumeScalingFactor: 1.2,
+    },
 };
 
 // Mock preprocessor configuration (test-friendly values)
@@ -195,6 +204,10 @@ const mockPreprocessorConfig = {
     defaultPassiveVolumeAbsolute: 5.0,
     defaultInstitutionalVolumeAbsolute: 50.0,
     maxTradesPerZone: 1500,
+    // Phase detection configuration
+    phaseDetectionEnabled: true,
+    phaseThresholdPercent: 0.35,
+    minPhaseDurationMs: 30000,
 };
 
 // CRITICAL: Mock StandardZone configuration matching production schema
@@ -243,6 +256,39 @@ export const Config = {
         exhaustion: 1.0,
         accumulation: 0.6,
         distribution: 0.7,
+    },
+
+    // Mock traditional indicators configuration
+    TRADITIONAL_INDICATORS: {
+        enabled: true,
+        timeframeMs: 300000, // 5 minutes
+        vwap: {
+            enabled: true,
+            windowMs: 1800000, // 30 minutes
+            maxDeviationPercent: 2.0,
+            minDeviationPercent: 0.1,
+            weightDecay: 0.95,
+        },
+        rsi: {
+            enabled: true,
+            period: 14,
+            timeframeMs: 300000, // 5 minutes per period
+            overboughtThreshold: 70,
+            oversoldThreshold: 30,
+            extremeOverbought: 80,
+            extremeOversold: 20,
+        },
+        oir: {
+            enabled: true,
+            lookbackPeriods: 20,
+            timeframeMs: 300000, // 5 minutes per period  
+            imbalanceHighThreshold: 0.7,
+            imbalanceMediumThreshold: 0.6,
+            imbalanceLowThreshold: 0.55,
+            trendConfirmationThreshold: 0.65,
+            reversalThreshold: 0.8,
+            extremeImbalanceThreshold: 0.85,
+        },
     },
 
     // CRITICAL: Add missing getTimeWindow method for DeltaCVD detector

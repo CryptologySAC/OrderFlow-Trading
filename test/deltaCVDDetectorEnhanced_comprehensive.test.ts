@@ -35,6 +35,7 @@ import { MetricsCollector } from "../__mocks__/src/infrastructure/metricsCollect
 import { createMockOrderflowPreprocessor } from "../__mocks__/src/market/orderFlowPreprocessor.js";
 import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
 import { Config } from "../__mocks__/src/core/config.js";
+import { createMockTraditionalIndicators } from "../__mocks__/src/indicators/helpers/traditionalIndicators.js";
 
 // Create mock instances using centralized factory functions
 const mockLogger = createMockLogger();
@@ -42,6 +43,7 @@ const mockMetricsCollector = new MetricsCollector();
 const mockPreprocessor = createMockOrderflowPreprocessor();
 const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 const mockSignalLogger = createMockSignalLogger();
+const mockTraditionalIndicators = createMockTraditionalIndicators();
 
 // Base price for LTCUSDT testing (realistic $85 level)
 const BASE_PRICE = 85.0;
@@ -337,7 +339,8 @@ describe("DeltaCVDDetectorEnhanced - 100 Comprehensive Tests (Pure Divergence)",
             mockLogger,
             mockMetricsCollector,
             mockSignalValidationLogger,
-            mockSignalLogger
+            mockSignalLogger,
+            mockTraditionalIndicators
         );
 
         // Reset event collection

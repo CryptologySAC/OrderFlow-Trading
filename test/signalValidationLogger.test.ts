@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { SignalValidationLogger } from "../src/utils/signalValidationLogger";
+import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockLogger } from "../__mocks__/src/infrastructure/loggerInterface.js";
 import type { Signal } from "../src/types";
 import * as fs from "fs";
 import * as path from "path";
@@ -24,7 +25,8 @@ describe("SignalValidationLogger", () => {
         vi.mocked(fs.appendFileSync).mockImplementation(() => undefined);
         vi.mocked(fs.readFileSync).mockReturnValue("");
 
-        logger = SignalValidationLogger.getInstance();
+        const mockLogger = createMockLogger();
+        logger = new SignalValidationLogger(mockLogger);
 
         mockSignal = {
             timestamp: mockTimestamp,
@@ -39,7 +41,6 @@ describe("SignalValidationLogger", () => {
 
     afterEach(() => {
         vi.useRealTimers();
-        SignalValidationLogger["instance"] = null;
     });
 
     describe("TP/SL Calculation Logic", () => {

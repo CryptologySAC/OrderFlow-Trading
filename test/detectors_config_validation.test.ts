@@ -271,7 +271,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             );
 
             // Access private property to verify actual threshold used
-            const actualThreshold = (detector as any).enhancementConfig
+            const actualThreshold = (detector as any).settings
                 .exhaustionThreshold;
 
             // CRITICAL: Should use config value, not hard-coded default
@@ -379,99 +379,25 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalValidationLogger
             );
 
-            const actualMinAggVolume = (detector as any).enhancementConfig
+            const actualMinAggVolume = (detector as any).settings
                 .minAggVolume;
             expect(actualMinAggVolume).toBe(configValue);
         });
 
-        it("should use maxPassiveRatio from config", () => {
-            const configValue = 0.35; // From config.json
+        it("should use passiveRatioBalanceThreshold from config", () => {
+            const configValue = 0.85; // From config.json
 
             const settings: ExhaustionEnhancedSettings = {
-                // Base detector settings
-                minAggVolume: 20,
-                windowMs: 45000,
-                pricePrecision: 2,
-                zoneTicks: 3,
-                eventCooldownMs: 10000,
-                minInitialMoveTicks: 1,
-                confirmationTimeoutMs: 40000,
-                maxRevisitTicks: 8,
-
-                // Exhaustion-specific thresholds
-                volumeSurgeMultiplier: 2.0,
-                imbalanceThreshold: 0.3,
-                institutionalThreshold: 15,
-                burstDetectionMs: 2000,
-                sustainedVolumeMs: 20000,
-                medianTradeSize: 0.8,
-                exhaustionThreshold: 0.3,
-                maxPassiveRatio: configValue,
-                minDepletionFactor: 0.2,
-                imbalanceHighThreshold: 0.75,
-                imbalanceMediumThreshold: 0.55,
-                spreadHighThreshold: 0.004,
-                spreadMediumThreshold: 0.0015,
-
-                // Scoring weights
-                scoringWeights: {
-                    depletion: 0.45,
-                    passive: 0.3,
-                    continuity: 0.12,
-                    imbalance: 0.08,
-                    spread: 0.04,
-                    velocity: 0.01,
-                },
-
-                // Quality and performance settings
-                depletionThresholdRatio: 0.15,
-                significantChangeThreshold: 0.08,
-                highQualitySampleCount: 6,
-                highQualityDataAge: 35000,
-                mediumQualitySampleCount: 3,
-                mediumQualityDataAge: 70000,
-                circuitBreakerMaxErrors: 8,
-                circuitBreakerWindowMs: 90000,
-
-                // Confidence adjustments
-                lowScoreConfidenceAdjustment: 0.7,
-                lowVolumeConfidenceAdjustment: 0.8,
-                invalidSurgeConfidenceAdjustment: 0.8,
-                passiveConsistencyThreshold: 0.7,
-                imbalanceNeutralThreshold: 0.1,
-                velocityMinBound: 0.1,
-                velocityMaxBound: 10,
-
-                // Zone management
-                maxZones: 75,
-                zoneAgeLimit: 1200000,
-
-                // Features configuration
-                features: {
-                    depletionTracking: true,
-                    spreadAdjustment: true,
-                    volumeVelocity: false,
-                    spoofingDetection: true,
-                    adaptiveZone: true,
-                    multiZone: false,
-                    passiveHistory: true,
-                },
-
-                // Enhancement control
-                useStandardizedZones: true,
-                enhancementMode: "production" as const,
-                minEnhancedConfidenceThreshold: 0.3,
-
-                // Enhanced depletion analysis
-                depletionVolumeThreshold: 30,
-                depletionRatioThreshold: 0.6,
-                varianceReductionFactor: 1,
-                alignmentNormalizationFactor: 1,
-                distanceNormalizationDivisor: 2,
-                passiveVolumeExhaustionRatio: 0.5,
-                aggressiveVolumeExhaustionThreshold: 0.7,
-                aggressiveVolumeReductionFactor: 0.5,
-                enableDepletionAnalysis: true,
+                // Core detection properties from actual schema
+                minAggVolume: 10,
+                timeWindowIndex: 0,
+                exhaustionThreshold: 0.25,
+                eventCooldownMs: 1000,
+                maxZonesPerSide: 15,
+                zoneDepletionThreshold: 0.15,
+                gapDetectionTicks: 3,
+                zoneHistoryWindowMs: 300000,
+                passiveRatioBalanceThreshold: configValue,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -484,99 +410,25 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalValidationLogger
             );
 
-            const actualMaxPassiveRatio = (detector as any).enhancementConfig
-                .maxPassiveRatio;
-            expect(actualMaxPassiveRatio).toBe(configValue);
+            const actualPassiveRatio = (detector as any).settings
+                .passiveRatioBalanceThreshold;
+            expect(actualPassiveRatio).toBe(configValue);
         });
 
-        it("should use all scoring weights from config", () => {
-            const configWeights = {
-                depletion: 0.45,
-                passive: 0.3,
-                continuity: 0.12,
-                imbalance: 0.08,
-                spread: 0.04,
-                velocity: 0.01,
-            };
+        it("should use maxZonesPerSide from config", () => {
+            const configValue = 15; // From config.json
 
             const settings: ExhaustionEnhancedSettings = {
-                // Base detector settings
-                minAggVolume: 20,
-                windowMs: 45000,
-                pricePrecision: 2,
-                zoneTicks: 3,
-                eventCooldownMs: 10000,
-                minInitialMoveTicks: 1,
-                confirmationTimeoutMs: 40000,
-                maxRevisitTicks: 8,
-
-                // Exhaustion-specific thresholds
-                volumeSurgeMultiplier: 2.0,
-                imbalanceThreshold: 0.3,
-                institutionalThreshold: 15,
-                burstDetectionMs: 2000,
-                sustainedVolumeMs: 20000,
-                medianTradeSize: 0.8,
-                exhaustionThreshold: 0.3,
-                maxPassiveRatio: 0.35,
-                minDepletionFactor: 0.2,
-                imbalanceHighThreshold: 0.75,
-                imbalanceMediumThreshold: 0.55,
-                spreadHighThreshold: 0.004,
-                spreadMediumThreshold: 0.0015,
-
-                // Scoring weights
-                scoringWeights: configWeights,
-
-                // Quality and performance settings
-                depletionThresholdRatio: 0.15,
-                significantChangeThreshold: 0.08,
-                highQualitySampleCount: 6,
-                highQualityDataAge: 35000,
-                mediumQualitySampleCount: 3,
-                mediumQualityDataAge: 70000,
-                circuitBreakerMaxErrors: 8,
-                circuitBreakerWindowMs: 90000,
-
-                // Confidence adjustments
-                lowScoreConfidenceAdjustment: 0.7,
-                lowVolumeConfidenceAdjustment: 0.8,
-                invalidSurgeConfidenceAdjustment: 0.8,
-                passiveConsistencyThreshold: 0.7,
-                imbalanceNeutralThreshold: 0.1,
-                velocityMinBound: 0.1,
-                velocityMaxBound: 10,
-
-                // Zone management
-                maxZones: 75,
-                zoneAgeLimit: 1200000,
-
-                // Features configuration
-                features: {
-                    depletionTracking: true,
-                    spreadAdjustment: true,
-                    volumeVelocity: false,
-                    spoofingDetection: true,
-                    adaptiveZone: true,
-                    multiZone: false,
-                    passiveHistory: true,
-                },
-
-                // Enhancement control
-                useStandardizedZones: true,
-                enhancementMode: "production" as const,
-                minEnhancedConfidenceThreshold: 0.3,
-
-                // Enhanced depletion analysis
-                depletionVolumeThreshold: 30,
-                depletionRatioThreshold: 0.6,
-                varianceReductionFactor: 1,
-                alignmentNormalizationFactor: 1,
-                distanceNormalizationDivisor: 2,
-                passiveVolumeExhaustionRatio: 0.5,
-                aggressiveVolumeExhaustionThreshold: 0.7,
-                aggressiveVolumeReductionFactor: 0.5,
-                enableDepletionAnalysis: true,
+                // Core detection properties from actual schema
+                minAggVolume: 10,
+                timeWindowIndex: 0,
+                exhaustionThreshold: 0.25,
+                eventCooldownMs: 1000,
+                maxZonesPerSide: configValue,
+                zoneDepletionThreshold: 0.15,
+                gapDetectionTicks: 3,
+                zoneHistoryWindowMs: 300000,
+                passiveRatioBalanceThreshold: 0.85,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
@@ -584,19 +436,13 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 settings,
                 createMockPreprocessor(),
                 mockLogger,
-                mockSpoofing,
                 mockMetrics,
                 mockSignalValidationLogger
             );
 
-            const actualWeights = (detector as any).enhancementConfig
-                .scoringWeights;
-            expect(actualWeights.depletion).toBe(configWeights.depletion);
-            expect(actualWeights.passive).toBe(configWeights.passive);
-            expect(actualWeights.continuity).toBe(configWeights.continuity);
-            expect(actualWeights.imbalance).toBe(configWeights.imbalance);
-            expect(actualWeights.spread).toBe(configWeights.spread);
-            expect(actualWeights.velocity).toBe(configWeights.velocity);
+            const actualMaxZones = (detector as any).settings
+                .maxZonesPerSide;
+            expect(actualMaxZones).toBe(configValue);
         });
     });
 
@@ -984,8 +830,8 @@ describe("Detector Config Validation - Universal Test Suite", () => {
     });
 
     describe("DeltaCVD Detector Config Usage", () => {
-        it("should use baseConfidenceRequired from config", () => {
-            const configValue = 0.2; // From config.json
+        it("should use cvdImbalanceThreshold from config", () => {
+            const configValue = 1.0; // From config.json
 
             const settings: DeltaCVDEnhancedSettings = {
                 // Core CVD analysis (12 properties)
@@ -1023,7 +869,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 imbalanceWeight: 0.2,
                 icebergMinRefills: 3,
                 icebergMinSize: 20,
-                baseConfidenceRequired: configValue, // Test parameter
+                cvdImbalanceThreshold: configValue, // Test parameter
                 finalConfidenceRequired: 0.35,
                 strongCorrelationThreshold: 0.7,
                 weakCorrelationThreshold: 0.3,
@@ -1065,13 +911,13 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalLogger
             );
 
-            const actualConfidence = (detector as any).enhancementConfig
-                .baseConfidenceRequired;
-            expect(actualConfidence).toBe(configValue);
+            const actualThreshold = (detector as any).enhancementConfig
+                .cvdImbalanceThreshold;
+            expect(actualThreshold).toBe(configValue);
         });
 
-        it("should use finalConfidenceRequired from config", () => {
-            const configValue = 0.35; // From config.json
+        it("should use institutionalThreshold from config", () => {
+            const configValue = 45.0; // From config.json
 
             const settings: DeltaCVDEnhancedSettings = {
                 // Core CVD analysis (12 properties)
@@ -1094,7 +940,6 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 // Volume and detection parameters (15 properties)
                 volumeSurgeMultiplier: 2.5,
                 imbalanceThreshold: 0.15,
-                institutionalThreshold: 17.8,
                 burstDetectionMs: 1000,
                 sustainedVolumeMs: 30000,
                 medianTradeSize: 0.6,
@@ -1109,8 +954,8 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 imbalanceWeight: 0.2,
                 icebergMinRefills: 3,
                 icebergMinSize: 20,
-                baseConfidenceRequired: 0.2,
-                finalConfidenceRequired: configValue, // Test parameter
+                cvdImbalanceThreshold: 0.2,
+                institutionalThreshold: configValue, // Test parameter
                 strongCorrelationThreshold: 0.7,
                 weakCorrelationThreshold: 0.3,
                 depthImbalanceThreshold: 0.2,
@@ -1151,13 +996,13 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalLogger
             );
 
-            const actualConfidence = (detector as any).enhancementConfig
-                .finalConfidenceRequired;
-            expect(actualConfidence).toBe(configValue);
+            const actualThreshold = (detector as any).enhancementConfig
+                .institutionalThreshold;
+            expect(actualThreshold).toBe(configValue);
         });
 
-        it("should use usePassiveVolume feature flag from config", () => {
-            const configValue = true; // From config.json
+        it("should use volumeEfficiencyThreshold from config", () => {
+            const configValue = 0.425; // From config.json
 
             const settings: DeltaCVDEnhancedSettings = {
                 // Core CVD analysis (12 properties)
@@ -1188,93 +1033,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 divergenceThreshold: 0.3,
                 divergenceLookbackSec: 60,
                 enableDepthAnalysis: false,
-                usePassiveVolume: configValue, // Test parameter
-                maxOrderbookAge: 5000,
-                absorptionCVDThreshold: 75,
-                absorptionPriceThreshold: 0.1,
-                imbalanceWeight: 0.2,
-                icebergMinRefills: 3,
-                icebergMinSize: 20,
-                baseConfidenceRequired: 0.2,
-                finalConfidenceRequired: 0.35,
-                strongCorrelationThreshold: 0.7,
-                weakCorrelationThreshold: 0.3,
-                depthImbalanceThreshold: 0.2,
-
-                // Enhancement control (3 properties)
-                useStandardizedZones: true,
-                enhancementMode: "production" as const,
-                minEnhancedConfidenceThreshold: 0.3,
-
-                // Enhanced CVD analysis (6 properties)
-                cvdDivergenceVolumeThreshold: 50,
-                cvdDivergenceStrengthThreshold: 0.7,
-                cvdSignificantImbalanceThreshold: 0.3,
-                cvdDivergenceScoreMultiplier: 1.5,
-                alignmentMinimumThreshold: 0.5,
-                momentumScoreMultiplier: 2,
-                enableCVDDivergenceAnalysis: true,
-                enableMomentumAlignment: false,
-
-                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
-                minTradesForAnalysis: 20,
-                minVolumeRatio: 0.1,
-                maxVolumeRatio: 5.0,
-                priceChangeThreshold: 0.001,
-                minZScoreBound: -20,
-                maxZScoreBound: 20,
-                minCorrelationBound: -0.999,
-                maxCorrelationBound: 0.999,
-            };
-
-            const detector = new DeltaCVDDetectorEnhanced(
-                "test-deltacvd",
-                settings,
-                createMockPreprocessor(),
-                mockLogger,
-                mockMetrics,
-                mockSignalValidationLogger,
-                mockSignalLogger
-            );
-
-            const actualFlag = (detector as any).enhancementConfig
-                .usePassiveVolume;
-            expect(actualFlag).toBe(configValue);
-        });
-
-        it("should use enableDepthAnalysis feature flag from config", () => {
-            const configValue = true; // From config.json
-
-            const settings: DeltaCVDEnhancedSettings = {
-                // Core CVD analysis (12 properties)
-                windowsSec: [60, 300],
-                minZ: 0.4,
-                priceCorrelationWeight: 0.3,
-                volumeConcentrationWeight: 0.2,
-                adaptiveThresholdMultiplier: 0.7,
-                eventCooldownMs: 15000,
-                minTradesPerSec: 0.1,
-                minVolPerSec: 0.5,
-                minSamplesForStats: 15,
-                pricePrecision: 2,
-                volatilityLookbackSec: 3600,
-                maxDivergenceAllowed: 0.5,
-                stateCleanupIntervalSec: 300,
-                dynamicThresholds: true,
-                logDebug: true,
-
-                // Volume and detection parameters (15 properties)
-                volumeSurgeMultiplier: 2.5,
-                imbalanceThreshold: 0.15,
-                institutionalThreshold: 17.8,
-                burstDetectionMs: 1000,
-                sustainedVolumeMs: 30000,
-                medianTradeSize: 0.6,
-                detectionMode: "momentum" as const,
-                divergenceThreshold: 0.3,
-                divergenceLookbackSec: 60,
-                enableDepthAnalysis: configValue, // Test parameter
-                usePassiveVolume: true,
+                volumeEfficiencyThreshold: configValue, // Test parameter
                 maxOrderbookAge: 5000,
                 absorptionCVDThreshold: 75,
                 absorptionPriceThreshold: 0.1,
@@ -1323,9 +1082,95 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalLogger
             );
 
-            const actualFlag = (detector as any).enhancementConfig
-                .enableDepthAnalysis;
-            expect(actualFlag).toBe(configValue);
+            const actualThreshold = (detector as any).enhancementConfig
+                .volumeEfficiencyThreshold;
+            expect(actualThreshold).toBe(configValue);
+        });
+
+        it("should use zoneSearchDistance from config", () => {
+            const configValue = 15; // From config.json
+
+            const settings: DeltaCVDEnhancedSettings = {
+                // Core CVD analysis (12 properties)
+                windowsSec: [60, 300],
+                minZ: 0.4,
+                priceCorrelationWeight: 0.3,
+                volumeConcentrationWeight: 0.2,
+                adaptiveThresholdMultiplier: 0.7,
+                eventCooldownMs: 15000,
+                minTradesPerSec: 0.1,
+                minVolPerSec: 0.5,
+                minSamplesForStats: 15,
+                pricePrecision: 2,
+                volatilityLookbackSec: 3600,
+                maxDivergenceAllowed: 0.5,
+                stateCleanupIntervalSec: 300,
+                dynamicThresholds: true,
+                logDebug: true,
+
+                // Volume and detection parameters (15 properties)
+                volumeSurgeMultiplier: 2.5,
+                imbalanceThreshold: 0.15,
+                institutionalThreshold: 17.8,
+                burstDetectionMs: 1000,
+                sustainedVolumeMs: 30000,
+                medianTradeSize: 0.6,
+                detectionMode: "momentum" as const,
+                divergenceThreshold: 0.3,
+                divergenceLookbackSec: 60,
+                zoneSearchDistance: configValue, // Test parameter
+                usePassiveVolume: true,
+                maxOrderbookAge: 5000,
+                absorptionCVDThreshold: 75,
+                absorptionPriceThreshold: 0.1,
+                imbalanceWeight: 0.2,
+                icebergMinRefills: 3,
+                icebergMinSize: 20,
+                baseConfidenceRequired: 0.2,
+                finalConfidenceRequired: 0.35,
+                strongCorrelationThreshold: 0.7,
+                weakCorrelationThreshold: 0.3,
+                depthImbalanceThreshold: 0.2,
+
+                // Enhancement control (3 properties)
+                useStandardizedZones: true,
+                enhancementMode: "production" as const,
+                minEnhancedConfidenceThreshold: 0.3,
+
+                // Enhanced CVD analysis (6 properties)
+                cvdDivergenceVolumeThreshold: 50,
+                cvdDivergenceStrengthThreshold: 0.7,
+                cvdSignificantImbalanceThreshold: 0.3,
+                cvdDivergenceScoreMultiplier: 1.5,
+                alignmentMinimumThreshold: 0.5,
+                momentumScoreMultiplier: 2,
+                enableCVDDivergenceAnalysis: true,
+                enableMomentumAlignment: false,
+
+                // ESSENTIAL CONFIGURABLE PARAMETERS - Trading Logic (8 mandatory parameters)
+                minTradesForAnalysis: 20,
+                minVolumeRatio: 0.1,
+                maxVolumeRatio: 5.0,
+                priceChangeThreshold: 0.001,
+                minZScoreBound: -20,
+                maxZScoreBound: 20,
+                minCorrelationBound: -0.999,
+                maxCorrelationBound: 0.999,
+            };
+
+            const detector = new DeltaCVDDetectorEnhanced(
+                "test-deltacvd",
+                settings,
+                createMockPreprocessor(),
+                mockLogger,
+                mockMetrics,
+                mockSignalValidationLogger,
+                mockSignalLogger
+            );
+
+            const actualDistance = (detector as any).enhancementConfig
+                .zoneSearchDistance;
+            expect(actualDistance).toBe(configValue);
         });
     });
 
@@ -1429,7 +1274,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalValidationLogger
             );
 
-            const actualThreshold = (detector as any).enhancementConfig
+            const actualThreshold = (detector as any).settings
                 .exhaustionThreshold;
 
             // If this fails, it means the detector is using hard-coded defaults
@@ -1548,19 +1393,19 @@ describe("Detector Config Validation - Universal Test Suite", () => {
 
             // Verify exact match for all parameters
             expect(
-                (detector as any).enhancementConfig.exhaustionThreshold
+                (detector as any).settings.exhaustionThreshold
             ).toBe(testSettings.exhaustionThreshold);
-            expect((detector as any).enhancementConfig.maxPassiveRatio).toBe(
+            expect((detector as any).settings.maxPassiveRatio).toBe(
                 testSettings.maxPassiveRatio
             );
-            expect((detector as any).enhancementConfig.minDepletionFactor).toBe(
+            expect((detector as any).settings.minDepletionFactor).toBe(
                 testSettings.minDepletionFactor
             );
             expect(
-                (detector as any).enhancementConfig.imbalanceHighThreshold
+                (detector as any).settings.imbalanceHighThreshold
             ).toBe(testSettings.imbalanceHighThreshold);
             expect(
-                (detector as any).enhancementConfig.spreadHighThreshold
+                (detector as any).settings.spreadHighThreshold
             ).toBe(testSettings.spreadHighThreshold);
         });
     });
@@ -1858,7 +1703,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalValidationLogger
             );
 
-            const actualThreshold = (detector as any).enhancementConfig
+            const actualThreshold = (detector as any).settings
                 .exhaustionThreshold;
 
             // Must use the explicitly provided value

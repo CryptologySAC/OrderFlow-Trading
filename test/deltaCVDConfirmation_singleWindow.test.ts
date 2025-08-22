@@ -6,6 +6,7 @@ vi.mock("../src/infrastructure/metricsCollector");
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
+import { createMockTraditionalIndicators } from "../__mocks__/src/indicators/helpers/traditionalIndicators.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
@@ -102,6 +103,7 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
         mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
 
         const mockSignalLogger = createMockSignalLogger();
+        const mockTraditionalIndicators = createMockTraditionalIndicators();
 
         detector = new DeltaCVDDetectorEnhanced(
             "cvd_single_window",

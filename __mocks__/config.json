@@ -130,7 +130,10 @@
                 "defaultAggressiveVolumeAbsolute": 10.0,
                 "defaultPassiveVolumeAbsolute": 5.0,
                 "defaultInstitutionalVolumeAbsolute": 50.0,
-                "maxTradesPerZone": 1500
+                "maxTradesPerZone": 1500,
+                "phaseDetectionEnabled": true,
+                "phaseThresholdPercent": 0.35,
+                "minPhaseDurationMs": 30000
             },
             "signalManager": {
                 "confidenceThreshold": 0.3,
@@ -223,57 +226,32 @@
             },
             "exhaustion": {
                 "minAggVolume": 10,
+                "exhaustionThreshold": 0.25,
                 "timeWindowIndex": 0,
-                "eventCooldownMs": 0,
-                "exhaustionThreshold": 0.05,
-                "useStandardizedZones": true,
-                "enhancementMode": "production",
-                "depletionVolumeThreshold": 10,
-                "depletionRatioThreshold": 0.05,
-                "minEnhancedConfidenceThreshold": 0.01,
-                "enableDepletionAnalysis": true,
-                "enableDynamicZoneTracking": true,
-                "maxZonesPerSide": 5,
-                "zoneDepletionThreshold": 0.7,
+                "eventCooldownMs": 1000,
+                "maxZonesPerSide": 15,
+                "zoneDepletionThreshold": 0.15,
                 "gapDetectionTicks": 3,
-                "varianceReductionFactor": 1.0,
-                "alignmentNormalizationFactor": 1.0,
-                "passiveVolumeExhaustionRatio": 0.5,
-                "aggressiveVolumeExhaustionThreshold": 0.05,
-                "aggressiveVolumeReductionFactor": 0.5,
-                "passiveRatioBalanceThreshold": 0.5,
-                "premiumConfidenceThreshold": 0.7,
-                "variancePenaltyFactor": 1.0,
-                "ratioBalanceCenterPoint": 0.5
+                "passiveRatioBalanceThreshold": 0.85,
+                "zoneHistoryWindowMs": 300000
             },
             "absorption": {
-                "minAggVolume": 80,
+                "minAggVolume": 50,
+                "passiveAbsorptionThreshold": 0.975,
+                "priceEfficiencyThreshold": 0.000387,
+                "maxPriceImpactRatio": 0.000421,
+                "minPassiveMultiplier": 38.4,
+                "balanceThreshold": 0.0085,
+                "priceStabilityTicks": 5,
+                "maxVolumeMultiplierRatio": 4.44,
                 "timeWindowIndex": 0,
-                "eventCooldownMs": 0,
-                "priceEfficiencyThreshold": 0.015,
-                "maxAbsorptionRatio": 0.65,
-                "minPassiveMultiplier": 1.2,
-                "passiveAbsorptionThreshold": 0.6,
+                "eventCooldownMs": 1000,
                 "expectedMovementScalingFactor": 10,
-                "liquidityGradientRange": 5,
-                "institutionalVolumeThreshold": 5,
-                "institutionalVolumeRatioThreshold": 0.5,
-                "enableInstitutionalVolumeFilter": true,
-                "minAbsorptionScore": 0.5,
-                "finalConfidenceRequired": 2.0,
-                "maxZoneCountForScoring": 3,
-                "minEnhancedConfidenceThreshold": 0.3,
-                "useStandardizedZones": true,
-                "enhancementMode": "production",
-                "balanceThreshold": 0.05,
-                "confluenceMinZones": 2,
-                "confluenceMaxDistance": 5,
-                "enableDynamicZoneTracking": true,
+                "maxZoneCountForScoring": 5,
                 "maxZonesPerSide": 5,
                 "zoneHistoryWindowMs": 60000,
                 "absorptionZoneThreshold": 1.5,
                 "minPassiveVolumeForZone": 50,
-                "priceStabilityTicks": 2,
                 "minAbsorptionEvents": 2
             },
             "spoofingDetector": {
@@ -372,15 +350,15 @@
                 "enhancementMode": "production"
             },
             "deltaCVD": {
-                "minTradesPerSec": 0.75,
-                "minVolPerSec": 10,
-                "signalThreshold": 0.4,
-                "eventCooldownMs": 5000,
+                "minTradesPerSec": 0.4,
+                "minVolPerSec": 5.25,
+                "signalThreshold": 0.79,
+                "eventCooldownMs": 1000,
+                "cvdImbalanceThreshold": 1.0,
                 "timeWindowIndex": 0,
-                "enhancementMode": "production",
-                "cvdImbalanceThreshold": 0.3,
-                "institutionalThreshold": 17.8,
-                "volumeEfficiencyThreshold": 0.3
+                "institutionalThreshold": 45.0,
+                "volumeEfficiencyThreshold": 0.425,
+                "zoneSearchDistance": 15
             },
             "simpleIceberg": {
                 "enhancementMode": "production",
@@ -415,6 +393,40 @@
                 "rateLimit": {
                     "maxRequestsPerSecond": 5,
                     "batchSize": 100
+                }
+            },
+            "traditionalIndicators": {
+                "enabled": true,
+                "timeframeMs": 300000,
+                "vwap": {
+                    "enabled": true,
+                    "windowMs": 300000,
+                    "maxDeviationPercent": 2.0,
+                    "minDeviationPercent": 0.5,
+                    "weightDecay": 0.95
+                },
+                "rsi": {
+                    "enabled": true,
+                    "period": 14,
+                    "timeframeMs": 300000,
+                    "overboughtThreshold": 70,
+                    "oversoldThreshold": 30,
+                    "extremeOverbought": 80,
+                    "extremeOversold": 20
+                },
+                "oir": {
+                    "enabled": true,
+                    "windowMs": 300000,
+                    "buyDominanceThreshold": 0.6,
+                    "sellDominanceThreshold": 0.4,
+                    "neutralZone": 0.1,
+                    "minVolumeThreshold": 100
+                },
+                "filterStrength": {
+                    "vwapWeight": 1.0,
+                    "rsiWeight": 1.0,
+                    "oirWeight": 1.0,
+                    "combinationMode": "all"
                 }
             }
         }

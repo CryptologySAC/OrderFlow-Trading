@@ -8,7 +8,7 @@
 import { TradeWebSocket } from "./websocket.js";
 
 const TRADE_WEBSOCKET_URL = "ws://localhost:3001";
-const MAX_TRADES = 50000;
+const MAX_TRADES = 10000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY_MS = 1000;
 const PING_INTERVAL_MS = 10000;
@@ -634,27 +634,17 @@ const tradeWebsocket = new TradeWebSocket({
         trades.length = 0;
         for (const trade of backLog) {
             if (isValidTrade(trade)) {
-                if (trades.length < MAX_TRADES) {
-                    trades.push(
-                        createTrade(
-                            trade.time,
-                            trade.price,
-                            trade.quantity,
-                            trade.orderType
-                        )
-                    );
-                } else {
-                    const recycled = trades.shift(); // Remove the oldest trade
-                    recycled.x = trade.time;
-                    recycled.y = trade.price;
-                    recycled.quantity = trade.quantity;
-                    recycled.orderType = trade.orderType;
-                    trades.push(recycled); // Push updated object
-                }
+                trades.push(
+                    createTrade(
+                        trade.time,
+                        trade.price,
+                        trade.quantity,
+                        trade.orderType
+                    )
+                );
             }
         }
-        while (trades.length > MAX_TRADES) trades.shift();
-
+        
         tradesChart.data.datasets[0].data = [...trades];
 
         if (trades.length > 0) {
@@ -718,24 +708,14 @@ const tradeWebsocket = new TradeWebSocket({
                 case "trade":
                     const trade = message.data;
                     if (isValidTrade(trade)) {
-                        if (trades.length < MAX_TRADES) {
-                            trades.push(
-                                createTrade(
-                                    trade.time,
-                                    trade.price,
-                                    trade.quantity,
-                                    trade.orderType
-                                )
-                            );
-                        } else {
-                            const recycled = trades.shift(); // Remove the oldest trade
-                            recycled.x = trade.time;
-                            recycled.y = trade.price;
-                            recycled.quantity = trade.quantity;
-                            recycled.orderType = trade.orderType;
-                            trades.push(recycled); // Push updated object
-                        }
-                        while (trades.length > MAX_TRADES) trades.shift();
+                        trades.push(
+                            createTrade(
+                                trade.time,
+                                trade.price,
+                                trade.quantity,
+                                trade.orderType
+                            )
+                        );
 
                         tradesChart.data.datasets[0].data = [...trades];
 
@@ -1005,6 +985,7 @@ function isValidTrade(trade) {
         ["BUY", "SELL"].includes(trade.orderType)
     );
 }
+
 
 /**
  * Gets the background color for a trade based on type and quantity.
@@ -3450,4 +3431,24 @@ document.addEventListener("DOMContentLoaded", () => {
             true
         );
     }
+
+    // Set up efficient trade cleanup every 15 minutes
+    // This prevents memory bloat while maintaining 90 minutes of visible trades
+    setInterval(() => {
+        const cutoffTime = Date.now() - (90 * 60 * 1000); // 90 minutes ago
+        const indexToKeep = trades.findIndex(t => t.x >= cutoffTime);
+        
+        if (indexToKeep > 0) {
+            // Remove all old trades in one efficient operation
+            trades.splice(0, indexToKeep);
+            
+            // Update chart after cleanup
+            if (tradesChart) {
+                tradesChart.data.datasets[0].data = [...trades];
+                scheduleTradesChartUpdate();
+            }
+            
+            console.log(`Cleaned up ${indexToKeep} old trades, ${trades.length} remaining`);
+        }
+    }, 15 * 60 * 1000); // Every 15 minutes
 });
