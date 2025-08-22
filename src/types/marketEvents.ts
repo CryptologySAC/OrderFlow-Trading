@@ -66,16 +66,19 @@ export interface StandardZoneData {
 
 export interface PhaseContext {
     currentPhase: {
-        direction: "UP" | "DOWN" | null;
+        direction: "UP" | "DOWN" | "SIDEWAYS" | null;
         startPrice: number;
         startTime: number;
         currentSize: number; // % move from start
         age: number; // ms since phase started
+        // For SIDEWAYS: consolidation range boundaries
+        consolidationHigh?: number; // Upper boundary of sideways range
+        consolidationLow?: number; // Lower boundary of sideways range
     } | null;
     previousPhase?:
         | {
-              direction: "UP" | "DOWN";
-              size: number; // total % move
+              direction: "UP" | "DOWN" | "SIDEWAYS";
+              size: number; // total % move (or range size for SIDEWAYS)
               duration: number; // ms
           }
         | undefined;

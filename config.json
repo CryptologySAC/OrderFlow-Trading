@@ -135,7 +135,10 @@
                 "maxTradesPerZone": 1500,
                 "phaseDetectionEnabled": true,
                 "phaseThresholdPercent": 0.35,
-                "minPhaseDurationMs": 30000
+                "minPhaseDurationMs": 30000,
+                "sidewaysDetectionEnabled": true,
+                "minSidewaysDurationMs": 60000,
+                "sidewaysBreakoutThreshold": 0.35
             },
             "signalManager": {
                 "confidenceThreshold": 0.5,

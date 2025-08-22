@@ -430,6 +430,9 @@ const BasicSymbolConfigSchema = z
             phaseDetectionEnabled: z.boolean(),
             phaseThresholdPercent: z.number().positive(),
             minPhaseDurationMs: z.number().int().positive(),
+            sidewaysDetectionEnabled: z.boolean(),
+            minSidewaysDurationMs: z.number().int().positive(),
+            sidewaysBreakoutThreshold: z.number().positive(),
         }),
         signalManager: z.object({
             confidenceThreshold: z.number().positive(),
@@ -931,6 +934,12 @@ export class Config {
             phaseThresholdPercent:
                 SYMBOL_CFG!.preprocessor.phaseThresholdPercent,
             minPhaseDurationMs: SYMBOL_CFG!.preprocessor.minPhaseDurationMs,
+            sidewaysDetectionEnabled:
+                SYMBOL_CFG!.preprocessor.sidewaysDetectionEnabled,
+            minSidewaysDurationMs:
+                SYMBOL_CFG!.preprocessor.minSidewaysDurationMs,
+            sidewaysBreakoutThreshold:
+                SYMBOL_CFG!.preprocessor.sidewaysBreakoutThreshold,
         };
     }
 

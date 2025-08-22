@@ -21,7 +21,9 @@ import type {
     EnrichedTradeEvent,
     ZoneSnapshot,
     StandardZoneData,
+    PhaseContext,
 } from "../types/marketEvents.js";
+
 import type {
     SignalCandidate,
     SignalType,
@@ -165,7 +167,81 @@ export class AbsorptionDetectorEnhanced extends Detector {
             return; // No core absorption - no signals at all
         }
 
-        // STEP 2: EMIT SINGLE SIGNAL with quality flags
+        // STEP 2: Phase filtering - only emit reversal signals
+        const phaseContext = event.phaseContext;
+        if (phaseContext?.currentPhase) {
+            const phaseDirection = phaseContext.currentPhase.direction;
+            const signalSide = signalCandidate.side;
+
+            // Suppress all signals during SIDEWAYS phase - no trend to reverse
+            if (phaseDirection === "SIDEWAYS") {
+                this.logger.debug(
+                    "AbsorptionDetectorEnhanced: Signal skipped - SIDEWAYS phase",
+                    {
+                        detectorId: this.getId(),
+                        price: event.price,
+                        signalSide,
+                        phaseDirection,
+                        consolidationRange: {
+                            high: phaseContext.currentPhase.consolidationHigh,
+                            low: phaseContext.currentPhase.consolidationLow,
+                        },
+                        reason: "sideways_phase_no_trend",
+                    }
+                );
+                return;
+            }
+
+            // Only emit reversal signals for directional phases:
+            // - Buy absorption during DOWN phase (potential bottom reversal)
+            // - Sell absorption during UP phase (potential top reversal)
+            const isReversal =
+                (phaseDirection === "DOWN" && signalSide === "buy") ||
+                (phaseDirection === "UP" && signalSide === "sell");
+
+            if (!isReversal) {
+                // Skip trend-confirming signals
+                this.logger.debug(
+                    "AbsorptionDetectorEnhanced: Signal skipped - trend-confirming",
+                    {
+                        detectorId: this.getId(),
+                        price: event.price,
+                        signalSide,
+                        phaseDirection,
+                        phaseAge: phaseContext.currentPhase.age,
+                        phaseSize: phaseContext.currentPhase.currentSize,
+                        reason: "trend_confirming_absorption",
+                    }
+                );
+                return;
+            }
+
+            // Log reversal signal detection
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: Reversal absorption detected",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    signalSide,
+                    phaseDirection,
+                    phaseAge: phaseContext.currentPhase.age,
+                    phaseSize: phaseContext.currentPhase.currentSize,
+                    isReversal: true,
+                }
+            );
+        } else {
+            // No phase context - still emit signal but log this condition
+            this.logger.debug(
+                "AbsorptionDetectorEnhanced: No phase context - emitting signal",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    signalSide: signalCandidate.side,
+                }
+            );
+        }
+
+        // STEP 3: EMIT SINGLE SIGNAL with quality flags
         // Check signal cooldown to prevent too many signals
         const eventKey = `absorption`; // Single cooldown for all absorption signals
         if (!this.canEmitSignal(eventKey)) {
@@ -318,6 +394,9 @@ export class AbsorptionDetectorEnhanced extends Detector {
             event.buyerIsMaker
         );
 
+        const phaseContext: PhaseContext = event.phaseContext;
+        this.logger.debug("PhaseContext:", { phaseContext });
+
         // Check if we pass all thresholds
         const isCoreAbosrption =
             passesThreshold_minAggVolume &&
@@ -372,6 +451,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 calculated: priceMovementTicks,
                 op: "EQS", // Used for stability analysis, not directly checked
             },
+            phaseContext: event.phaseContext,
         };
 
         // Update current price for signal validation

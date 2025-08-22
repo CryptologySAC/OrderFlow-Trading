@@ -186,7 +186,81 @@ export class ExhaustionDetectorEnhanced extends Detector {
             return; // No core exhaustion - no signals at all
         }
 
-        // STEP 2: Emit the signal
+        // STEP 2: Phase filtering - only emit reversal signals
+        const phaseContext = event.phaseContext;
+        if (phaseContext?.currentPhase) {
+            const phaseDirection = phaseContext.currentPhase.direction;
+            const signalSide = signalCandidate.side;
+
+            // Suppress all signals during SIDEWAYS phase - no trend to reverse
+            if (phaseDirection === "SIDEWAYS") {
+                this.logger.debug(
+                    "ExhaustionDetectorEnhanced: Signal skipped - SIDEWAYS phase",
+                    {
+                        detectorId: this.getId(),
+                        price: event.price,
+                        signalSide,
+                        phaseDirection,
+                        consolidationRange: {
+                            high: phaseContext.currentPhase.consolidationHigh,
+                            low: phaseContext.currentPhase.consolidationLow,
+                        },
+                        reason: "sideways_phase_no_trend",
+                    }
+                );
+                return;
+            }
+
+            // Only emit reversal signals for directional phases:
+            // - Bid exhaustion during UP phase (potential top reversal)
+            // - Ask exhaustion during DOWN phase (potential bottom reversal)
+            const isReversal =
+                (phaseDirection === "UP" && signalSide === "sell") ||
+                (phaseDirection === "DOWN" && signalSide === "buy");
+
+            if (!isReversal) {
+                // Skip trend-confirming signals
+                this.logger.debug(
+                    "ExhaustionDetectorEnhanced: Signal skipped - trend-confirming",
+                    {
+                        detectorId: this.getId(),
+                        price: event.price,
+                        signalSide,
+                        phaseDirection,
+                        phaseAge: phaseContext.currentPhase.age,
+                        phaseSize: phaseContext.currentPhase.currentSize,
+                        reason: "trend_confirming_exhaustion",
+                    }
+                );
+                return;
+            }
+
+            // Log reversal signal detection
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Reversal exhaustion detected",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    signalSide,
+                    phaseDirection,
+                    phaseAge: phaseContext.currentPhase.age,
+                    phaseSize: phaseContext.currentPhase.currentSize,
+                    isReversal: true,
+                }
+            );
+        } else {
+            // No phase context - still emit signal but log this condition
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: No phase context - emitting signal",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    signalSide: signalCandidate.side,
+                }
+            );
+        }
+
+        // STEP 3: Emit the signal
         const eventKey = `exhaustion`; // Single cooldown for all exhaustion signals
         if (!this.canEmitSignal(eventKey)) {
             // Always log cooldown blocking for auditability and tests
@@ -296,6 +370,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculated: depletionResult.depletionRatio,
                 op: "EQL", // Check: depletionResult.depletionRatio >= settings.exhaustionThreshold,
             },
+            phaseContext: event.phaseContext,
         };
 
         const dominantSide =

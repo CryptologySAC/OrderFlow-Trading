@@ -1,4 +1,5 @@
 import { MarketAnomaly } from "../utils/types.js";
+import type { PhaseContext } from "./marketEvents.js";
 
 export type DetectorResultType =
     | AbsorptionSignalData
@@ -585,6 +586,7 @@ export interface AbsorptionThresholdChecks {
     passiveAbsorptionThreshold: ThresholdCheck<number>;
     balanceThreshold: ThresholdCheck<number>;
     priceStabilityTicks: ThresholdCheck<number>;
+    phaseContext: PhaseContext;
 }
 
 /**
@@ -594,6 +596,7 @@ export interface ExhaustionThresholdChecks {
     minAggVolume: ThresholdCheck<number>;
     exhaustionThreshold: ThresholdCheck<number>;
     passiveRatioBalanceThreshold: ThresholdCheck<number>;
+    phaseContext: PhaseContext;
 }
 
 /**
@@ -606,6 +609,7 @@ export interface DeltaCVDThresholdChecks {
     cvdImbalanceThreshold: ThresholdCheck<number>;
     institutionalThreshold: ThresholdCheck<number>;
     volumeEfficiencyThreshold: ThresholdCheck<number>;
+    phaseContext: PhaseContext;
 }
 
 /**
