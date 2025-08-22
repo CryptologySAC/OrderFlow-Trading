@@ -226,14 +226,15 @@
             },
             "exhaustion": {
                 "minAggVolume": 10,
-                "exhaustionThreshold": 0.25,
+                "exhaustionThreshold": 0.20,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
                 "maxZonesPerSide": 15,
                 "zoneDepletionThreshold": 0.15,
                 "gapDetectionTicks": 3,
                 "passiveRatioBalanceThreshold": 0.85,
-                "zoneHistoryWindowMs": 300000
+                "zoneHistoryWindowMs": 60000,
+                "minPeakVolume": 100
             },
             "absorption": {
                 "minAggVolume": 50,

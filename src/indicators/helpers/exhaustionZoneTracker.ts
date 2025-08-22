@@ -13,6 +13,7 @@
 //
 
 import { FinancialMath } from "../../utils/financialMath.js";
+import { Config } from "../../core/config.js";
 import type { ZoneSnapshot } from "../../types/marketEvents.js";
 
 /**
@@ -74,6 +75,17 @@ export class ExhaustionZoneTracker {
     private readonly config: ZoneTrackerConfig;
     private readonly tickSize: number;
 
+    // Confidence calculation constants
+    private static readonly CONFIDENCE_BASE_MAX = 0.4;
+    private static readonly CONFIDENCE_BASE_MULTIPLIER = 0.5;
+    private static readonly CONFIDENCE_ZONES_CONTRIBUTION = 0.2;
+    private static readonly CONFIDENCE_DEPLETION_CONTRIBUTION = 0.2;
+    private static readonly CONFIDENCE_DEPLETION_MULTIPLIER = 0.25;
+    private static readonly CONFIDENCE_GAP_BONUS = 0.2;
+
+    // Zone distance constants
+    private static readonly ZONE_SPREAD_TOLERANCE_TICKS = 2; // Allow zones 2 ticks inside spread
+
     constructor(config: ZoneTrackerConfig, tickSize: number) {
         this.config = config;
         this.tickSize = tickSize;
@@ -91,8 +103,6 @@ export class ExhaustionZoneTracker {
      * Process zone update and track passive volume changes
      */
     public updateZone(zone: ZoneSnapshot, timestamp: number): void {
-        const zoneId = zone.zoneId;
-
         // Track all zones including depleted ones (passive volume = 0) to detect exhaustion patterns
 
         if (!this.currentSpread) {
@@ -115,13 +125,13 @@ export class ExhaustionZoneTracker {
             zone.priceLevel,
             this.tickSize
         );
-        const priceKey = normalizedPrice.toFixed(4);
-        let tracked = trackedZones.get(priceKey);
+        const zoneKey = `${isNearBid ? "bid" : "ask"}_${normalizedPrice.toFixed(Config.PRICE_PRECISION)}`;
+        let tracked = trackedZones.get(zoneKey);
 
         if (!tracked) {
             // Initialize new tracked zone
             tracked = {
-                zoneId,
+                zoneId: zoneKey,
                 priceLevel: zone.priceLevel,
                 history: [],
                 maxPassiveBidVolume: zone.passiveBidVolume,
@@ -129,37 +139,22 @@ export class ExhaustionZoneTracker {
                 lastUpdate: timestamp,
                 depletionEvents: 0,
             };
-            trackedZones.set(priceKey, tracked);
+            trackedZones.set(zoneKey, tracked);
         }
 
-        // Update zone ID if it changed (but keep history)
-        tracked.zoneId = zoneId;
-
-        // Update peak volumes - ensure we handle NaN/undefined values
+        // Update peak volumes - use cumulative maximum for proper depletion detection
         const currentBidVolume = zone.passiveBidVolume || 0;
         const currentAskVolume = zone.passiveAskVolume || 0;
 
-        // Track rolling peak volume over the configured history window (not all-time maximum)
-        // This allows detection of genuine exhaustion when volume depletes from recent peaks
-        // Use half of the history window for peak lookback to ensure we have context
-        const peakLookbackMs = Math.floor(this.config.historyWindowMs / 2);
-        const recentHistory = tracked.history.filter(
-            (h) => h.timestamp > timestamp - peakLookbackMs
+        // Track cumulative maximum volumes - never decrease peaks
+        tracked.maxPassiveBidVolume = Math.max(
+            tracked.maxPassiveBidVolume || 0,
+            currentBidVolume
         );
-
-        // Calculate recent peaks excluding current values to allow depletion detection
-        const recentBidVolumes = recentHistory.map((h) => h.passiveBidVolume);
-        const recentAskVolumes = recentHistory.map((h) => h.passiveAskVolume);
-
-        // Only use historical values for peak calculation - if no history, use current as initial peak
-        tracked.maxPassiveBidVolume =
-            recentBidVolumes.length > 0
-                ? Math.max(...recentBidVolumes, 0)
-                : currentBidVolume;
-        tracked.maxPassiveAskVolume =
-            recentAskVolumes.length > 0
-                ? Math.max(...recentAskVolumes, 0)
-                : currentAskVolume;
+        tracked.maxPassiveAskVolume = Math.max(
+            tracked.maxPassiveAskVolume || 0,
+            currentAskVolume
+        );
 
         // Add history entry with proper defaults
         const entry: ZoneHistoryEntry = {
@@ -402,21 +397,28 @@ export class ExhaustionZoneTracker {
         let confidence = 0;
 
         // Base confidence from depletion ratio (0-40%)
-        confidence += Math.min(0.4, avgDepletionRatio * 0.5);
+        confidence += Math.min(
+            ExhaustionZoneTracker.CONFIDENCE_BASE_MAX,
+            avgDepletionRatio * ExhaustionZoneTracker.CONFIDENCE_BASE_MULTIPLIER
+        );
 
         // Affected zones contribution (0-20%)
         const zoneScore = Math.min(
             1,
             affectedZones / this.config.maxZonesPerSide
         );
-        confidence += zoneScore * 0.2;
+        confidence +=
+            zoneScore * ExhaustionZoneTracker.CONFIDENCE_ZONES_CONTRIBUTION;
 
         // Max depletion contribution (0-20%)
-        confidence += Math.min(0.2, maxDepletion * 0.25);
+        confidence += Math.min(
+            ExhaustionZoneTracker.CONFIDENCE_DEPLETION_CONTRIBUTION,
+            maxDepletion * ExhaustionZoneTracker.CONFIDENCE_DEPLETION_MULTIPLIER
+        );
 
         // Gap creation bonus (0-20%)
         if (gapCreated) {
-            confidence += 0.2;
+            confidence += ExhaustionZoneTracker.CONFIDENCE_GAP_BONUS;
         }
 
         return confidence;
@@ -466,7 +468,9 @@ export class ExhaustionZoneTracker {
         const tickDistance = distance / this.tickSize;
         // Allow zones from slightly above bid (negative distance) to maxZonesPerSide below
         return (
-            tickDistance >= -2 && tickDistance <= this.config.maxZonesPerSide
+            tickDistance >=
+                -ExhaustionZoneTracker.ZONE_SPREAD_TOLERANCE_TICKS &&
+            tickDistance <= this.config.maxZonesPerSide
         );
     }
 
@@ -480,7 +484,9 @@ export class ExhaustionZoneTracker {
         const tickDistance = distance / this.tickSize;
         // Allow zones from slightly below ask (negative distance) to maxZonesPerSide above
         return (
-            tickDistance >= -2 && tickDistance <= this.config.maxZonesPerSide
+            tickDistance >=
+                -ExhaustionZoneTracker.ZONE_SPREAD_TOLERANCE_TICKS &&
+            tickDistance <= this.config.maxZonesPerSide
         );
     }
 
@@ -504,19 +510,30 @@ export class ExhaustionZoneTracker {
     ): void {
         const toRemove: string[] = [];
 
-        for (const [id, zone] of zones) {
+        for (const [key] of zones) {
+            // Extract price from "bid_89.50" or "ask_89.50" key format
+            const parts = key.split("_");
+            if (parts.length !== 2 || !parts[1]) {
+                toRemove.push(key); // Invalid key format
+                continue;
+            }
+
+            const price = parseFloat(parts[1]);
+            if (isNaN(price)) {
+                toRemove.push(key); // Invalid price
+                continue;
+            }
+
             const isNear =
-                side === "bid"
-                    ? this.isNearBid(zone.priceLevel)
-                    : this.isNearAsk(zone.priceLevel);
+                side === "bid" ? this.isNearBid(price) : this.isNearAsk(price);
 
             if (!isNear) {
-                toRemove.push(id);
+                toRemove.push(key);
             }
         }
 
-        for (const id of toRemove) {
-            zones.delete(id);
+        for (const key of toRemove) {
+            zones.delete(key);
         }
     }
 

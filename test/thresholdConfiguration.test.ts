@@ -221,10 +221,12 @@ describe("Threshold Configuration Chain", () => {
             );
 
             // Check that configuration values are properly loaded (only valid schema properties)
-            expect((detector as any).settings.exhaustionThreshold).toBe(0.25); // From __mocks__/config.json
+            expect((detector as any).settings.exhaustionThreshold).toBe(0.2); // From __mocks__/config.json
             expect((detector as any).settings.minAggVolume).toBe(10); // From __mocks__/config.json exhaustion section
             expect((detector as any).settings.maxZonesPerSide).toBe(15); // From __mocks__/config.json
-            expect((detector as any).settings.zoneDepletionThreshold).toBe(0.15); // From __mocks__/config.json
+            expect((detector as any).settings.zoneDepletionThreshold).toBe(
+                0.15
+            ); // From __mocks__/config.json
         });
 
         it("should use custom threshold values when provided (ONLY VALID SCHEMA PROPERTIES)", () => {
@@ -260,7 +262,9 @@ describe("Threshold Configuration Chain", () => {
             expect((detector as any).settings.zoneDepletionThreshold).toBe(0.8);
             expect((detector as any).settings.gapDetectionTicks).toBe(5);
             expect((detector as any).settings.zoneHistoryWindowMs).toBe(120000);
-            expect((detector as any).settings.passiveRatioBalanceThreshold).toBe(0.75);
+            expect(
+                (detector as any).settings.passiveRatioBalanceThreshold
+            ).toBe(0.75);
         });
 
         it("should validate threshold configuration ranges (VALID SCHEMA PROPERTIES)", () => {
@@ -451,14 +455,10 @@ describe("Threshold Configuration Chain", () => {
 
             expect(
                 (detector as any).settings.imbalanceMediumThreshold
-            ).toBeLessThan(
-                (detector as any).settings.imbalanceHighThreshold
-            );
+            ).toBeLessThan((detector as any).settings.imbalanceHighThreshold);
             expect(
                 (detector as any).settings.spreadMediumThreshold
-            ).toBeLessThan(
-                (detector as any).settings.spreadHighThreshold
-            );
+            ).toBeLessThan((detector as any).settings.spreadHighThreshold);
         });
     });
 });

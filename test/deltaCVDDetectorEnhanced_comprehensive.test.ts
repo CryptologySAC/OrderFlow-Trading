@@ -274,7 +274,7 @@ function generateRealisticCVDPattern(
         // Create trade with pattern-specific passive volume to simulate CVD conditions
         let passiveBidVol = 50;
         let passiveAskVol = 50;
-        
+
         if (pattern === "bullish_divergence") {
             // Bullish: More passive bid volume (buying pressure)
             passiveBidVol = 80 + Math.floor((i / tradeCount) * 40); // 80-120

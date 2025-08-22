@@ -128,6 +128,7 @@ export const ExhaustionDetectorSchema = z.object({
 
     // Additional configurable thresholds to replace magic numbers
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.99), // Replace hardcoded 0.5
+    minPeakVolume: z.number().int().min(10).max(100000).optional(), // Optional: fallback to minAggVolume
 });
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain

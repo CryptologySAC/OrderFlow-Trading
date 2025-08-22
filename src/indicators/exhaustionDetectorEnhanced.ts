@@ -112,7 +112,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             maxZonesPerSide: settings.maxZonesPerSide,
             historyWindowMs: settings.zoneHistoryWindowMs,
             depletionThreshold: settings.zoneDepletionThreshold,
-            minPeakVolume: settings.minAggVolume,
+            minPeakVolume: settings.minPeakVolume || settings.minAggVolume,
             gapDetectionTicks: settings.gapDetectionTicks,
         };
         this.zoneTracker = new ExhaustionZoneTracker(
