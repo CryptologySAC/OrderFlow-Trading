@@ -117,7 +117,31 @@ export class ExhaustionZoneTracker {
             return;
         }
 
-        const trackedZones = isNearBid ? this.bidZones : this.askZones;
+        // Precise zone classification: check exact prices first
+        let isAskZone: boolean;
+        if (this.currentSpread && zone.priceLevel === this.currentSpread.ask) {
+            isAskZone = true; // Exactly at ask price -> ask zone
+        } else if (
+            this.currentSpread &&
+            zone.priceLevel === this.currentSpread.bid
+        ) {
+            isAskZone = false; // Exactly at bid price -> bid zone
+        } else if (isNearAsk && !isNearBid) {
+            isAskZone = true; // Only near ask -> ask zone
+        } else if (isNearBid && !isNearAsk) {
+            isAskZone = false; // Only near bid -> bid zone
+        } else {
+            // Both near bid and ask (in spread) - use distance to determine
+            const bidDistance = Math.abs(
+                zone.priceLevel - (this.currentSpread?.bid || 0)
+            );
+            const askDistance = Math.abs(
+                zone.priceLevel - (this.currentSpread?.ask || 0)
+            );
+            isAskZone = askDistance <= bidDistance;
+        }
+
+        const trackedZones = isAskZone ? this.askZones : this.bidZones;
 
         // Use price level as key for better zone continuity
         // Normalize to tick size using FinancialMath for consistency
@@ -125,7 +149,7 @@ export class ExhaustionZoneTracker {
             zone.priceLevel,
             this.tickSize
         );
-        const zoneKey = `${isNearBid ? "bid" : "ask"}_${normalizedPrice.toFixed(Config.PRICE_PRECISION)}`;
+        const zoneKey = `${isAskZone ? "ask" : "bid"}_${normalizedPrice.toFixed(Config.PRICE_PRECISION)}`;
         let tracked = trackedZones.get(zoneKey);
 
         if (!tracked) {
@@ -176,7 +200,7 @@ export class ExhaustionZoneTracker {
         tracked.lastUpdate = timestamp;
 
         // Check for depletion event
-        this.detectDepletionEvent(tracked, isNearBid ? "bid" : "ask");
+        this.detectDepletionEvent(tracked, isAskZone ? "ask" : "bid");
 
         // Clean old history
         this.cleanOldHistory(tracked, timestamp);
