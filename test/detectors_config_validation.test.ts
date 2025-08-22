@@ -379,8 +379,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalValidationLogger
             );
 
-            const actualMinAggVolume = (detector as any).settings
-                .minAggVolume;
+            const actualMinAggVolume = (detector as any).settings.minAggVolume;
             expect(actualMinAggVolume).toBe(configValue);
         });
 
@@ -440,8 +439,7 @@ describe("Detector Config Validation - Universal Test Suite", () => {
                 mockSignalValidationLogger
             );
 
-            const actualMaxZones = (detector as any).settings
-                .maxZonesPerSide;
+            const actualMaxZones = (detector as any).settings.maxZonesPerSide;
             expect(actualMaxZones).toBe(configValue);
         });
     });
@@ -1392,21 +1390,21 @@ describe("Detector Config Validation - Universal Test Suite", () => {
             );
 
             // Verify exact match for all parameters
-            expect(
-                (detector as any).settings.exhaustionThreshold
-            ).toBe(testSettings.exhaustionThreshold);
+            expect((detector as any).settings.exhaustionThreshold).toBe(
+                testSettings.exhaustionThreshold
+            );
             expect((detector as any).settings.maxPassiveRatio).toBe(
                 testSettings.maxPassiveRatio
             );
             expect((detector as any).settings.minDepletionFactor).toBe(
                 testSettings.minDepletionFactor
             );
-            expect(
-                (detector as any).settings.imbalanceHighThreshold
-            ).toBe(testSettings.imbalanceHighThreshold);
-            expect(
-                (detector as any).settings.spreadHighThreshold
-            ).toBe(testSettings.spreadHighThreshold);
+            expect((detector as any).settings.imbalanceHighThreshold).toBe(
+                testSettings.imbalanceHighThreshold
+            );
+            expect((detector as any).settings.spreadHighThreshold).toBe(
+                testSettings.spreadHighThreshold
+            );
         });
     });
 

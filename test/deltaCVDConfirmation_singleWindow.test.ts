@@ -127,7 +127,8 @@ describe("DeltaCVDDetectorEnhanced single window CVD analysis", () => {
             mockLogger,
             mockMetrics,
             mockSignalValidationLogger,
-            mockSignalLogger
+            mockSignalLogger,
+            mockTraditionalIndicators
         );
 
         signalSpy = vi.fn();

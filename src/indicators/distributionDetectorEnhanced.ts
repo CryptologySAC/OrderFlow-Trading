@@ -695,7 +695,7 @@ export class DistributionDetectorEnhanced extends Detector {
             zone: zoneData,
             actionType: signalType,
             confidence: calculatedConfidence,
-            urgency: confidenceBoost > 0.15 ? "high" : "medium",
+            // urgency removed - use confidence for prioritization
             expectedDirection: signalSide === "sell" ? "down" : "up",
             detectorId: this.getId(),
             timestamp: Date.now(),
@@ -712,7 +712,7 @@ export class DistributionDetectorEnhanced extends Detector {
                 zoneId: zoneSignal.zone.id,
                 confidence: zoneSignal.confidence,
                 side: signalSide,
-                urgency: zoneSignal.urgency,
+                // urgency removed - use confidence for prioritization
                 expectedDirection: zoneSignal.expectedDirection,
             }
         );

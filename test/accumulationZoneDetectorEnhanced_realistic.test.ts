@@ -268,7 +268,7 @@ describe("AccumulationZoneDetectorEnhanced - Realistic Market Scenarios", () => 
             const zoneSignal = emittedEvents.find(
                 (e) => e.event === "zoneSignal"
             );
-            expect(zoneSignal?.data.urgency).toBe("high");
+            expect(zoneSignal?.data.confidence).toBeGreaterThan(0.7); // High confidence replaces high urgency
         });
 
         it("Test 4: Gradual Accumulation Building - Sustained Buying Pressure", () => {
@@ -987,12 +987,12 @@ describe("AccumulationZoneDetectorEnhanced - Realistic Market Scenarios", () => 
 
             detector.onEnrichedTrade(event);
 
-            // EXPECTATION: High urgency institutional signal
+            // EXPECTATION: High confidence institutional signal
             expect(emittedEvents.length).toBeGreaterThan(0);
             const zoneSignal = emittedEvents.find(
                 (e) => e.event === "zoneSignal"
             );
-            expect(zoneSignal?.data.urgency).toBe("high");
+            expect(zoneSignal?.data.confidence).toBeGreaterThan(0.7); // High confidence for institutional volume
         });
 
         it("Test 78: Perfect Cross-Timeframe Alignment - All Frames 70% Buy", () => {
@@ -1053,11 +1053,10 @@ describe("AccumulationZoneDetectorEnhanced - Realistic Market Scenarios", () => 
 
             detector.onEnrichedTrade(event);
 
-            // EXPECTATION: Maximum confidence and urgency
+            // EXPECTATION: Maximum confidence (replaces urgency concept)
             expect(emittedEvents.length).toBeGreaterThan(0);
             const signal = emittedEvents.find((e) => e.event === "zoneSignal");
-            expect(signal?.data.confidence).toBeGreaterThan(0.8);
-            expect(signal?.data.urgency).toBe("high");
+            expect(signal?.data.confidence).toBeGreaterThan(0.8); // Maximum confidence for perfect storm scenario
         });
 
         // Tests 81-100: Enhanced combination scenarios

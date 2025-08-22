@@ -383,7 +383,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             this.traditionalIndicators.validateSignal(
                 event.price,
                 (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy",
-                "reversal" // Absorption detects reversals at support/resistance
+                "absorption_reversal" // Absorption detects reversals through order flow absorption
             );
 
         if (

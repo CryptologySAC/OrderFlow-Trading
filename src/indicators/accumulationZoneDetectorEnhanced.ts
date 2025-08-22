@@ -713,20 +713,12 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             zoneData.strength + confidenceBoost
         );
 
-        // Calculate dynamic urgency based on institutional factors
-        const urgency = this.calculateUrgencyLevel(
-            calculatedConfidence,
-            zoneData.volume,
-            zoneData.metadata.buyRatio ?? 0
-        );
-
         // Create signal before emitting
         const zoneSignal = {
             signalType,
             zone: zoneData,
             actionType: signalType,
             confidence: calculatedConfidence,
-            urgency,
             expectedDirection: signalSide === "buy" ? "up" : "down",
             detectorId: this.getId(),
             timestamp: Date.now(),
@@ -743,7 +735,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 zoneId: zoneSignal.zone.id,
                 confidence: zoneSignal.confidence,
                 side: signalSide,
-                urgency: zoneSignal.urgency,
+                // urgency removed - use confidence for prioritization
                 expectedDirection: zoneSignal.expectedDirection,
             }
         );
@@ -1032,42 +1024,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
         };
     }
 
-    /**
-     * Calculate urgency level based on institutional factors
-     * 
-     * Based on test requirements:
-     * - High: Large volume (400+ LTC) + High buy ratio (70%+) + Strong confidence (70%+)
-     * - Medium: Moderate levels
-     * - Low: Weak levels
-     */
-    private calculateUrgencyLevel(
-        confidence: number,
-        volumeConcentration: number,
-        buyRatio: number
-    ): "low" | "medium" | "high" {
-        // Institutional thresholds based on actual debug values
-        const isInstitutionalVolume = volumeConcentration >= 300; // Adjusted: 350 observed for 500 LTC
-        const isHighBuyRatio = buyRatio >= 1.0; // Adjusted: 1.14 observed for 80% (buyVol/sellVol ratio)
-        const isStrongConfidence = confidence >= 0.70; // 70%+ confidence
-
-        // High urgency: Institutional accumulation pattern
-        if (isInstitutionalVolume && isHighBuyRatio && isStrongConfidence) {
-            return "high";
-        }
-
-        // High urgency: Maximum signal strength scenarios (very high confidence)
-        if (confidence >= 0.85 && isHighBuyRatio && volumeConcentration >= 200) {
-            return "high";
-        }
-
-        // Medium urgency: Moderate accumulation
-        if (volumeConcentration >= 200 && buyRatio >= 0.60 && confidence >= 0.50) {
-            return "medium";
-        }
-
-        // Low urgency: Weak accumulation
-        return "low";
-    }
+    // calculateUrgencyLevel method removed - use confidence directly for signal prioritization
 
     /**
      * Update enhancement mode at runtime (for A/B testing and gradual rollout)

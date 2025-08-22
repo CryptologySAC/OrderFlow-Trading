@@ -12,6 +12,7 @@ import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
+import { createMockTraditionalIndicators } from "../__mocks__/src/indicators/helpers/traditionalIndicators.js";
 /**
  * REAL-WORLD DELTACVD DETECTOR SCENARIOS
  *
@@ -29,6 +30,9 @@ describe("DeltaCVDConfirmation - Real World Scenarios", () => {
     let mockLogger: ILogger;
     let mockMetrics: MetricsCollector;
     let mockSignalValidationLogger: SignalValidationLogger;
+    let mockTraditionalIndicators: ReturnType<
+        typeof createMockTraditionalIndicators
+    >;
 
     const mockPreprocessor: IOrderflowPreprocessor = {
         handleDepth: vi.fn(),

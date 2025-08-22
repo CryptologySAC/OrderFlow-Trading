@@ -215,12 +215,12 @@ export class TraditionalIndicators {
      * Validate signal against traditional indicators
      * @param price - Current price
      * @param side - Signal side (buy/sell)
-     * @param signalType - Type of signal: "reversal" for absorption/exhaustion, "trend" for momentum
+     * @param signalType - Type of signal: "reversal" for regular reversals, "absorption_reversal" for absorption signals, "trend" for momentum
      */
     public validateSignal(
         price: number,
         side: "buy" | "sell",
-        signalType: "reversal" | "trend" = "trend"
+        signalType: "reversal" | "trend" | "absorption_reversal" = "trend"
     ): TraditionalIndicatorValues {
         try {
             // Input validation
@@ -365,7 +365,7 @@ export class TraditionalIndicators {
     private validateVWAP(
         price: number,
         side: "buy" | "sell",
-        signalType: "reversal" | "trend"
+        signalType: "reversal" | "trend" | "absorption_reversal"
     ): TraditionalIndicatorValues["vwap"] {
         if (
             !this.config.vwap.enabled ||
@@ -401,8 +401,8 @@ export class TraditionalIndicators {
         let passed = true;
         let reason: string | undefined;
 
-        if (signalType === "reversal") {
-            // For reversal signals, large deviations from VWAP are FAVORABLE
+        if (signalType === "reversal" || signalType === "absorption_reversal") {
+            // For reversal signals (including absorption), large deviations from VWAP are FAVORABLE
             // They indicate overextension and potential mean reversion
 
             if (side === "buy" && deviation < 0) {
@@ -547,7 +547,7 @@ export class TraditionalIndicators {
 
     private validateRSI(
         side: "buy" | "sell",
-        signalType: "reversal" | "trend"
+        signalType: "reversal" | "trend" | "absorption_reversal"
     ): TraditionalIndicatorValues["rsi"] {
         if (
             !this.config.rsi.enabled ||
@@ -589,7 +589,47 @@ export class TraditionalIndicators {
         }
 
         // Apply filtering logic based on signal type
-        if (signalType === "reversal") {
+        if (signalType === "absorption_reversal") {
+            // For ABSORPTION reversal signals, RSI extremes are OPTIMAL
+            // SELL absorption at oversold = smart money BUYING the panic = BULLISH
+            // BUY absorption at overbought = smart money SELLING into strength = BEARISH
+
+            if (
+                side === "sell" &&
+                (condition === "oversold" || condition === "extreme_oversold")
+            ) {
+                // SELL absorption at oversold = smart money buying the panic = BULLISH REVERSAL
+                passed = true;
+                reason = `absorption_sell_at_oversold: RSI ${this.currentRSI.toFixed(1)} (excellent bullish absorption - smart money buying panic)`;
+            } else if (
+                side === "buy" &&
+                (condition === "overbought" ||
+                    condition === "extreme_overbought")
+            ) {
+                // BUY absorption at overbought = smart money selling into buying = BEARISH REVERSAL
+                passed = true;
+                reason = `absorption_buy_at_overbought: RSI ${this.currentRSI.toFixed(1)} (excellent bearish absorption - smart money selling strength)`;
+            } else if (
+                side === "buy" &&
+                (condition === "oversold" || condition === "extreme_oversold")
+            ) {
+                // BUY absorption at oversold = less ideal (buying into panic)
+                passed = true;
+                reason = `absorption_buy_at_oversold: RSI ${this.currentRSI.toFixed(1)} (neutral absorption - buying into oversold)`;
+            } else if (
+                side === "sell" &&
+                (condition === "overbought" ||
+                    condition === "extreme_overbought")
+            ) {
+                // SELL absorption at overbought = less ideal (selling into strength)
+                passed = true;
+                reason = `absorption_sell_at_overbought: RSI ${this.currentRSI.toFixed(1)} (neutral absorption - selling into overbought)`;
+            } else {
+                // Neutral RSI for absorption
+                passed = true;
+                reason = `absorption_rsi_neutral: RSI ${this.currentRSI.toFixed(1)} (neutral conditions)`;
+            }
+        } else if (signalType === "reversal") {
             // For reversal signals, RSI extremes are actually FAVORABLE
             // The existing logic already works correctly - we just add better messaging
 
@@ -728,7 +768,7 @@ export class TraditionalIndicators {
 
     private validateOIR(
         side: "buy" | "sell",
-        signalType: "reversal" | "trend"
+        signalType: "reversal" | "trend" | "absorption_reversal"
     ): TraditionalIndicatorValues["oir"] {
         if (
             !this.config.oir.enabled ||
@@ -793,8 +833,8 @@ export class TraditionalIndicators {
         }
 
         // Apply filtering logic based on signal type
-        if (signalType === "reversal") {
-            // For reversal signals, extreme OIR indicates EXHAUSTION
+        if (signalType === "reversal" || signalType === "absorption_reversal") {
+            // For reversal signals (including absorption), extreme OIR indicates EXHAUSTION
             // Extreme selling = buy reversal opportunity
             // Extreme buying = sell reversal opportunity
 

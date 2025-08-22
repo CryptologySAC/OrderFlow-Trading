@@ -208,7 +208,8 @@ describe("Threshold Configuration Chain", () => {
     });
 
     describe("ExhaustionDetectorEnhanced Threshold Configuration", () => {
-        it("should use default threshold values when not provided", () => {
+        it("should load threshold values from configuration (NO DEFAULTS ALLOWED)", () => {
+            // CLAUDE.md: NO DEFAULTS ALLOWED - everything from config.json
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 mockConfig.symbols.LTCUSDT.exhaustion as any,
@@ -219,56 +220,30 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
-            // Check actual threshold defaults from cleaned mock config - accessing through enhancementConfig
-            expect(
-                (detector as any).enhancementConfig.exhaustionThreshold
-            ).toBe(0.05);
-            expect(
-                (detector as any).enhancementConfig.depletionVolumeThreshold
-            ).toBe(10); // From mock config (test environment uses different values than production)
-            expect(
-                (detector as any).enhancementConfig.depletionRatioThreshold
-            ).toBe(0.05); // From mock config
-            expect(
-                (detector as any).enhancementConfig
-                    .minEnhancedConfidenceThreshold
-            ).toBe(0.01); // From mock config
+            // Check that configuration values are properly loaded (only valid schema properties)
+            expect((detector as any).settings.exhaustionThreshold).toBe(0.25); // From __mocks__/config.json
+            expect((detector as any).settings.minAggVolume).toBe(10); // From __mocks__/config.json exhaustion section
+            expect((detector as any).settings.maxZonesPerSide).toBe(15); // From __mocks__/config.json
+            expect((detector as any).settings.zoneDepletionThreshold).toBe(0.15); // From __mocks__/config.json
         });
 
-        it("should use custom threshold values when provided", () => {
-            const customSettings = {
+        it("should use custom threshold values when provided (ONLY VALID SCHEMA PROPERTIES)", () => {
+            // ONLY use properties that exist in ExhaustionDetectorSchema
+            const validCustomSettings = {
+                minAggVolume: 50,
+                timeWindowIndex: 1,
                 exhaustionThreshold: 0.15,
-                depletionVolumeThreshold: 25,
-                depletionRatioThreshold: 0.6,
-                minEnhancedConfidenceThreshold: 0.1,
-            };
-
-            const completeSettings = {
-                // Core detection parameters (cleaned schema)
-                minAggVolume: 20,
-                windowMs: 45000,
-
-                // Enhancement control
-                useStandardizedZones: true,
-                enhancementMode: "production" as const,
-
-                // Enhanced depletion analysis
-                enableDepletionAnalysis: true,
-
-                // Cross-timeframe calculations
-                varianceReductionFactor: 1.5,
-                alignmentNormalizationFactor: 1.2,
-                passiveVolumeExhaustionRatio: 0.6,
-                aggressiveVolumeExhaustionThreshold: 0.8,
-                aggressiveVolumeReductionFactor: 0.6,
-
-                // Apply custom settings last to override defaults
-                ...customSettings,
+                eventCooldownMs: 5000,
+                maxZonesPerSide: 10,
+                zoneDepletionThreshold: 0.8,
+                gapDetectionTicks: 5,
+                zoneHistoryWindowMs: 120000,
+                passiveRatioBalanceThreshold: 0.75,
             };
 
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
-                completeSettings,
+                validCustomSettings,
                 mockPreprocessor,
                 mockLogger,
                 mockSpoofingDetector,
@@ -276,33 +251,30 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
-            // Verify custom values were applied correctly
-            expect(
-                (detector as any).enhancementConfig.exhaustionThreshold
-            ).toBe(0.15);
-            expect(
-                (detector as any).enhancementConfig.depletionVolumeThreshold
-            ).toBe(25);
-            expect(
-                (detector as any).enhancementConfig.depletionRatioThreshold
-            ).toBe(0.6);
-            expect(
-                (detector as any).enhancementConfig
-                    .minEnhancedConfidenceThreshold
-            ).toBe(0.1);
+            // Verify ONLY valid schema properties were applied correctly
+            expect((detector as any).settings.minAggVolume).toBe(50);
+            expect((detector as any).settings.timeWindowIndex).toBe(1);
+            expect((detector as any).settings.exhaustionThreshold).toBe(0.15);
+            expect((detector as any).settings.eventCooldownMs).toBe(5000);
+            expect((detector as any).settings.maxZonesPerSide).toBe(10);
+            expect((detector as any).settings.zoneDepletionThreshold).toBe(0.8);
+            expect((detector as any).settings.gapDetectionTicks).toBe(5);
+            expect((detector as any).settings.zoneHistoryWindowMs).toBe(120000);
+            expect((detector as any).settings.passiveRatioBalanceThreshold).toBe(0.75);
         });
 
-        it("should validate threshold configuration ranges", () => {
-            // Validation now happens in config.ts via Zod schema
-            // Test that valid configuration values are accepted
+        it("should validate threshold configuration ranges (VALID SCHEMA PROPERTIES)", () => {
+            // Validation happens in config.ts via Zod schema
+            // Test that valid boundary configuration values are accepted
 
             const detector = new ExhaustionDetectorEnhanced(
                 "test-exhaustion",
                 {
                     ...mockConfig.symbols.LTCUSDT.exhaustion,
-                    // Override with test-specific boundary values
-                    exhaustionThreshold: 0.01, // Minimum allowed value
-                    depletionVolumeThreshold: 1000, // Maximum allowed value
+                    // Override with test-specific boundary values within schema limits
+                    exhaustionThreshold: 0.01, // Minimum allowed value (0.01-1.0)
+                    minAggVolume: 1, // Minimum allowed value (1-100000)
+                    maxZonesPerSide: 20, // Maximum allowed value (1-20)
                 },
                 mockPreprocessor,
                 mockLogger,
@@ -311,13 +283,10 @@ describe("Threshold Configuration Chain", () => {
                 { logSignal: vi.fn() } as any
             );
 
-            // Verify the configuration was accepted correctly
-            expect(
-                (detector as any).enhancementConfig.exhaustionThreshold
-            ).toBe(0.01);
-            expect(
-                (detector as any).enhancementConfig.depletionVolumeThreshold
-            ).toBe(1000);
+            // Verify the valid boundary configuration was accepted correctly
+            expect((detector as any).settings.exhaustionThreshold).toBe(0.01);
+            expect((detector as any).settings.minAggVolume).toBe(1);
+            expect((detector as any).settings.maxZonesPerSide).toBe(20);
         });
     });
 
@@ -481,14 +450,14 @@ describe("Threshold Configuration Chain", () => {
             );
 
             expect(
-                (detector as any).enhancementConfig.imbalanceMediumThreshold
+                (detector as any).settings.imbalanceMediumThreshold
             ).toBeLessThan(
-                (detector as any).enhancementConfig.imbalanceHighThreshold
+                (detector as any).settings.imbalanceHighThreshold
             );
             expect(
-                (detector as any).enhancementConfig.spreadMediumThreshold
+                (detector as any).settings.spreadMediumThreshold
             ).toBeLessThan(
-                (detector as any).enhancementConfig.spreadHighThreshold
+                (detector as any).settings.spreadHighThreshold
             );
         });
     });

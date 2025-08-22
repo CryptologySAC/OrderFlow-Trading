@@ -482,7 +482,7 @@ export class OrderFlowDashboard {
                         zone: signal.zone,
                         actionType: signal.actionType,
                         confidence: signal.confidence,
-                        urgency: signal.urgency,
+                        // urgency removed - use confidence for prioritization
                         expectedDirection: signal.expectedDirection,
                         detectorId: signal.detectorId,
                     },
@@ -535,7 +535,7 @@ export class OrderFlowDashboard {
                         zone: signal.zone,
                         actionType: signal.actionType,
                         confidence: signal.confidence,
-                        urgency: signal.urgency,
+                        // urgency removed - use confidence for prioritization
                         expectedDirection: signal.expectedDirection,
                         detectorId: signal.detectorId,
                     },

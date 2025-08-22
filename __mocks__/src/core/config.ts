@@ -181,7 +181,7 @@ const mockExhaustionConfig = {
     ratioBalanceCenterPoint: 0.5,
     aggressiveVolumeExhaustionThreshold: 0.05, // Very low threshold for testing
     aggressiveVolumeReductionFactor: 0.5,
-    
+
     // Enhancement config properties for test compatibility
     enhancementConfig: {
         imbalanceMediumThreshold: 0.6,
@@ -281,7 +281,7 @@ export const Config = {
         oir: {
             enabled: true,
             lookbackPeriods: 20,
-            timeframeMs: 300000, // 5 minutes per period  
+            timeframeMs: 300000, // 5 minutes per period
             imbalanceHighThreshold: 0.7,
             imbalanceMediumThreshold: 0.6,
             imbalanceLowThreshold: 0.55,
