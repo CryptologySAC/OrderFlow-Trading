@@ -91,7 +91,7 @@ export class OrderBookState implements IOrderBookState {
 
     // Track best quotes for efficiency
     private _bestBid: number = 0;
-    private _bestAsk: number = Infinity;
+    private _bestAsk: number = 0; // ← Fix: Use 0 instead of Infinity
     private lastUpdateId: number = 0;
 
     // Circuitbreaker
@@ -125,6 +125,9 @@ export class OrderBookState implements IOrderBookState {
             options.disableSequenceValidation ?? false;
         this.startPruning();
         setInterval(() => this.connectionHealthCheck(), 10000);
+
+        // Ensure best quotes are calculated on initialization
+        this.recalculateBestQuotes();
     }
 
     /**
@@ -289,11 +292,13 @@ export class OrderBookState implements IOrderBookState {
     }
 
     public getBestAsk(): number {
-        return this._bestAsk === Infinity ? 0 : this._bestAsk;
+        return this._bestAsk;
     }
 
     public getSpread(): number {
-        if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
+        if (!this.isInitialized || this._bestBid === 0 || this._bestAsk === 0) {
+            return 0;
+        }
         return FinancialMath.calculateSpread(
             this._bestAsk,
             this._bestBid,
@@ -302,7 +307,9 @@ export class OrderBookState implements IOrderBookState {
     }
 
     public getMidPrice(): number {
-        if (this._bestBid === 0 || this._bestAsk === Infinity) return 0;
+        if (!this.isInitialized || this._bestBid === 0 || this._bestAsk === 0) {
+            return 0;
+        }
         return FinancialMath.calculateMidPrice(
             this._bestBid,
             this._bestAsk,
@@ -680,17 +687,39 @@ export class OrderBookState implements IOrderBookState {
     }
 
     private recalculateBestQuotes(): void {
-        this._bestBid = 0;
-        this._bestAsk = Infinity;
+        let maxBid = 0;
+        let minAsk = Infinity;
+        let hasValidLevels = false;
 
         for (const [price, level] of this.book) {
-            if (level.bid > 0 && price > this._bestBid) {
-                this._bestBid = price;
+            if (level.bid > 0) {
+                maxBid = Math.max(maxBid, price);
+                hasValidLevels = true;
             }
-            if (level.ask > 0 && price < this._bestAsk) {
-                this._bestAsk = price;
+            if (level.ask > 0) {
+                minAsk = Math.min(minAsk, price);
+                hasValidLevels = true;
             }
         }
+
+        // Only update if we have valid levels
+        if (hasValidLevels) {
+            this._bestBid = maxBid;
+            this._bestAsk = minAsk === Infinity ? 0 : minAsk;
+            this.isInitialized = true;
+        } else {
+            // Keep existing values if no valid levels
+            this.isInitialized = false;
+        }
+
+        // Add logging for debugging
+        this.logger.debug("[OrderBookState] Best quotes recalculated", {
+            bestBid: this._bestBid,
+            bestAsk: this._bestAsk,
+            spread: this.getSpread(),
+            bookSize: this.book.size,
+            isInitialized: this.isInitialized,
+        });
     }
 
     private pruneDistantLevels(): void {
@@ -821,7 +850,7 @@ export class OrderBookState implements IOrderBookState {
         // Clear book
         this.book.clear();
         this._bestBid = 0;
-        this._bestAsk = Infinity;
+        this._bestAsk = 0; // ← Fix: Use 0 instead of Infinity
         this.isInitialized = false;
 
         this.logger.info("[OrderBookState] Shutdown complete");
@@ -904,7 +933,7 @@ export class OrderBookState implements IOrderBookState {
             // Reset state
             this.book.clear();
             this._bestBid = 0;
-            this._bestAsk = Infinity;
+            this._bestAsk = 0; // ← Fix: Use 0 instead of Infinity
             this.isInitialized = false;
             this.snapshotBuffer = [];
             this.lastUpdateId = 0;
