@@ -1264,17 +1264,15 @@ export class OrderflowPreprocessor
                 FinancialMath.safeMultiply(i, zoneSize)
             );
             // Check cache first for existing zone with trade data
-            const zoneId = `${this.symbol}_${zoneTicks}T_${zoneLowerBoundary.toFixed(this.pricePrecision)}`;
-            const cachedZone = this.getZoneFromCache(zoneId);
+            //const zoneId = `${this.symbol}_${zoneTicks}T_${zoneLowerBoundary.toFixed(this.pricePrecision)}`;
+            //const cachedZone = this.getZoneFromCache(zoneId);
 
-            const zoneSnapshot =
-                cachedZone ||
-                this.createZoneSnapshot(
-                    zoneLowerBoundary,
-                    zoneTicks,
-                    timestamp,
-                    tradePrice
-                );
+            const zoneSnapshot = this.createZoneSnapshot(
+                zoneLowerBoundary,
+                zoneTicks,
+                timestamp,
+                tradePrice
+            );
 
             if (zoneSnapshot) {
                 snapshots.push(zoneSnapshot);

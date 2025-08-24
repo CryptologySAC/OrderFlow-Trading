@@ -612,6 +612,8 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 price: event.price,
                 timestamp: event.timestamp,
             });
+        } else {
+            this.logger.debug("Dynamic zone tracking:", { exhaustionPattern });
         }
 
         return {

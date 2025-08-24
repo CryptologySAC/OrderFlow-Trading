@@ -212,7 +212,6 @@ export class ExhaustionZoneTracker {
     public analyzeExhaustion(isBuyTrade: boolean): ExhaustionPattern {
         const relevantZones = isBuyTrade ? this.askZones : this.bidZones;
         const exhaustionType = isBuyTrade ? "ask" : "bid";
-
         let totalDepletionRatio = 0;
         let totalVelocity = 0;
         let affectedZones = 0;
@@ -284,19 +283,15 @@ export class ExhaustionZoneTracker {
             return { isExhausted: false, depletionRatio: 0, velocity: 0 };
         }
 
-        const peakVolume =
-            side === "bid"
-                ? zone.maxPassiveBidVolume
-                : zone.maxPassiveAskVolume;
-
-        if (peakVolume < this.config.minPeakVolume) {
-            return { isExhausted: false, depletionRatio: 0, velocity: 0 };
-        }
-
         const lastEntry = zone.history[zone.history.length - 1];
         if (!lastEntry) {
             return { isExhausted: false, depletionRatio: 0, velocity: 0 };
         }
+
+        const peakVolume =
+            side === "bid"
+                ? zone.maxPassiveBidVolume
+                : zone.maxPassiveAskVolume;
 
         const currentVolume =
             side === "bid"
@@ -310,6 +305,14 @@ export class ExhaustionZoneTracker {
 
         // Calculate velocity (rate of depletion)
         const velocity = this.calculateDepletionVelocity(zone, side);
+
+        if (peakVolume < this.config.minPeakVolume) {
+            return {
+                isExhausted: false,
+                depletionRatio: depletionRatio,
+                velocity: velocity,
+            };
+        }
 
         const isExhausted = depletionRatio >= this.config.depletionThreshold;
 
@@ -490,6 +493,7 @@ export class ExhaustionZoneTracker {
         // Include zones AT and BELOW the bid (and slightly above for spread zones)
         const distance = this.currentSpread.bid - priceLevel;
         const tickDistance = distance / this.tickSize;
+
         // Allow zones from slightly above bid (negative distance) to maxZonesPerSide below
         return (
             tickDistance >=
