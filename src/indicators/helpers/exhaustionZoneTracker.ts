@@ -39,6 +39,8 @@ interface TrackedZone {
     maxPassiveAskVolume: number; // Peak ask volume seen
     lastUpdate: number;
     depletionEvents: number; // Count of significant depletion events
+    consumptionConfidence: number; // Confidence that depletion is from real consumption (0-1)
+    lastConfirmedConsumption: number; // Timestamp of last confirmed consumption
 }
 
 /**
@@ -59,11 +61,19 @@ export interface ExhaustionPattern {
  * Configuration for zone tracking
  */
 export interface ZoneTrackerConfig {
-    maxZonesPerSide: number; // Number of zones to track on each side of spread
+    maxZonesPerSide: number; // Number of zones to track on each side
     historyWindowMs: number; // How long to keep zone history
     depletionThreshold: number; // Minimum depletion ratio to consider exhaustion (e.g., 0.7 = 70% depleted)
     minPeakVolume: number; // Minimum peak volume to consider for exhaustion
     gapDetectionTicks: number; // Price distance in ticks to detect gap creation
+    consumptionValidation?:
+        | {
+              maxReasonableVelocity: number; // Maximum reasonable depletion velocity
+              minConsumptionConfidence: number; // Minimum confidence required for exhaustion
+              confidenceDecayTimeMs: number; // Time after which confidence decays
+              minAggressiveVolumeRatio: number; // Minimum aggressive volume ratio for validation
+          }
+        | undefined;
 }
 
 /**
@@ -163,6 +173,8 @@ export class ExhaustionZoneTracker {
                 maxPassiveAskVolume: zone.passiveAskVolume,
                 lastUpdate: timestamp,
                 depletionEvents: 0,
+                consumptionConfidence: 0.5, // Start with neutral confidence
+                lastConfirmedConsumption: 0,
             };
             trackedZones.set(zoneKey, tracked);
         }
@@ -329,7 +341,17 @@ export class ExhaustionZoneTracker {
             };
         }
 
-        const isExhausted = depletionRatio >= this.config.depletionThreshold;
+        // Validate that depletion is from real consumption, not spoofing
+        const isValidConsumption = this.validateConsumptionPattern(
+            zone,
+            side,
+            depletionRatio,
+            velocity
+        );
+
+        const isExhausted =
+            depletionRatio >= this.config.depletionThreshold &&
+            isValidConsumption;
 
         return { isExhausted, depletionRatio, velocity };
     }
@@ -389,6 +411,105 @@ export class ExhaustionZoneTracker {
             totalChange * 1000, // Convert to per second
             timeSpan
         );
+    }
+
+    /**
+     * Validate that depletion is from real consumption, not spoofing
+     * Uses multiple heuristics to distinguish genuine trading activity from order manipulation
+     */
+    private validateConsumptionPattern(
+        zone: TrackedZone,
+        side: "bid" | "ask",
+        depletionRatio: number,
+        velocity: number
+    ): boolean {
+        if (zone.history.length < 3) {
+            return false; // Need more data for validation
+        }
+
+        // Heuristic 1: Check for suspicious velocity patterns (too fast = likely spoofing)
+        const maxReasonableVelocity =
+            this.config.consumptionValidation?.maxReasonableVelocity ?? 1000;
+        if (velocity > maxReasonableVelocity) {
+            return false; // Too fast, likely spoofing
+        }
+
+        // Heuristic 2: Check for gradual vs sudden depletion patterns
+        const recentHistory = zone.history.slice(-5);
+        let suddenDrops = 0;
+        let gradualChanges = 0;
+
+        for (let i = 1; i < recentHistory.length; i++) {
+            const prev = recentHistory[i - 1];
+            const curr = recentHistory[i];
+
+            if (!prev || !curr) continue;
+
+            const prevVolume =
+                side === "bid" ? prev.passiveBidVolume : prev.passiveAskVolume;
+            const currVolume =
+                side === "bid" ? curr.passiveBidVolume : curr.passiveAskVolume;
+
+            if (prevVolume > 0) {
+                const changeRatio = (prevVolume - currVolume) / prevVolume;
+
+                if (changeRatio > 0.5) {
+                    suddenDrops++; // >50% drop in single update
+                } else if (changeRatio > 0.05) {
+                    gradualChanges++; // 5-50% drop (reasonable trading)
+                }
+            }
+        }
+
+        // If mostly sudden drops with few gradual changes, likely spoofing
+        if (suddenDrops > gradualChanges * 2) {
+            return false;
+        }
+
+        // Heuristic 3: Check for consumption confidence based on recent activity
+        const timeSinceLastConsumption =
+            Date.now() - zone.lastConfirmedConsumption;
+        const confidenceDecayTime =
+            this.config.consumptionValidation?.confidenceDecayTimeMs ?? 30000;
+
+        if (timeSinceLastConsumption > confidenceDecayTime) {
+            // Confidence decays over time without confirmed consumption
+            zone.consumptionConfidence = Math.max(
+                0.1,
+                zone.consumptionConfidence * 0.9
+            );
+        }
+
+        // Heuristic 4: Check for realistic depletion patterns
+        // Real consumption typically shows some aggressive volume activity
+        const recentAggressiveVolume = recentHistory.reduce((sum, entry) => {
+            return FinancialMath.safeAdd(sum, entry.aggressiveVolume);
+        }, 0);
+
+        // If significant depletion but no aggressive volume, suspicious
+        const minAggressiveRatio =
+            this.config.consumptionValidation?.minAggressiveVolumeRatio ?? 0.1;
+        if (
+            depletionRatio > 0.3 &&
+            recentAggressiveVolume <
+                this.config.minPeakVolume * minAggressiveRatio
+        ) {
+            return false;
+        }
+
+        // Update confidence based on validation results
+        if (gradualChanges > 0 && recentAggressiveVolume > 0) {
+            zone.consumptionConfidence = Math.min(
+                1.0,
+                zone.consumptionConfidence + 0.1
+            );
+            zone.lastConfirmedConsumption = Date.now();
+        }
+
+        // Require minimum confidence for exhaustion signal
+        const minConfidence =
+            this.config.consumptionValidation?.minConsumptionConfidence ?? 0.4;
+        return zone.consumptionConfidence >= minConfidence;
     }
 
     /**

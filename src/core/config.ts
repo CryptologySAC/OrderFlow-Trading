@@ -130,6 +130,16 @@ export const ExhaustionDetectorSchema = z.object({
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.99), // Replace hardcoded 0.5
     passiveRatioAnomalyStdDev: z.number().min(1.0).max(10.0),
     minPeakVolume: z.number().int().min(10).max(100000).optional(), // Optional: fallback to minAggVolume
+
+    // Consumption validation to prevent spoofing false signals
+    consumptionValidation: z
+        .object({
+            maxReasonableVelocity: z.number().min(1).max(10000), // Max depletion velocity (units/sec)
+            minConsumptionConfidence: z.number().min(0.1).max(1.0), // Min confidence for exhaustion
+            confidenceDecayTimeMs: z.number().min(1000).max(300000), // Confidence decay time
+            minAggressiveVolumeRatio: z.number().min(0.01).max(1.0), // Min aggressive volume ratio
+        })
+        .optional(),
 });
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain

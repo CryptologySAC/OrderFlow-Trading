@@ -119,6 +119,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             depletionThreshold: settings.zoneDepletionThreshold,
             minPeakVolume: settings.minPeakVolume || settings.minAggVolume,
             gapDetectionTicks: settings.gapDetectionTicks,
+            consumptionValidation: settings.consumptionValidation,
         };
         this.zoneTracker = new ExhaustionZoneTracker(
             zoneTrackerConfig,

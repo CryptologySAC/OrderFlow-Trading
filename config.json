@@ -240,7 +240,13 @@
                 "zoneDepletionThreshold": 0.75,
                 "gapDetectionTicks": 3,
                 "zoneHistoryWindowMs": 300000,
-                "passiveRatioAnomalyStdDev": 2.5
+                "passiveRatioAnomalyStdDev": 2.5,
+                "consumptionValidation": {
+                    "maxReasonableVelocity": 1000,
+                    "minConsumptionConfidence": 0.4,
+                    "confidenceDecayTimeMs": 30000,
+                    "minAggressiveVolumeRatio": 0.1
+                }
             },
 
             "absorption": {
