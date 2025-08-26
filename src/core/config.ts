@@ -128,6 +128,7 @@ export const ExhaustionDetectorSchema = z.object({
 
     // Additional configurable thresholds to replace magic numbers
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.99), // Replace hardcoded 0.5
+    passiveRatioAnomalyStdDev: z.number().min(1.0).max(10.0),
     minPeakVolume: z.number().int().min(10).max(100000).optional(), // Optional: fallback to minAggVolume
 });
 
@@ -142,7 +143,9 @@ export const AbsorptionDetectorSchema = z.object({
     priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
     maxPriceImpactRatio: z.number().min(0.0).max(1.0),
     minPassiveMultiplier: z.number().min(0.5).max(250.0),
-    passiveAbsorptionThreshold: z.number().min(0.1).max(50),
+    passiveAbsorptionThreshold: z.number().min(0.1).max(0.98),
+    passiveAbsorptionThresholdElite: z.number().min(0.98).max(1.0),
+    passiveAbsorptionAnomalyStdDev: z.number().min(1.0).max(10.0),
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),

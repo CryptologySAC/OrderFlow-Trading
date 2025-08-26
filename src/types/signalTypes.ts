@@ -596,6 +596,7 @@ export interface ExhaustionThresholdChecks {
     minAggVolume: ThresholdCheck<number>;
     exhaustionThreshold: ThresholdCheck<number>;
     passiveRatioBalanceThreshold: ThresholdCheck<number>;
+    minPeakVolumeCheck: ThresholdCheck<number>; // Added this line
     phaseContext: PhaseContext;
 }
 

@@ -219,7 +219,7 @@ export class TraditionalIndicators {
      */
     public validateSignal(
         price: number,
-        side: "buy" | "sell",
+        side: "buy" | "sell" | null,
         signalType: "reversal" | "trend" | "absorption_reversal" = "trend"
     ): TraditionalIndicatorValues {
         try {

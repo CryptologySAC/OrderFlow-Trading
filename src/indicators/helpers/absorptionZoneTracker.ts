@@ -198,7 +198,8 @@ export class AbsorptionZoneTracker {
         const relevantZones = isBuyTrade ? this.askZones : this.bidZones;
         const absorptionType = isBuyTrade ? "ask" : "bid";
 
-        let totalAbsorptionRatio = 0;
+        let totalWeightedAbsorptionRatio = 0;
+        let totalAggressiveVolume = 0;
         let totalStrength = 0;
         let affectedZones = 0;
         let maxAbsorption = 0;
@@ -209,7 +210,9 @@ export class AbsorptionZoneTracker {
 
             if (analysis.isAbsorbing) {
                 affectedZones++;
-                totalAbsorptionRatio += analysis.absorptionRatio;
+                totalWeightedAbsorptionRatio +=
+                    analysis.absorptionRatio * zone.totalAggressiveVolume;
+                totalAggressiveVolume += zone.totalAggressiveVolume;
                 totalStrength += analysis.strength;
                 maxAbsorption = Math.max(
                     maxAbsorption,
@@ -226,7 +229,7 @@ export class AbsorptionZoneTracker {
             }
         }
 
-        if (affectedZones === 0) {
+        if (affectedZones === 0 || totalAggressiveVolume === 0) {
             return {
                 hasAbsorption: false,
                 absorptionType: null,
@@ -239,13 +242,14 @@ export class AbsorptionZoneTracker {
             };
         }
 
-        const avgAbsorptionRatio = totalAbsorptionRatio / affectedZones;
+        const weightedAvgAbsorptionRatio =
+            totalWeightedAbsorptionRatio / totalAggressiveVolume;
         const avgStrength = totalStrength / affectedZones;
         const priceStability = this.checkPriceStability();
 
         // Calculate confidence based on multiple factors
         const confidence = this.calculateAbsorptionConfidence(
-            avgAbsorptionRatio,
+            weightedAvgAbsorptionRatio,
             affectedZones,
             maxAbsorption,
             priceStability
@@ -263,7 +267,7 @@ export class AbsorptionZoneTracker {
         return {
             hasAbsorption: hasSignificantAbsorption,
             absorptionType,
-            absorptionRatio: avgAbsorptionRatio,
+            absorptionRatio: weightedAvgAbsorptionRatio,
             absorptionStrength: avgStrength,
             affectedZones,
             confidence,

@@ -74,6 +74,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
     private readonly windowMs: number;
     private readonly enhancementStats: AbsorptionEnhancementStats;
 
+    // Dynamic thresholding
+    private passiveVolumeRatioHistory: number[] = [];
+    private rollingPassiveVolumeRatioAverage = 0;
+    private readonly ROLLING_WINDOW_SIZE = 100; // Same as analysis script
+
     // Dynamic zone tracking for true absorption detection
     private readonly zoneTracker: AbsorptionZoneTracker;
 
@@ -173,29 +178,11 @@ export class AbsorptionDetectorEnhanced extends Detector {
             const phaseDirection = phaseContext.currentPhase.direction;
             const signalSide = signalCandidate.side;
 
-            // Suppress all signals during SIDEWAYS phase - no trend to reverse
-            if (phaseDirection === "SIDEWAYS") {
-                this.logger.debug(
-                    "AbsorptionDetectorEnhanced: Signal skipped - SIDEWAYS phase",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        signalSide,
-                        phaseDirection,
-                        consolidationRange: {
-                            high: phaseContext.currentPhase.consolidationHigh,
-                            low: phaseContext.currentPhase.consolidationLow,
-                        },
-                        reason: "sideways_phase_no_trend",
-                    }
-                );
-                return;
-            }
-
             // Only emit reversal signals for directional phases:
             // - Buy absorption during DOWN phase (potential bottom reversal)
             // - Sell absorption during UP phase (potential top reversal)
             const isReversal =
+                phaseDirection === "SIDEWAYS" ||
                 (phaseDirection === "DOWN" && signalSide === "buy") ||
                 (phaseDirection === "UP" && signalSide === "sell");
 
@@ -213,7 +200,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                         reason: "trend_confirming_absorption",
                     }
                 );
-                return;
+                //return; // TODO turned off temporarely for validation logging
             }
 
             // Log reversal signal detection
@@ -328,8 +315,29 @@ export class AbsorptionDetectorEnhanced extends Detector {
             volumePressure.directionalPassiveVolume,
             volumePressure.totalDirectionalVolume
         );
+
+        // Update rolling average and history
+        this.passiveVolumeRatioHistory.push(passiveVolumeRatio);
+        if (this.passiveVolumeRatioHistory.length > this.ROLLING_WINDOW_SIZE) {
+            this.passiveVolumeRatioHistory.shift();
+        }
+        this.rollingPassiveVolumeRatioAverage =
+            this.passiveVolumeRatioHistory.reduce((a, b) => a + b, 0) /
+            this.passiveVolumeRatioHistory.length;
+
+        const stdDev = Math.sqrt(
+            this.passiveVolumeRatioHistory
+                .map((x) =>
+                    Math.pow(x - this.rollingPassiveVolumeRatioAverage, 2)
+                )
+                .reduce((a, b) => a + b, 0) /
+                this.passiveVolumeRatioHistory.length
+        );
+
         const passesThreshold_passiveAbsorptionThreshold =
-            passiveVolumeRatio >= this.settings.passiveAbsorptionThreshold;
+            passiveVolumeRatio >=
+            this.rollingPassiveVolumeRatioAverage +
+                stdDev * this.settings.passiveAbsorptionAnomalyStdDev;
 
         // Calculate price efficiency using FinancialMath (institutional precision)
         // priceEfficiencyThreshold: priceEfficiency <= this.enhancementConfig.priceEfficiencyThreshold
@@ -346,7 +354,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             event,
             volumePressure.pressureRatio
         );
-        const passesThreshold_maxPriceImpactRatio =
+        let passesThreshold_maxPriceImpactRatio =
             priceImpactRatio !== null &&
             priceImpactRatio <= this.settings.maxPriceImpactRatio;
 
@@ -371,7 +379,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                       actualPassiveMultiplier
                   )
                 : Number.MAX_SAFE_INTEGER;
-        const passesThreshold_maxVolumeMultiplierRatio =
+        let passesThreshold_maxVolumeMultiplierRatio =
             volumeMultiplierRatio <= this.settings.maxVolumeMultiplierRatio;
 
         // NOTE: Removed redundant absorptionScore calculation
@@ -380,12 +388,12 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Caluclate balanced flow
         const balancedFlow = this.calculateBalancedFlow(relevantZones);
-        const passesThreshold_balanceThreshold =
+        let passesThreshold_balanceThreshold =
             balancedFlow && balancedFlow <= this.settings.balanceThreshold;
 
         // Calculate price movement range in ticks using zone tracker's time-based approach
         const priceMovementTicks = this.zoneTracker.getPriceRangeInTicks();
-        const passesThreshold_priceStabilityTicks =
+        let passesThreshold_priceStabilityTicks =
             priceMovementTicks <= this.settings.priceStabilityTicks;
 
         // Determine dominant side and signal direction
@@ -396,6 +404,58 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         const phaseContext: PhaseContext = event.phaseContext;
         this.logger.debug("PhaseContext:", { phaseContext });
+
+        // Check special overrides:
+
+        // Combination group 1: Volume Excellence Override (Corrected Logic)
+        // Rationale: Massive volume absorbed with low price impact is a textbook institutional signal.
+        const volumeExcellenceOverride =
+            volumePressure.directionalAggressiveVolume >=
+                5 * this.settings.minAggVolume &&
+            passiveVolumeRatio > this.settings.passiveAbsorptionThresholdElite;
+        if (volumeExcellenceOverride) {
+            this.logger.info(
+                "[Absorption Override] Volume Excellence triggered."
+            );
+            // Override balance and stability, but ENFORCE low price impact.
+            passesThreshold_balanceThreshold = true;
+            passesThreshold_priceStabilityTicks =
+                priceMovementTicks <= 3 * this.settings.priceStabilityTicks;
+            // CRITICAL CHANGE: Ensure price impact is LOW, not relaxed.
+            passesThreshold_maxPriceImpactRatio =
+                priceImpactRatio !== null &&
+                priceImpactRatio <= this.settings.maxPriceImpactRatio * 0.5;
+        }
+
+        // Combination group 2: Efficiency Champion Override (Unchanged)
+        // Rationale: Exceptional efficiency + strong passive absorption indicates smart money accumulation.
+        const efficiencyChampionOverride =
+            priceEfficiency <= this.settings.priceEfficiencyThreshold / 5 &&
+            actualPassiveMultiplier >= 3 * this.settings.minPassiveMultiplier;
+        if (efficiencyChampionOverride) {
+            this.logger.info(
+                "[Absorption Override] Efficiency Champion triggered."
+            );
+            passesThreshold_balanceThreshold = true;
+            passesThreshold_maxVolumeMultiplierRatio = true;
+            passesThreshold_priceStabilityTicks =
+                priceMovementTicks <= 2 * this.settings.priceStabilityTicks;
+        }
+
+        // Combination group 3: Institutional Override (Corrected Logic)
+        // Rationale: Elite passive absorption indicates sophisticated accumulation patterns.
+        const institutionalOverride =
+            actualPassiveMultiplier >= 5 * this.settings.minPassiveMultiplier &&
+            passiveVolumeRatio >= this.settings.passiveAbsorptionThresholdElite;
+        if (institutionalOverride) {
+            this.logger.info(
+                "[Absorption Override] Institutional Override triggered."
+            );
+            passesThreshold_balanceThreshold = true;
+            // CRITICAL CHANGE: Removed relaxation of price impact. Strong passive absorption should control price.
+            passesThreshold_priceStabilityTicks =
+                priceMovementTicks <= 2 * this.settings.priceStabilityTicks;
+        }
 
         // Check if we pass all thresholds
         const isCoreAbosrption =
@@ -1164,25 +1224,23 @@ export class AbsorptionDetectorEnhanced extends Detector {
         relevantPassiveVolume: number,
         buyerIsMaker: boolean
     ): "buy" | "sell" | null {
-        // CRITICAL FIX: Use same directional logic as calculateVolumePressure
-        // - Buy trades (buyerIsMaker = false): Only count passiveAskVolume (hitting asks)
-        // - Sell trades (buyerIsMaker = true): Only count passiveBidVolume (hitting bids)
-
-        // DIRECTIONAL SIGNAL LOGIC: Signal follows the trade direction that shows absorption
-        // This aligns with calculateVolumePressure which also uses directional passive volume
+        // Corrected Reversal Logic for Absorption:
+        // - If aggressive BUYING is absorbed by passive sellers, it's a bearish signal (SELL).
+        // - If aggressive SELLING is absorbed by passive buyers, it's a bullish signal (BUY).
         if (relevantPassiveVolume > 0) {
-            const signalSide = buyerIsMaker ? "sell" : "buy";
+            // The trade direction is being absorbed; the signal should be for a reversal.
+            const signalSide = buyerIsMaker ? "buy" : "sell"; // If seller is maker (buy trade), signal sell. If buyer is maker (sell trade), signal buy.
             this.logger.info(
-                `AbsorptionDetectorEnhanced: Returning ${signalSide.toUpperCase()} signal (directional absorption detected)`,
+                `AbsorptionDetectorEnhanced: Returning ${signalSide.toUpperCase()} reversal signal`,
                 {
                     relevantPassiveVolume,
-                    tradeDirection: buyerIsMaker ? "SELL" : "BUY",
+                    absorbedTradeDirection: buyerIsMaker ? "SELL" : "BUY",
                     signalSide,
                 }
             );
             return signalSide;
         }
-        return null; // No directional absorption
+        return null; // No directional absorption detected.
     }
 
     // Update zone tracker with current market data

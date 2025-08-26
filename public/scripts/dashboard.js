@@ -8,7 +8,7 @@
 import { TradeWebSocket } from "./websocket.js";
 
 const TRADE_WEBSOCKET_URL = "ws://localhost:3001";
-const MAX_TRADES = 10000;
+const MAX_TRADES = 50000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY_MS = 1000;
 const PING_INTERVAL_MS = 10000;

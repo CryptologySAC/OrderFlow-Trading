@@ -26,13 +26,16 @@
         "update": "npx npm-check-updates -u",
         "build": "yarn format && tsc -p tsconfig.build.json",
         "test": "vitest --run",
+
         "test:coverage": "vitest run --coverage",
         "check:deps": "yarn install --check-cache",
         "typecheck": "tsc --noEmit",
         "build:watch": "tsc -p tsconfig.build.json --watch",
         "analyze:signals": "npx tsx analysis/analyze_success_with_price_reconstruction.ts",
         "analyze:thresholds": "npx tsx analysis/analyze_threshold_optimization_binary.ts",
-        "analyze:traditional": "npx  --node-options='--max-old-space-size=16384' tsx analysis/analyze_traditional_indicators.ts"
+        "analyze:traditional": "npx  --node-options='--max-old-space-size=16384' tsx analysis/analyze_traditional_indicators.ts",
+        "check": "yarn lint && yarn typecheck && yarn build && yarn test",
+        "check:ci": "yarn lint && yarn typecheck && yarn build --if-present && yarn test:coverage"
     },
     "devDependencies": {
         "@types/better-sqlite3": "7.6.13",
@@ -73,6 +76,7 @@
         "@types/express": "^5.0.3",
         "async-mutex": "^0.5.0",
         "better-sqlite3": "^12.2.0",
+        "decimal.js": "^10.6.0",
         "dotenv": "^17.2.1",
         "express": "^5.1.0",
         "fastpriorityqueue": "^0.7.5",

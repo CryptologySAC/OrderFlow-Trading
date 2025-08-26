@@ -52,6 +52,7 @@ export interface ExhaustionPattern {
     affectedZones: number;
     confidence: number;
     gapCreated: boolean; // True if liquidity moved to wider levels
+    passesMinPeakVolume: boolean; // Added: Indicates if minPeakVolume was met for any affected zone
 }
 
 /**
@@ -212,28 +213,39 @@ export class ExhaustionZoneTracker {
     public analyzeExhaustion(isBuyTrade: boolean): ExhaustionPattern {
         const relevantZones = isBuyTrade ? this.askZones : this.bidZones;
         const exhaustionType = isBuyTrade ? "ask" : "bid";
-        let totalDepletionRatio = 0;
+        let totalWeightedDepletion = 0;
+        let totalPeakVolume = 0;
         let totalVelocity = 0;
         let affectedZones = 0;
         let maxDepletion = 0;
         let hasSignificantExhaustion = false;
+        let passesMinPeakVolumeOverall = false; // Initialize
 
         for (const zone of relevantZones.values()) {
             const analysis = this.analyzeZoneExhaustion(zone, exhaustionType);
 
             if (analysis.isExhausted) {
                 affectedZones++;
-                totalDepletionRatio += analysis.depletionRatio;
+                const peakVolume =
+                    exhaustionType === "bid"
+                        ? zone.maxPassiveBidVolume
+                        : zone.maxPassiveAskVolume;
+                totalWeightedDepletion += analysis.depletionRatio * peakVolume;
+                totalPeakVolume += peakVolume;
                 totalVelocity += analysis.velocity;
                 maxDepletion = Math.max(maxDepletion, analysis.depletionRatio);
 
                 if (analysis.depletionRatio >= this.config.depletionThreshold) {
                     hasSignificantExhaustion = true;
                 }
+                // Add this line:
+                if (peakVolume >= this.config.minPeakVolume) {
+                    passesMinPeakVolumeOverall = true;
+                }
             }
         }
 
-        if (affectedZones === 0) {
+        if (affectedZones === 0 || totalPeakVolume === 0) {
             return {
                 hasExhaustion: false,
                 exhaustionType: null,
@@ -242,16 +254,18 @@ export class ExhaustionZoneTracker {
                 affectedZones: 0,
                 confidence: 0,
                 gapCreated: false,
+                passesMinPeakVolume: false, // Added this line
             };
         }
 
-        const avgDepletionRatio = totalDepletionRatio / affectedZones;
+        const weightedAvgDepletionRatio =
+            totalWeightedDepletion / totalPeakVolume;
         const avgVelocity = totalVelocity / affectedZones;
         const gapCreated = this.detectGapCreation(exhaustionType);
 
         // Calculate confidence based on multiple factors
         const confidence = this.calculateExhaustionConfidence(
-            avgDepletionRatio,
+            weightedAvgDepletionRatio,
             affectedZones,
             maxDepletion,
             gapCreated
@@ -260,11 +274,12 @@ export class ExhaustionZoneTracker {
         return {
             hasExhaustion: hasSignificantExhaustion,
             exhaustionType,
-            depletionRatio: avgDepletionRatio,
+            depletionRatio: weightedAvgDepletionRatio,
             depletionVelocity: avgVelocity,
             affectedZones,
             confidence,
             gapCreated,
+            passesMinPeakVolume: passesMinPeakVolumeOverall, // Added this line
         };
     }
 
@@ -326,15 +341,23 @@ export class ExhaustionZoneTracker {
         zone: TrackedZone,
         side: "bid" | "ask"
     ): number {
-        if (zone.history.length < 3) {
+        if (zone.history.length < 2) {
             return 0;
         }
 
-        // Look at recent history (last N entries or available)
         const historyLookback = 5; // Number of recent entries to analyze
         const recentHistory = zone.history.slice(-historyLookback);
+        if (recentHistory.length < 2) {
+            return 0;
+        }
+
         let totalChange = 0;
-        let timeSpan = 0;
+        const startTime = recentHistory[0]?.timestamp;
+        const endTime = recentHistory[recentHistory.length - 1]?.timestamp;
+
+        if (!startTime || !endTime || startTime === endTime) {
+            return 0;
+        }
 
         for (let i = 1; i < recentHistory.length; i++) {
             const prev = recentHistory[i - 1];
@@ -354,11 +377,10 @@ export class ExhaustionZoneTracker {
                 // Only count depletion
                 totalChange += change;
             }
-
-            timeSpan = curr.timestamp - prev.timestamp;
         }
 
-        if (timeSpan === 0) {
+        const timeSpan = endTime - startTime;
+        if (timeSpan <= 0) {
             return 0;
         }
 
@@ -378,25 +400,83 @@ export class ExhaustionZoneTracker {
         }
 
         const zones = side === "bid" ? this.bidZones : this.askZones;
+        if (zones.size === 0) {
+            return false;
+        }
+
         const spreadPrice =
             side === "bid" ? this.currentSpread.bid : this.currentSpread.ask;
 
-        // Check if nearest zones are depleted
-        let nearestDepleted = false;
-        let hasWiderLiquidity = false;
+        // Find the most relevant, depleted zone at the spread
+        let primaryZone: TrackedZone | null = null;
+        let minDistance = Infinity;
 
         for (const zone of zones.values()) {
             const distance = Math.abs(zone.priceLevel - spreadPrice);
-            const distanceInTicks = distance / this.tickSize;
+            if (distance < minDistance) {
+                minDistance = distance;
+                primaryZone = zone;
+            }
+        }
 
-            if (distanceInTicks <= 1) {
-                // Nearest zone
-                const analysis = this.analyzeZoneExhaustion(zone, side);
-                if (analysis.depletionRatio > 0.8) {
-                    nearestDepleted = true;
-                }
-            } else if (distanceInTicks >= this.config.gapDetectionTicks) {
-                // Wider zone
+        if (!primaryZone) {
+            return false;
+        }
+
+        // 1. Check if the primary zone is significantly depleted
+        const primaryAnalysis = this.analyzeZoneExhaustion(primaryZone, side);
+        if (primaryAnalysis.depletionRatio < 0.8) {
+            // Not depleted enough to be the leading edge of a gap
+            return false;
+        }
+
+        // 2. Define the "gap zone" immediately behind the primary zone
+        const gapZoneStart =
+            side === "bid"
+                ? primaryZone.priceLevel - this.tickSize
+                : primaryZone.priceLevel + this.tickSize;
+        const gapZoneEnd =
+            side === "bid"
+                ? gapZoneStart - this.config.gapDetectionTicks * this.tickSize
+                : gapZoneStart + this.config.gapDetectionTicks * this.tickSize;
+
+        // 3. Check for a lack of liquidity in the gap zone
+        let liquidityInGapZone = 0;
+        for (const zone of zones.values()) {
+            if (
+                (side === "bid" &&
+                    zone.priceLevel < primaryZone.priceLevel &&
+                    zone.priceLevel >= gapZoneEnd) ||
+                (side === "ask" &&
+                    zone.priceLevel > primaryZone.priceLevel &&
+                    zone.priceLevel <= gapZoneEnd)
+            ) {
+                const lastEntry = zone.history[zone.history.length - 1];
+                const currentVolume =
+                    side === "bid"
+                        ? lastEntry?.passiveBidVolume || 0
+                        : lastEntry?.passiveAskVolume || 0;
+                liquidityInGapZone += currentVolume;
+            }
+        }
+
+        // If liquidity in the gap is high, it's not a true gap
+        if (liquidityInGapZone > this.config.minPeakVolume * 0.5) {
+            return false;
+        }
+
+        // 4. Confirm that significant liquidity exists at a wider level
+        let hasWiderLiquidity = false;
+        const widerZoneStart =
+            side === "bid"
+                ? gapZoneEnd - this.tickSize
+                : gapZoneEnd + this.tickSize;
+
+        for (const zone of zones.values()) {
+            if (
+                (side === "bid" && zone.priceLevel <= widerZoneStart) ||
+                (side === "ask" && zone.priceLevel >= widerZoneStart)
+            ) {
                 const lastEntry = zone.history[zone.history.length - 1];
                 const currentVolume =
                     side === "bid"
@@ -405,11 +485,12 @@ export class ExhaustionZoneTracker {
 
                 if (currentVolume > this.config.minPeakVolume) {
                     hasWiderLiquidity = true;
+                    break;
                 }
             }
         }
 
-        return nearestDepleted && hasWiderLiquidity;
+        return hasWiderLiquidity; // A true gap exists if there's a depleted front, a low-liquidity middle, and a high-liquidity back.
     }
 
     /**
@@ -460,7 +541,10 @@ export class ExhaustionZoneTracker {
         }
 
         const current = zone.history[zone.history.length - 1];
-        const previous = zone.history[zone.history.length - 2];
+        const previous =
+            zone.history.length > 1
+                ? zone.history[zone.history.length - 2]
+                : null;
 
         if (!current || !previous) {
             return;

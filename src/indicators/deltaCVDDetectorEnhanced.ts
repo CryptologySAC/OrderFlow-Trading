@@ -318,51 +318,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const realConfidence = divergenceResult.divergenceStrength;
         const signalSide = this.determineCVDSignalSide(event);
 
-        // ===== PHASE FILTERING: Only emit reversal signals =====
-        if (signalSide !== null && event.phaseContext) {
-            const phaseDirection = event.phaseContext.currentPhase?.direction;
-
-            // Suppress all signals during SIDEWAYS phase - no trend to reverse
-            if (phaseDirection === "SIDEWAYS") {
-                this.logger.debug(
-                    "[DeltaCVDDetectorEnhanced DEBUG] Skipping SIDEWAYS phase signal",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        phaseDirection,
-                        signalSide,
-                        consolidationRange: {
-                            high: event.phaseContext.currentPhase
-                                ?.consolidationHigh,
-                            low: event.phaseContext.currentPhase
-                                ?.consolidationLow,
-                        },
-                        signalType: "sideways_phase_no_trend",
-                    }
-                );
-                return null;
-            }
-
-            // Only emit reversal signals for directional phases
-            const isReversal =
-                (phaseDirection === "UP" && signalSide === "sell") ||
-                (phaseDirection === "DOWN" && signalSide === "buy");
-
-            if (!isReversal) {
-                // Skip trend-confirming signals - user only wants reversal signals
-                this.logger.debug(
-                    "[DeltaCVDDetectorEnhanced DEBUG] Skipping trend-confirming signal",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        phaseDirection,
-                        signalSide,
-                        signalType: "trend_confirming",
-                    }
-                );
-                return null;
-            }
-        }
+        // MOMENTUM LOGIC: No phase filtering is applied. This detector identifies momentum, not reversals.
+        // The signal side is determined by the CVD imbalance, and it is emitted regardless of the broader market phase.
 
         // ===== SINGLE EVALUATION: One decision point =====
         const thresholds: DeltaCVDThresholdChecks = {

@@ -73,6 +73,11 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private readonly enhancementStats: ExhaustionEnhancementStats;
     private readonly zoneTracker: ExhaustionZoneTracker;
 
+    // Dynamic thresholding
+    private passiveRatioHistory: number[] = [];
+    private rollingPassiveRatioAverage = 0;
+    private readonly ROLLING_WINDOW_SIZE = 100;
+
     // Signal cooldown tracking (CLAUDE.md compliance - no magic cooldown values)
     private readonly lastSignal = new Map<string, number>();
 
@@ -192,29 +197,11 @@ export class ExhaustionDetectorEnhanced extends Detector {
             const phaseDirection = phaseContext.currentPhase.direction;
             const signalSide = signalCandidate.side;
 
-            // Suppress all signals during SIDEWAYS phase - no trend to reverse
-            if (phaseDirection === "SIDEWAYS") {
-                this.logger.debug(
-                    "ExhaustionDetectorEnhanced: Signal skipped - SIDEWAYS phase",
-                    {
-                        detectorId: this.getId(),
-                        price: event.price,
-                        signalSide,
-                        phaseDirection,
-                        consolidationRange: {
-                            high: phaseContext.currentPhase.consolidationHigh,
-                            low: phaseContext.currentPhase.consolidationLow,
-                        },
-                        reason: "sideways_phase_no_trend",
-                    }
-                );
-                return;
-            }
-
             // Only emit reversal signals for directional phases:
             // - Bid exhaustion during UP phase (potential top reversal)
             // - Ask exhaustion during DOWN phase (potential bottom reversal)
             const isReversal =
+                phaseDirection === "SIDEWAYS" ||
                 (phaseDirection === "UP" && signalSide === "sell") ||
                 (phaseDirection === "DOWN" && signalSide === "buy");
 
@@ -232,7 +219,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                         reason: "trend_confirming_exhaustion",
                     }
                 );
-                return;
+                //return; // TODO turned off temporarely for validation logging
             }
 
             // Log reversal signal detection
@@ -333,10 +320,25 @@ export class ExhaustionDetectorEnhanced extends Detector {
             volumePressure.directionalAggressiveVolume >=
             this.settings.minAggVolume;
 
-        // passiveRatioBalanceThreshold EQS
-        const passesThreshold_passiveRatioBalanceThreshold =
-            volumePressure.accumulatedPassiveRatio <=
-            this.settings.passiveRatioBalanceThreshold;
+        // Update rolling average and history
+        this.passiveRatioHistory.push(volumePressure.accumulatedPassiveRatio);
+        if (this.passiveRatioHistory.length > this.ROLLING_WINDOW_SIZE) {
+            this.passiveRatioHistory.shift();
+        }
+        this.rollingPassiveRatioAverage =
+            this.passiveRatioHistory.reduce((a, b) => a + b, 0) /
+            this.passiveRatioHistory.length;
+
+        const stdDev = Math.sqrt(
+            this.passiveRatioHistory
+                .map((x) => Math.pow(x - this.rollingPassiveRatioAverage, 2))
+                .reduce((a, b) => a + b, 0) / this.passiveRatioHistory.length
+        );
+
+        let passesThreshold_passiveRatioBalanceThreshold =
+            volumePressure.accumulatedPassiveRatio >
+            this.rollingPassiveRatioAverage +
+                stdDev * this.settings.passiveRatioAnomalyStdDev;
 
         const depletionResult = this.analyzeLiquidityDepletion(
             event.zoneData,
@@ -345,8 +347,41 @@ export class ExhaustionDetectorEnhanced extends Detector {
         const hasDepletion = depletionResult.hasDepletion;
 
         // exhaustionThreshold EQL : Depletion Ratio
-        const passesThreshold_exhaustionThreshold =
+        let passesThreshold_exhaustionThreshold =
             depletionResult.depletionRatio >= this.settings.exhaustionThreshold;
+
+        // Check special overrides:
+        // Scenario 1: Extreme Depletion Override
+        if (hasDepletion && depletionResult.depletionRatio >= 0.985) {
+            if (!passesThreshold_passiveRatioBalanceThreshold) {
+                this.logger.info(
+                    `[Exhaustion Override] Extreme Depletion triggered for ${this.getId()}. Bypassing balance checks.`
+                );
+                passesThreshold_passiveRatioBalanceThreshold = true;
+            }
+        }
+
+        // Scenario 2: Aggressive Climax Override
+        if (
+            hasDepletion &&
+            volumePressure.directionalAggressiveVolume >=
+                this.settings.minAggVolume * 5
+        ) {
+            const relaxedExhaustionThreshold =
+                this.settings.exhaustionThreshold * 0.9;
+            if (depletionResult.depletionRatio >= relaxedExhaustionThreshold) {
+                if (
+                    !passesThreshold_passiveRatioBalanceThreshold ||
+                    !passesThreshold_exhaustionThreshold
+                ) {
+                    this.logger.info(
+                        `[Exhaustion Override] Aggressive Climax triggered for ${this.getId()}. Bypassing balance and relaxing exhaustion threshold.`
+                    );
+                    passesThreshold_passiveRatioBalanceThreshold = true;
+                    passesThreshold_exhaustionThreshold = true; // Bypass the original check
+                }
+            }
+        }
 
         const isExhaustion =
             passesThreshold_minAggVolume &&
@@ -370,6 +405,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 calculated: depletionResult.depletionRatio,
                 op: "EQL", // Check: depletionResult.depletionRatio >= settings.exhaustionThreshold,
             },
+            minPeakVolumeCheck: {
+                threshold:
+                    this.settings.minPeakVolume ?? this.settings.minAggVolume,
+                calculated: volumePressure.directionalAggressiveVolume,
+                op: "EQL",
+            },
             phaseContext: event.phaseContext,
         };
 
@@ -380,7 +421,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         this.validationLogger.updateCurrentPrice(event.price);
 
         const signalSide =
-            (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy";
+            dominantSide ?? (event.buyerIsMaker ? "sell" : "buy");
 
         // MANDATORY: Calculate traditional indicators for ALL signals (pass or reject)
         // Exhaustion signals are reversal signals - liquidity depletion at extremes
@@ -393,6 +434,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         if (
             isExhaustion &&
+            dominantSide &&
             traditionalIndicatorResult.overallDecision !== "filter"
         ) {
             // Signal passes all thresholds AND traditional indicators
@@ -413,7 +455,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 },
                 data: {
                     price: event.price,
-                    side: (dominantSide ?? event.buyerIsMaker) ? "sell" : "buy",
+                    side: dominantSide,
                     aggressive: volumePressure.directionalAggressiveVolume,
                     oppositeQty: volumePressure.directionalPassiveVolume,
                     exhaustionScore: depletionResult.depletionRatio,
@@ -495,16 +537,18 @@ export class ExhaustionDetectorEnhanced extends Detector {
     private determineExhaustionSignalSide(depletionResult: {
         exhaustionType: "bid" | "ask" | "both" | null;
     }): "buy" | "sell" | null {
-        // Use the ACTUAL depletion data, not static comparison
+        // Exhaustion reverses a trend.
+        // If buying pressure is exhausted (asks depleted), the trend reverses DOWN -> "sell" signal.
+        // If selling pressure is exhausted (bids depleted), the trend reverses UP -> "buy" signal.
         switch (depletionResult.exhaustionType) {
             case "ask":
-                // Asks depleted → resistance exhausted → reversal DOWN
+                // Buying pressure exhausted at resistance. Expect price to reverse DOWN.
                 return "sell";
             case "bid":
-                // Bids depleted → support exhausted → reversal UP
+                // Selling pressure exhausted at support. Expect price to reverse UP.
                 return "buy";
             case "both":
-                // Both sides depleted → unclear direction
+                // Both sides are depleted; the direction is ambiguous.
                 return null;
             default:
                 return null;
@@ -583,6 +627,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         depletionRatio: number;
         affectedZones: number;
         exhaustionType: "bid" | "ask" | "both" | null;
+        passesMinPeakVolume: boolean; // Added this line
     } {
         // If dynamic zone tracking is enabled, use the new tracker
         // CRITICAL: Update spread BEFORE updating zones so zones can be properly filtered
@@ -621,6 +666,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             depletionRatio: exhaustionPattern.depletionRatio,
             affectedZones: exhaustionPattern.affectedZones,
             exhaustionType: exhaustionPattern.exhaustionType,
+            passesMinPeakVolume: exhaustionPattern.passesMinPeakVolume,
         };
     }
 
@@ -721,20 +767,17 @@ export class ExhaustionDetectorEnhanced extends Detector {
             return null;
         }
 
-        // Apply confluence detection - require minimum number of zones
-        // This adds quality control: we need multiple zones confirming exhaustion
-        if (
-            relevantZones.length <
-            Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount
-        ) {
+        // A single, significant zone can be enough to signal exhaustion.
+        // By setting the requirement to 1, we allow the detector to analyze these scenarios.
+        const minRequiredZones = 1;
+        if (relevantZones.length < minRequiredZones) {
             this.logger.debug(
                 "ExhaustionDetectorEnhanced: Insufficient zone confluence",
                 {
                     detectorId: this.getId(),
                     price: event.price,
                     zonesFound: relevantZones.length,
-                    minRequired:
-                        Config.UNIVERSAL_ZONE_CONFIG.minZoneConfluenceCount,
+                    minRequired: minRequiredZones,
                 }
             );
             return null;

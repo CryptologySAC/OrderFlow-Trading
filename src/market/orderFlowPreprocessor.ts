@@ -164,6 +164,10 @@ export class OrderflowPreprocessor
         inSidewaysCandidate: false, // Flag for detecting sideways transition
     };
 
+    private readonly zoneRelevanceVolumeFactor = 100;
+    private readonly zoneRelevanceProximityFactor = 0.05;
+    private readonly zoneRelevanceWeight = 0.5;
+
     constructor(
         opts: OrderflowPreprocessorOptions,
         orderBook: IOrderBookState,
@@ -1167,12 +1171,18 @@ export class OrderflowPreprocessor
             price,
             8
         );
-        const proximityScore = Math.max(0, 1 - distance / 0.05); // Closer is better
-        const volumeScore = Math.min(1, totalVolume / 100); // Higher volume is better
+        const proximityScore = Math.max(
+            0,
+            1 - distance / this.zoneRelevanceProximityFactor
+        ); // Closer is better
+        const volumeScore = Math.min(
+            1,
+            totalVolume / this.zoneRelevanceVolumeFactor
+        ); // Higher volume is better
 
         return FinancialMath.multiplyQuantities(
             FinancialMath.addAmounts(proximityScore, volumeScore, 8),
-            0.5
+            this.zoneRelevanceWeight
         );
     }
 
