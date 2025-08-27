@@ -115,7 +115,6 @@ export const StandardZoneConfigSchema = z.object({
 // EXHAUSTION detector - CLEANED UP - Only used settings remain (16 core parameters)
 export const ExhaustionDetectorSchema = z.object({
     // Core detection
-    minAggVolume: z.number().int().min(1).max(100000),
     timeWindowIndex: z.number().int().min(0).max(5),
     exhaustionThreshold: z.number().min(0.01).max(1.0),
     eventCooldownMs: z.number().int().min(1000).max(300000),
@@ -129,17 +128,15 @@ export const ExhaustionDetectorSchema = z.object({
     // Additional configurable thresholds to replace magic numbers
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.99), // Replace hardcoded 0.5
     passiveRatioAnomalyStdDev: z.number().min(1.0).max(10.0),
-    minPeakVolume: z.number().int().min(10).max(100000).optional(), // Optional: fallback to minAggVolume
+    minPeakVolume: z.number().int().min(10).max(100000), // Optional: fallback to minAggVolume
 
     // Consumption validation to prevent spoofing false signals
-    consumptionValidation: z
-        .object({
-            maxReasonableVelocity: z.number().min(1).max(10000), // Max depletion velocity (units/sec)
-            minConsumptionConfidence: z.number().min(0.1).max(1.0), // Min confidence for exhaustion
-            confidenceDecayTimeMs: z.number().min(1000).max(300000), // Confidence decay time
-            minAggressiveVolumeRatio: z.number().min(0.01).max(1.0), // Min aggressive volume ratio
-        })
-        .optional(),
+    consumptionValidation: z.object({
+        maxReasonableVelocity: z.number().min(1).max(10000), // Max depletion velocity (units/sec)
+        minConsumptionConfidence: z.number().min(0.1).max(1.0), // Min confidence for exhaustion
+        confidenceDecayTimeMs: z.number().min(1000).max(300000), // Confidence decay time
+        minAggressiveVolume: z.number().min(1).max(1000), // Min aggressive volume
+    }),
 });
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain
@@ -155,7 +152,7 @@ export const AbsorptionDetectorSchema = z.object({
     minPassiveMultiplier: z.number().min(0.5).max(250.0),
     passiveAbsorptionThreshold: z.number().min(0.1).max(0.98),
     passiveAbsorptionThresholdElite: z.number().min(0.98).max(1.0),
-    passiveAbsorptionAnomalyStdDev: z.number().min(1.0).max(10.0),
+    rollingWindowSize: z.number().int().min(10).max(5000),
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
@@ -181,8 +178,6 @@ export const AbsorptionDetectorSchema = z.object({
 // DELTACVD detector - CLEANED UP - Only used settings remain
 export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis parameters (actually used by detector)
-    minTradesPerSec: z.number().min(1.0).max(50.0),
-    minVolPerSec: z.number().min(0.01).max(2000.0),
     signalThreshold: z.number().min(0.01).max(8.0),
     eventCooldownMs: z.number().int().min(1000).max(1800000),
 
@@ -199,6 +194,8 @@ export const DeltaCVDDetectorSchema = z.object({
     volumeEfficiencyThreshold: z.number().min(0.1).max(0.5),
     // Zone search distance configuration (replace hardcoded 15)
     zoneSearchDistance: z.number().int().min(5).max(50), // Number of ticks to search around price for relevant zones
+    tradeRateWindowSize: z.number().int().min(10).max(5000),
+    volumeRateWindowSize: z.number().int().min(10).max(5000),
 });
 
 // ACCUMULATION detector - CLEANED UP - Only used settings remain

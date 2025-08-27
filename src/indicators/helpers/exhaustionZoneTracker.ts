@@ -71,7 +71,7 @@ export interface ZoneTrackerConfig {
               maxReasonableVelocity: number; // Maximum reasonable depletion velocity
               minConsumptionConfidence: number; // Minimum confidence required for exhaustion
               confidenceDecayTimeMs: number; // Time after which confidence decays
-              minAggressiveVolumeRatio: number; // Minimum aggressive volume ratio for validation
+              minAggressiveVolume: number; // Minimum aggressive volume for validation
           }
         | undefined;
 }
@@ -487,12 +487,11 @@ export class ExhaustionZoneTracker {
         }, 0);
 
         // If significant depletion but no aggressive volume, suspicious
-        const minAggressiveRatio =
-            this.config.consumptionValidation?.minAggressiveVolumeRatio ?? 0.1;
+        const minAggressiveVolume =
+            this.config.consumptionValidation?.minAggressiveVolume ?? 20;
         if (
             depletionRatio > 0.3 &&
-            recentAggressiveVolume <
-                this.config.minPeakVolume * minAggressiveRatio
+            recentAggressiveVolume < minAggressiveVolume
         ) {
             return false;
         }

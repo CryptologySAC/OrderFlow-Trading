@@ -593,7 +593,6 @@ export interface AbsorptionThresholdChecks {
  * Exhaustion detector threshold checks for all config parameters
  */
 export interface ExhaustionThresholdChecks {
-    minAggVolume: ThresholdCheck<number>;
     exhaustionThreshold: ThresholdCheck<number>;
     passiveRatioBalanceThreshold: ThresholdCheck<number>;
     minPeakVolumeCheck: ThresholdCheck<number>; // Added this line

@@ -117,7 +117,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             maxZonesPerSide: settings.maxZonesPerSide,
             historyWindowMs: settings.zoneHistoryWindowMs,
             depletionThreshold: settings.zoneDepletionThreshold,
-            minPeakVolume: settings.minPeakVolume || settings.minAggVolume,
+            minPeakVolume: settings.minPeakVolume,
             gapDetectionTicks: settings.gapDetectionTicks,
             consumptionValidation: settings.consumptionValidation,
         };
@@ -316,11 +316,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
             return null;
         }
 
-        // minAggVolume: directionalAggressive >= this.enhancementConfig.minAggVolume
-        const passesThreshold_minAggVolume =
-            volumePressure.directionalAggressiveVolume >=
-            this.settings.minAggVolume;
-
         // Update rolling average and history
         this.passiveRatioHistory.push(volumePressure.accumulatedPassiveRatio);
         if (this.passiveRatioHistory.length > this.ROLLING_WINDOW_SIZE) {
@@ -348,7 +343,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         const hasDepletion = depletionResult.hasDepletion;
 
         // exhaustionThreshold EQL : Depletion Ratio
-        let passesThreshold_exhaustionThreshold =
+        const passesThreshold_exhaustionThreshold =
             depletionResult.depletionRatio >= this.settings.exhaustionThreshold;
 
         // Check special overrides:
@@ -362,40 +357,12 @@ export class ExhaustionDetectorEnhanced extends Detector {
             }
         }
 
-        // Scenario 2: Aggressive Climax Override
-        if (
-            hasDepletion &&
-            volumePressure.directionalAggressiveVolume >=
-                this.settings.minAggVolume * 5
-        ) {
-            const relaxedExhaustionThreshold =
-                this.settings.exhaustionThreshold * 0.9;
-            if (depletionResult.depletionRatio >= relaxedExhaustionThreshold) {
-                if (
-                    !passesThreshold_passiveRatioBalanceThreshold ||
-                    !passesThreshold_exhaustionThreshold
-                ) {
-                    this.logger.info(
-                        `[Exhaustion Override] Aggressive Climax triggered for ${this.getId()}. Bypassing balance and relaxing exhaustion threshold.`
-                    );
-                    passesThreshold_passiveRatioBalanceThreshold = true;
-                    passesThreshold_exhaustionThreshold = true; // Bypass the original check
-                }
-            }
-        }
-
         const isExhaustion =
-            passesThreshold_minAggVolume &&
             passesThreshold_passiveRatioBalanceThreshold &&
             hasDepletion &&
             passesThreshold_exhaustionThreshold;
 
         const thresholdChecks: ExhaustionThresholdChecks = {
-            minAggVolume: {
-                threshold: this.settings.minAggVolume,
-                calculated: volumePressure.directionalAggressiveVolume,
-                op: "EQL", // Check: directionalAggressive >= this.enhancementConfig.minAggVolume
-            },
             passiveRatioBalanceThreshold: {
                 threshold: this.settings.passiveRatioBalanceThreshold,
                 calculated: volumePressure.accumulatedPassiveRatio,
@@ -407,8 +374,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 op: "EQL", // Check: depletionResult.depletionRatio >= settings.exhaustionThreshold,
             },
             minPeakVolumeCheck: {
-                threshold:
-                    this.settings.minPeakVolume ?? this.settings.minAggVolume,
+                threshold: this.settings.minPeakVolume,
                 calculated: volumePressure.directionalAggressiveVolume,
                 op: "EQL",
             },
@@ -495,11 +461,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
                 thresholdType = "traditional_indicators";
                 thresholdValue = 1;
                 actualValue = 0;
-            } else if (!passesThreshold_minAggVolume) {
-                rejectionReason = "insufficient_aggressive_volume";
-                thresholdType = "aggressive_volume";
-                thresholdValue = this.settings.minAggVolume;
-                actualValue = volumePressure.directionalAggressiveVolume;
             } else if (!passesThreshold_passiveRatioBalanceThreshold) {
                 rejectionReason = "passive_volume_ratio_too_high";
                 thresholdType = "passive_volume_ratio";

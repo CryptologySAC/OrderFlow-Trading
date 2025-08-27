@@ -230,8 +230,7 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "minAggVolume": 250,
-                "passiveRatioBalanceThreshold": 0.96,
+                "passiveRatioBalanceThreshold": 0.90,
                 "exhaustionThreshold": 0.87,
                 "minPeakVolume": 1000,
                 "timeWindowIndex": 0,
@@ -245,7 +244,7 @@
                     "maxReasonableVelocity": 1000,
                     "minConsumptionConfidence": 0.4,
                     "confidenceDecayTimeMs": 30000,
-                    "minAggressiveVolumeRatio": 0.1
+                    "minAggressiveVolume": 20
                 }
             },
 
@@ -259,7 +258,7 @@
                 "balanceThreshold": 0.1,
                 "priceStabilityTicks": 5,
                 "maxVolumeMultiplierRatio": 3.8,
-                "passiveAbsorptionAnomalyStdDev": 2.5,
+                "rollingWindowSize": 500,
 
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
@@ -328,8 +327,6 @@
                 "marketHealthWindowMs": 600000
             },
             "deltaCVD": {
-                "minTradesPerSec": 5.0,
-                "minVolPerSec": 5.25,
                 "signalThreshold": 1.0,
                 "eventCooldownMs": 1000,
                 "cvdImbalanceThreshold": 1.0,

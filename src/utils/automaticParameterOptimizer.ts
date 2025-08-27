@@ -626,7 +626,6 @@ export class AutomaticParameterOptimizer {
         } else if (success.detectorType === "exhaustion") {
             const config = Config.EXHAUSTION_DETECTOR;
             const mapping: Record<string, number> = {
-                minAggVolume: config.minAggVolume,
                 timeWindowIndex: config.timeWindowIndex,
                 exhaustionThreshold: config.exhaustionThreshold,
                 eventCooldownMs: config.eventCooldownMs,
@@ -664,7 +663,6 @@ export class AutomaticParameterOptimizer {
         } else if (detectorType === "exhaustion") {
             const config = Config.EXHAUSTION_DETECTOR;
             const mapping: Record<string, number> = {
-                minAggVolume: config.minAggVolume,
                 timeWindowIndex: config.timeWindowIndex,
                 exhaustionThreshold: config.exhaustionThreshold,
                 eventCooldownMs: config.eventCooldownMs,

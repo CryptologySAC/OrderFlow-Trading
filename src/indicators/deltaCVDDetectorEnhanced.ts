@@ -115,6 +115,8 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     private readonly preprocessor: IOrderflowPreprocessor;
     private readonly validationLogger: SignalValidationLogger;
     private readonly lastSignal = new TimeAwareCache<string, number>(900000);
+    private tradesPerSecHistory: number[] = [];
+    private volumePerSecHistory: number[] = [];
     constructor(
         id: string,
         settings: DeltaCVDEnhancedSettings,
@@ -265,14 +267,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             );
         }
 
-        // Check for volume surge using configurable volume threshold
-        if (event.quantity >= this.enhancementConfig.minVolPerSec) {
-            this.metricsCollector.incrementCounter(
-                "cvd_volume_surge_detected",
-                1
-            );
-        }
-
         // Check order flow imbalance (simplified - based on buyerIsMaker)
         if (event.buyerIsMaker != null) {
             this.metricsCollector.incrementCounter(
@@ -322,14 +316,46 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         // The signal side is determined by the CVD imbalance, and it is emitted regardless of the broader market phase.
 
         // ===== SINGLE EVALUATION: One decision point =====
+
+        // Update histories
+        this.tradesPerSecHistory.push(detectionRequirements.tradesPerSec);
+        if (
+            this.tradesPerSecHistory.length >
+            this.enhancementConfig.tradeRateWindowSize
+        ) {
+            this.tradesPerSecHistory.shift();
+        }
+        this.volumePerSecHistory.push(detectionRequirements.volumePerSec);
+        if (
+            this.volumePerSecHistory.length >
+            this.enhancementConfig.volumeRateWindowSize
+        ) {
+            this.volumePerSecHistory.shift();
+        }
+
+        // Calculate dynamic thresholds using percentiles
+        const sortedTradesHistory = [...this.tradesPerSecHistory].sort(
+            (a, b) => a - b
+        );
+        const dynamicTradesPerSecThreshold =
+            sortedTradesHistory[Math.floor(sortedTradesHistory.length * 0.9)] ??
+            0;
+
+        const sortedVolumeHistory = [...this.volumePerSecHistory].sort(
+            (a, b) => a - b
+        );
+        const dynamicVolumePerSecThreshold =
+            sortedVolumeHistory[Math.floor(sortedVolumeHistory.length * 0.9)] ??
+            0;
+
         const thresholds: DeltaCVDThresholdChecks = {
             minTradesPerSec: {
-                threshold: this.enhancementConfig.minTradesPerSec,
+                threshold: dynamicTradesPerSecThreshold,
                 calculated: detectionRequirements.tradesPerSec,
                 op: "EQL",
             },
             minVolPerSec: {
-                threshold: this.enhancementConfig.minVolPerSec,
+                threshold: dynamicVolumePerSecThreshold,
                 calculated: detectionRequirements.volumePerSec,
                 op: "EQL",
             },
@@ -359,16 +385,15 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             phaseContext: event.phaseContext,
         };
         const hasVolumeEfficiency =
-            cvdData.hasSignificantVolume &&
             Math.abs(cvdData.cvdDelta) >=
-                cvdData.totalVolume *
-                    this.enhancementConfig.volumeEfficiencyThreshold;
+            cvdData.totalVolume *
+                this.enhancementConfig.volumeEfficiencyThreshold;
 
         // Check all thresholds
         const passesThreshold_minTradesPerSec =
-            detectionRequirements.meetsTradeRate;
+            detectionRequirements.tradesPerSec >= dynamicTradesPerSecThreshold;
         const passesThreshold_minVolPerSec =
-            detectionRequirements.meetsVolumeRate;
+            detectionRequirements.volumePerSec >= dynamicVolumePerSecThreshold;
         const passesThreshold_signalThreshold =
             realConfidence >= this.enhancementConfig.signalThreshold;
         const passesThreshold_cvdImbalanceThreshold =
@@ -544,8 +569,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
     private calculateDetectionRequirements(event: EnrichedTradeEvent): {
         volumePerSec: number;
         tradesPerSec: number;
-        meetsVolumeRate: boolean;
-        meetsTradeRate: boolean;
         totalVolume: number;
         totalTrades: number;
         timespan: number;
@@ -556,8 +579,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             return {
                 volumePerSec: 0,
                 tradesPerSec: 0,
-                meetsVolumeRate: false,
-                meetsTradeRate: false,
                 totalVolume: 0,
                 totalTrades: 0,
                 timespan: 1000,
@@ -606,11 +627,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const volumePerSec = (totalVolume * 1000) / timespan;
         const tradesPerSec = (totalTrades * 1000) / timespan;
 
-        const meetsVolumeRate =
-            volumePerSec >= this.enhancementConfig.minVolPerSec;
-        const meetsTradeRate =
-            tradesPerSec >= this.enhancementConfig.minTradesPerSec;
-
         const meetsInstitutionalThreshold =
             event.quantity >= this.enhancementConfig.institutionalThreshold;
 
@@ -623,10 +639,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 timespan,
                 volumePerSec,
                 tradesPerSec,
-                requiredVPS: this.enhancementConfig.minVolPerSec,
-                requiredTPS: this.enhancementConfig.minTradesPerSec,
-                meetsVolumeRate,
-                meetsTradeRate,
                 meetsInstitutionalThreshold,
             }
         );
@@ -634,8 +646,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         return {
             volumePerSec,
             tradesPerSec,
-            meetsVolumeRate,
-            meetsTradeRate,
             totalVolume,
             totalTrades,
             timespan,
@@ -650,7 +660,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         zoneData: StandardZoneData,
         tradeTimestamp?: number
     ): {
-        hasSignificantVolume: boolean;
         totalVolume: number;
         buyVolume: number;
         sellVolume: number;
@@ -690,8 +699,6 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         });
 
         const totalVolume = totalBuyVolume + totalSellVolume;
-        const hasSignificantVolume =
-            totalVolume >= this.enhancementConfig.minVolPerSec;
         const cvdDelta = FinancialMath.safeSubtract(
             totalBuyVolume,
             totalSellVolume
@@ -704,14 +711,11 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                 totalBuyVolume,
                 totalSellVolume,
                 totalVolume,
-                minVolPerSec: this.enhancementConfig.minVolPerSec,
-                hasSignificantVolume,
                 zonesCount: allZones.length,
             }
         );
 
         return {
-            hasSignificantVolume,
             totalVolume,
             buyVolume: totalBuyVolume,
             sellVolume: totalSellVolume,

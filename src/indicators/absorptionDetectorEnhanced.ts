@@ -76,8 +76,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
     // Dynamic thresholding
     private passiveVolumeRatioHistory: number[] = [];
-    private rollingPassiveVolumeRatioAverage = 0;
-    private readonly ROLLING_WINDOW_SIZE = 100; // Same as analysis script
 
     // Dynamic zone tracking for true absorption detection
     private readonly zoneTracker: AbsorptionZoneTracker;
@@ -318,26 +316,25 @@ export class AbsorptionDetectorEnhanced extends Detector {
 
         // Update rolling average and history
         this.passiveVolumeRatioHistory.push(passiveVolumeRatio);
-        if (this.passiveVolumeRatioHistory.length > this.ROLLING_WINDOW_SIZE) {
+        if (
+            this.passiveVolumeRatioHistory.length >
+            this.settings.rollingWindowSize
+        ) {
             this.passiveVolumeRatioHistory.shift();
         }
-        this.rollingPassiveVolumeRatioAverage =
-            this.passiveVolumeRatioHistory.reduce((a, b) => a + b, 0) /
-            this.passiveVolumeRatioHistory.length;
-
-        const stdDev = Math.sqrt(
-            this.passiveVolumeRatioHistory
-                .map((x) =>
-                    Math.pow(x - this.rollingPassiveVolumeRatioAverage, 2)
-                )
-                .reduce((a, b) => a + b, 0) /
-                this.passiveVolumeRatioHistory.length
+        // Using a percentile-based threshold is more robust for bounded data [0, 1]
+        // as a std dev multiplier can create impossible thresholds > 1.0.
+        // The 99th percentile corresponds roughly to a 2.5 std dev cutoff.
+        const sortedHistory = [...this.passiveVolumeRatioHistory].sort(
+            (a, b) => a - b
         );
+        const percentileIndex = Math.floor(sortedHistory.length * 0.99);
+        const dynamicPassiveThreshold =
+            sortedHistory[percentileIndex] ??
+            this.settings.passiveAbsorptionThreshold;
 
         const passesThreshold_passiveAbsorptionThreshold =
-            passiveVolumeRatio >=
-            this.rollingPassiveVolumeRatioAverage +
-                stdDev * this.settings.passiveAbsorptionAnomalyStdDev;
+            passiveVolumeRatio >= dynamicPassiveThreshold;
 
         // Calculate price efficiency using FinancialMath (institutional precision)
         // priceEfficiencyThreshold: priceEfficiency <= this.enhancementConfig.priceEfficiencyThreshold
@@ -477,7 +474,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 op: "EQL", // Check: directionalAggressive >= this.enhancementConfig.minAggVolume
             },
             passiveAbsorptionThreshold: {
-                threshold: this.settings.passiveAbsorptionThreshold,
+                threshold: dynamicPassiveThreshold,
                 calculated: passiveVolumeRatio,
                 op: "EQL", // Check: passiveVolumeRatio >= this.enhancementConfig.passiveAbsorptionThreshold
             },
