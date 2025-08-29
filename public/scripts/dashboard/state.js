@@ -94,12 +94,63 @@ export function setAnomalyFilters(filters) {
 
 export function setRuntimeConfig(config) {
     if (config && typeof config === "object") {
-        window.runtimeConfig = {
-            ...(window.runtimeConfig || {}),
-            ...config,
-        };
-        if (typeof config.dedupTolerance === "number") {
-            dedupTolerance = config.dedupTolerance;
+        try {
+            // Safe config merging with circular reference protection
+            const safeConfig = safeConfigMerge(
+                window.runtimeConfig || {},
+                config
+            );
+            window.runtimeConfig = safeConfig;
+
+            if (typeof safeConfig.dedupTolerance === "number") {
+                dedupTolerance = safeConfig.dedupTolerance;
+            }
+        } catch (error) {
+            console.error("Error processing runtime config:", error);
+            // Fallback to basic config without merging
+            if (typeof config.dedupTolerance === "number") {
+                dedupTolerance = config.dedupTolerance;
+            }
         }
     }
+}
+
+// Helper function for safe config merging
+function safeConfigMerge(target, source) {
+    const visited = new WeakSet();
+
+    function isCircular(obj) {
+        if (obj && typeof obj === "object") {
+            if (visited.has(obj)) {
+                return true;
+            }
+            visited.add(obj);
+        }
+        return false;
+    }
+
+    function safeClone(obj, depth = 0, maxDepth = 10) {
+        if (depth > maxDepth) {
+            console.warn("Max depth reached during config cloning");
+            return {};
+        }
+
+        if (!obj || typeof obj !== "object" || isCircular(obj)) {
+            return obj;
+        }
+
+        if (Array.isArray(obj)) {
+            return obj.map((item) => safeClone(item, depth + 1, maxDepth));
+        }
+
+        const result = {};
+        for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+                result[key] = safeClone(obj[key], depth + 1, maxDepth);
+            }
+        }
+        return result;
+    }
+
+    return { ...safeClone(target), ...safeClone(source) };
 }

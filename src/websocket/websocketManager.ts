@@ -371,20 +371,77 @@ export class WebSocketManager {
     }
 
     /**
+     * Send message to a specific client
+     */
+    public sendToClient(
+        ws: ExtendedWebSocket,
+        message: WebSocketMessage
+    ): void {
+        if (this.isShuttingDown || ws.readyState !== WebSocket.OPEN) return;
+
+        // Sanitize message to prevent circular references and deep nesting
+        const sanitizedMessage = this.sanitizeForWebSocket(message);
+
+        try {
+            ws.send(JSON.stringify(sanitizedMessage));
+        } catch (error) {
+            this.logger.error("Send to client error", { error });
+        }
+    }
+
+    /**
      * Broadcast message to all connected clients
      */
     public broadcast(message: WebSocketMessage): void {
         if (this.isShuttingDown) return;
 
+        // Sanitize message to prevent circular references and deep nesting
+        const sanitizedMessage = this.sanitizeForWebSocket(message);
+
         this.wsServer.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
                 try {
-                    client.send(JSON.stringify(message));
+                    client.send(JSON.stringify(sanitizedMessage));
                 } catch (error) {
                     this.logger.error("Broadcast error", { error });
                 }
             }
         });
+    }
+
+    /**
+     * Sanitize objects for WebSocket transmission to prevent circular references
+     */
+    private sanitizeForWebSocket(obj: any): any {
+        const visited = new WeakSet();
+
+        function sanitize(obj: any, depth = 0): any {
+            if (depth > 5) return {}; // Prevent deep recursion
+
+            if (!obj || typeof obj !== "object") {
+                return obj;
+            }
+
+            if (visited.has(obj)) {
+                return {}; // Break circular reference
+            }
+
+            visited.add(obj);
+
+            if (Array.isArray(obj)) {
+                return obj.map((item) => sanitize(item, depth + 1));
+            }
+
+            const result: any = {};
+            for (const key in obj) {
+                if (obj.hasOwnProperty(key) && typeof obj[key] !== "function") {
+                    result[key] = sanitize(obj[key], depth + 1);
+                }
+            }
+            return result;
+        }
+
+        return sanitize(obj);
     }
 
     /**

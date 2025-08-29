@@ -125,6 +125,32 @@ function createTrade(time, price, quantity, orderType) {
     };
 }
 
+/**
+ * Detects circular references in objects to prevent infinite recursion.
+ * @param {any} obj - The object to check for circular references.
+ * @param {WeakSet} visited - Set of already visited objects.
+ * @returns {boolean} - True if circular reference is found, false otherwise.
+ */
+function hasCircularReference(obj, visited = new WeakSet()) {
+    if (!obj || typeof obj !== "object") {
+        return false;
+    }
+
+    if (visited.has(obj)) {
+        return true;
+    }
+
+    visited.add(obj);
+
+    for (const key in obj) {
+        if (hasCircularReference(obj[key], visited)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function initialize() {
     // Restore ALL saved settings FIRST, before any UI setup or rendering
     restoreTheme();
@@ -426,13 +452,23 @@ const tradeWebsocket = new TradeWebSocket({
         scheduleTradesChartUpdate();
     },
 
-    
     onMessage: (message) => {
         try {
             // Check if message is null or undefined
             if (!message) {
                 console.warn("Received null or undefined message");
                 return;
+            }
+
+            // Add circular reference check for message.data
+            if (message.data && typeof message.data === "object") {
+                if (hasCircularReference(message.data)) {
+                    console.error(
+                        "Message contains circular reference, skipping:",
+                        message.type
+                    );
+                    return;
+                }
             }
 
             const receiveTime = Date.now();
@@ -442,8 +478,6 @@ const tradeWebsocket = new TradeWebSocket({
                 // Update the trade delay indicator (gauge was removed)
                 updateTradeDelayIndicator(delay);
             }
-
-            
 
             switch (message.type) {
                 case "anomaly":
