@@ -412,13 +412,18 @@ export class WebSocketManager {
     /**
      * Sanitize objects for WebSocket transmission to prevent circular references
      */
-    private sanitizeForWebSocket(obj: any): any {
-        const visited = new WeakSet();
+    private sanitizeForWebSocket(obj: unknown): unknown {
+        const visited = new WeakSet<object>();
 
-        function sanitize(obj: any, depth = 0): any {
+        function sanitize(obj: unknown, depth = 0): unknown {
             if (depth > 5) return {}; // Prevent deep recursion
 
             if (!obj || typeof obj !== "object") {
+                return obj;
+            }
+
+            // Type guard for objects that can be stored in WeakSet
+            if (obj === null || typeof obj !== "object") {
                 return obj;
             }
 
@@ -432,13 +437,26 @@ export class WebSocketManager {
                 return obj.map((item) => sanitize(item, depth + 1));
             }
 
-            const result: any = {};
-            for (const key in obj) {
-                if (obj.hasOwnProperty(key) && typeof obj[key] !== "function") {
-                    result[key] = sanitize(obj[key], depth + 1);
+            // Handle plain objects
+            if (obj.constructor === Object) {
+                const result: Record<string, unknown> = {};
+                for (const key in obj) {
+                    if (
+                        Object.prototype.hasOwnProperty.call(obj, key) &&
+                        typeof (obj as Record<string, unknown>)[key] !==
+                            "function"
+                    ) {
+                        result[key] = sanitize(
+                            (obj as Record<string, unknown>)[key],
+                            depth + 1
+                        );
+                    }
                 }
+                return result;
             }
-            return result;
+
+            // For other object types, return empty object to avoid issues
+            return {};
         }
 
         return sanitize(obj);

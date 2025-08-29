@@ -191,7 +191,7 @@ export const DeltaCVDDetectorSchema = z.object({
     institutionalThreshold: z.number().min(5).max(5000.0), // LTC threshold for institutional trade detection
 
     // Volume efficiency threshold for quality flag
-    volumeEfficiencyThreshold: z.number().min(0.1).max(0.5),
+    volumeEfficiencyThreshold: z.number().min(0.1).max(0.75),
     // Zone search distance configuration (replace hardcoded 15)
     zoneSearchDistance: z.number().int().min(5).max(50), // Number of ticks to search around price for relevant zones
     tradeRateWindowSize: z.number().int().min(10).max(5000),
