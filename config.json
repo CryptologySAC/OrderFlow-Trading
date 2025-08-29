@@ -333,14 +333,14 @@
             },
             "deltaCVD": {
                 "signalThreshold": 1.0,
-                "eventCooldownMs": 1000,
+                "eventCooldownMs": 5000,
                 "cvdImbalanceThreshold": 1.0,
-                "timeWindowIndex": 0,
-                "institutionalThreshold":61.7,
-                "volumeEfficiencyThreshold": 0.666,
-                "zoneSearchDistance": 15,
-                "tradeRateWindowSize": 500,
-                "volumeRateWindowSize": 500
+                "timeWindowIndex": 1,
+                "institutionalThreshold":45.0,
+                "volumeEfficiencyThreshold": 0.425,
+                "zoneSearchDistance": 20,
+                "tradeRateWindowSize": 750,
+                "volumeRateWindowSize": 750
             },
             "accumulation": {
                 "timeWindowIndex": 1,
