@@ -105,6 +105,15 @@ export interface IStorage extends IPipelineStorage {
 
     getLastTradeTimestamp(symbol: string): number | null;
 
+    // RSI data methods
+    saveRSIData(symbol: string, timestamp: number, rsiValue: number): void;
+    getRSIData(
+        symbol: string,
+        limit: number
+    ): Array<{ timestamp: number; rsi_value: number }>;
+    purgeOldRSIData(cutOffTime: number): number;
+    clearAllRSIData(): number;
+
     close(): void;
 
     // Health monitoring
@@ -127,6 +136,12 @@ export class Storage implements IStorage {
     private readonly purgeAggregatedTrades: Statement;
     private readonly clearAllTrades: Statement;
     private readonly getLastTradeTimestampStmt: Statement;
+
+    // RSI data statements
+    private readonly insertRSIDataStmt: Statement;
+    private readonly getRSIDataStmt: Statement;
+    private readonly purgeRSIDataStmt: Statement;
+    private readonly clearAllRSIDataStmt: Statement;
     private readonly logger: ILogger;
     private readonly pipelineStorage: PipelineStorage;
     private readonly healthMonitor: StorageHealthMonitor;
@@ -172,6 +187,16 @@ export class Storage implements IStorage {
             CREATE INDEX IF NOT EXISTS idx_aggregated_trades_symbol ON aggregated_trades (symbol);
             CREATE INDEX IF NOT EXISTS idx_aggregated_trades_symbol_time ON aggregated_trades (symbol, tradeTime DESC);
             CREATE INDEX IF NOT EXISTS idx_aggregated_trades_agg_id ON aggregated_trades (aggregatedTradeId);
+
+            CREATE TABLE IF NOT EXISTS rsi_data (
+                id INTEGER PRIMARY KEY,
+                symbol TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                rsi_value REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_rsi_timestamp ON rsi_data (timestamp);
+            CREATE INDEX IF NOT EXISTS idx_rsi_symbol ON rsi_data (symbol);
+            CREATE INDEX IF NOT EXISTS idx_rsi_symbol_timestamp ON rsi_data (symbol, timestamp DESC);
         `);
 
         // Prepare statements
@@ -201,9 +226,31 @@ export class Storage implements IStorage {
         `);
 
         this.getLastTradeTimestampStmt = this.db.prepare(`
-            SELECT MAX(tradeTime) as lastTime 
-            FROM aggregated_trades 
+            SELECT MAX(tradeTime) as lastTime
+            FROM aggregated_trades
             WHERE symbol = @symbol
+        `);
+
+        // RSI data prepared statements
+        this.insertRSIDataStmt = this.db.prepare(`
+            INSERT INTO rsi_data (symbol, timestamp, rsi_value)
+            VALUES (@symbol, @timestamp, @rsiValue)
+        `);
+
+        this.getRSIDataStmt = this.db.prepare(`
+            SELECT timestamp, rsi_value
+            FROM rsi_data
+            WHERE symbol = @symbol
+            ORDER BY timestamp DESC
+            LIMIT @limit
+        `);
+
+        this.purgeRSIDataStmt = this.db.prepare(`
+            DELETE FROM rsi_data WHERE timestamp < @cutOffTime
+        `);
+
+        this.clearAllRSIDataStmt = this.db.prepare(`
+            DELETE FROM rsi_data
         `);
     }
 
@@ -863,5 +910,147 @@ export class Storage implements IStorage {
     // Data cleanup
     public async purgeOldSignalData(olderThan: number): Promise<void> {
         await this.pipelineStorage.purgeOldSignalData(olderThan);
+    }
+
+    /**
+     * Save RSI data point
+     */
+    public saveRSIData(
+        symbol: string,
+        timestamp: number,
+        rsiValue: number
+    ): void {
+        try {
+            const validatedSymbol = validateString(symbol, "symbol");
+            const validatedTimestamp = validateTimestamp(
+                timestamp,
+                "timestamp"
+            );
+            const validatedRSI = validateNumeric(rsiValue, "rsiValue");
+
+            if (
+                !validatedSymbol ||
+                validatedTimestamp === null ||
+                validatedRSI === null
+            ) {
+                this.logger.warn("Invalid RSI data provided", {
+                    symbol,
+                    timestamp,
+                    rsiValue,
+                });
+                return;
+            }
+
+            this.insertRSIDataStmt.run({
+                symbol: validatedSymbol,
+                timestamp: validatedTimestamp,
+                rsiValue: validatedRSI,
+            });
+
+            this.logger.debug("RSI data saved", {
+                symbol: validatedSymbol,
+                timestamp: validatedTimestamp,
+                rsiValue: validatedRSI,
+            });
+        } catch (error) {
+            this.logger.error("Error saving RSI data", {
+                error,
+                symbol,
+                timestamp,
+                rsiValue,
+            });
+        }
+    }
+
+    /**
+     * Get RSI data for a symbol
+     */
+    public getRSIData(
+        symbol: string,
+        limit: number
+    ): Array<{ timestamp: number; rsi_value: number }> {
+        try {
+            const validatedSymbol = validateString(symbol, "symbol");
+            const validatedLimit = validateNumeric(limit, "limit");
+
+            if (!validatedSymbol || validatedLimit === null) {
+                this.logger.warn("Invalid parameters for getRSIData", {
+                    symbol,
+                    limit,
+                });
+                return [];
+            }
+
+            const result = this.getRSIDataStmt.all({
+                symbol: validatedSymbol,
+                limit: validatedLimit,
+            });
+
+            return result as Array<{ timestamp: number; rsi_value: number }>;
+        } catch (error) {
+            this.logger.error("Error retrieving RSI data", {
+                error,
+                symbol,
+                limit,
+            });
+            return [];
+        }
+    }
+
+    /**
+     * Purge old RSI data
+     */
+    public purgeOldRSIData(cutOffTime: number): number {
+        try {
+            const validatedCutOff = validateTimestamp(cutOffTime, "cutOffTime");
+            if (validatedCutOff === null) {
+                this.logger.warn("Invalid cutoff time for RSI purge", {
+                    cutOffTime,
+                });
+                return 0;
+            }
+
+            const info = this.purgeRSIDataStmt.run({
+                cutOffTime: validatedCutOff,
+            });
+
+            const deletedCount =
+                typeof info.changes === "number" ? info.changes : 0;
+
+            this.logger.info("RSI data purged", {
+                cutOffTime: validatedCutOff,
+                deletedCount,
+            });
+
+            return deletedCount;
+        } catch (error) {
+            this.logger.error("Error purging RSI data", {
+                error,
+                cutOffTime,
+            });
+            return 0;
+        }
+    }
+
+    /**
+     * Clear all RSI data
+     */
+    public clearAllRSIData(): number {
+        try {
+            const info = this.clearAllRSIDataStmt.run();
+            const deletedCount =
+                typeof info.changes === "number" ? info.changes : 0;
+
+            this.logger.info("All RSI data cleared", {
+                deletedCount,
+            });
+
+            return deletedCount;
+        } catch (error) {
+            this.logger.error("Error clearing RSI data", {
+                error,
+            });
+            return 0;
+        }
     }
 }

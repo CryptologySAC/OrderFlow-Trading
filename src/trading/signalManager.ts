@@ -77,6 +77,15 @@ export interface SignalManagerConfig {
     priorityQueueHighThreshold: number;
     backpressureYieldMs: number;
     marketVolatilityWeight: number;
+
+    // RSI Dashboard Integration parameters
+    rsiUpdateFrequency: number;
+    maxRsiBacklogSize: number;
+    maxSignalBacklogAgeMinutes: number;
+
+    // Detector priorities (to eliminate magic numbers)
+    accumulationDetectorPriority: number;
+    distributionDetectorPriority: number;
 }
 
 interface SignalCorrelation {

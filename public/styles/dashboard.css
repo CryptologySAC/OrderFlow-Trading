@@ -117,21 +117,23 @@ body {
     transition:
         background-color 0.3s ease,
         border-color 0.3s ease;
+    display: flex; 
+    flex-direction: column;
 }
 
 .chart-container,
 .gauge-container,
 .signals-container {
-    margin: 1vh 0;
+    margin: 0;
 }
 
 .signals-container,
 .anomaly-list-container {
-    margin: 1vh 0;
+    margin: 0;
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 200px;
+    min-height: 100px;
     overflow: hidden;
 }
 
@@ -417,12 +419,33 @@ body {
     transition: border-color 0.2s;
 }
 
+.resize-handle-y {
+    height: 10px;
+    width: 100%;
+    background: transparent;
+    cursor: ns-resize;
+    z-index: 1000;
+    border-top: 2px solid transparent;
+    border-bottom: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
 .resize-handle:hover {
     border-right-color: var(--resize-handle-hover);
 }
 
+.resize-handle-y:hover {
+    border-top-color: var(--resize-handle-hover);
+    border-bottom-color: var(--resize-handle-hover);
+}
+
 .resize-handle:active {
     border-right-color: var(--resize-handle-active);
+}
+
+.resize-handle-y:active {
+    border-top-color: var(--resize-handle-active);
+    border-bottom-color: var(--resize-handle-active);
 }
 
 canvas {
@@ -674,6 +697,64 @@ canvas {
     100% {
         opacity: 0;
     }
+}
+
+/* --- ADDITIONS FOR VERTICAL RESIZING --- */
+
+/* Ensure columns are ready for vertical flex resizing */
+#column2, #column3 {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Make direct children of resizable columns flexible */
+#column2 > .chart-container,
+#column3 > .signals-container,
+#column3 > .anomaly-list-container {
+    flex: 1 1 0; /* flex-grow, flex-shrink, flex-basis */
+    min-height: 0; /* Crucial for allowing elements to shrink */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Remove vertical margins that cause gaps */
+#tradesContainer {
+    margin-bottom: 0 !important;
+}
+#rsiContainer {
+    margin-top: 0 !important;
+    border-top: none; /* The handle will be the separator */
+}
+#column3 .signals-container {
+    margin-bottom: 0 !important;
+}
+#column3 .anomaly-list-container {
+    margin-top: 0 !important;
+    border-top: none; /* The handle will be the separator */
+}
+
+/* Style the vertical resize handle to be the separator */
+.resize-handle-y {
+    flex-shrink: 0; /* Prevent handle from shrinking */
+    height: 2px;
+    background: var(--border-color);
+    cursor: ns-resize;
+    z-index: 1000;
+    border: none; /* Remove previous transparent borders */
+    transition: background-color 0.2s;
+}
+
+.resize-handle-y:hover {
+    background: var(--resize-handle-hover);
+    border-top-color: transparent;
+    border-bottom-color: transparent;
+}
+
+.resize-handle-y:active {
+    background: var(--resize-handle-active);
+    border-top-color: transparent;
+    border-bottom-color: transparent;
 }
 
 @media (max-width: 768px) {

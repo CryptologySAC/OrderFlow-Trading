@@ -493,6 +493,13 @@ const BasicSymbolConfigSchema = z
             priorityQueueHighThreshold: z.number().min(5.0).max(10.0),
             backpressureYieldMs: z.number().int().min(1).max(100),
             marketVolatilityWeight: z.number().min(0.1).max(1.0),
+            // RSI Dashboard Integration parameters
+            rsiUpdateFrequency: z.number().int().min(1).max(100),
+            maxRsiBacklogSize: z.number().int().min(1000).max(100000),
+            maxSignalBacklogAgeMinutes: z.number().int().min(10).max(480),
+            // Detector priorities (to eliminate magic numbers)
+            accumulationDetectorPriority: z.number().int().min(1).max(100),
+            distributionDetectorPriority: z.number().int().min(1).max(100),
         }),
         signalCoordinator: z.object({
             maxConcurrentProcessing: z.number().int().positive(),
@@ -1059,6 +1066,19 @@ export class Config {
             ),
             backpressureYieldMs: Number(smConfig.backpressureYieldMs),
             marketVolatilityWeight: Number(smConfig.marketVolatilityWeight),
+            // RSI Dashboard Integration parameters
+            rsiUpdateFrequency: Number(smConfig.rsiUpdateFrequency),
+            maxRsiBacklogSize: Number(smConfig.maxRsiBacklogSize),
+            maxSignalBacklogAgeMinutes: Number(
+                smConfig.maxSignalBacklogAgeMinutes
+            ),
+            // Detector priorities
+            accumulationDetectorPriority: Number(
+                smConfig.accumulationDetectorPriority
+            ),
+            distributionDetectorPriority: Number(
+                smConfig.distributionDetectorPriority
+            ),
         };
     }
 
@@ -1130,6 +1150,8 @@ export class Config {
     static get DISTRIBUTION_CONFIG() {
         return SYMBOL_CFG!.distribution;
     }
+
+    // Traditional Indicators Configuration
     static get TRADITIONAL_INDICATORS_CONFIG() {
         return SYMBOL_CFG!["traditionalIndicators"];
     }

@@ -219,7 +219,12 @@
                 "defaultVolatilityError": 0.03,
                 "priorityQueueHighThreshold": 8.0,
                 "backpressureYieldMs": 1,
-                "marketVolatilityWeight": 0.7
+                "marketVolatilityWeight": 0.7,
+                "rsiUpdateFrequency": 10,
+                "maxRsiBacklogSize": 50000,
+                "maxSignalBacklogAgeMinutes": 90,
+                "accumulationDetectorPriority": 40,
+                "distributionDetectorPriority": 40
             },
             "signalCoordinator": {
                 "maxConcurrentProcessing": 20,
@@ -230,7 +235,7 @@
                 "logLevel": "info"
             },
             "exhaustion": {
-                "passiveRatioBalanceThreshold": 0.90,
+                "passiveRatioBalanceThreshold": 0.9,
                 "exhaustionThreshold": 0.87,
                 "minPeakVolume": 1000,
                 "timeWindowIndex": 0,
@@ -333,7 +338,9 @@
                 "timeWindowIndex": 0,
                 "institutionalThreshold": 45.0,
                 "volumeEfficiencyThreshold": 0.425,
-                "zoneSearchDistance": 15
+                "zoneSearchDistance": 15,
+                "tradeRateWindowSize": 500,
+                "volumeRateWindowSize": 500
             },
             "accumulation": {
                 "timeWindowIndex": 1,
@@ -412,10 +419,10 @@
             },
             "traditionalIndicators": {
                 "enabled": true,
-                "timeframeMs": 300000,
+                "timeframeMs": 120000,
                 "vwap": {
                     "enabled": true,
-                    "windowMs": 300000,
+                    "windowMs": 120000,
                     "maxDeviationPercent": 2.0,
                     "minDeviationPercent": 0.5,
                     "weightDecay": 0.95
@@ -423,7 +430,7 @@
                 "rsi": {
                     "enabled": true,
                     "period": 14,
-                    "timeframeMs": 300000,
+                    "timeframeMs": 120000,
                     "overboughtThreshold": 70,
                     "oversoldThreshold": 30,
                     "extremeOverbought": 80,
@@ -431,7 +438,7 @@
                 },
                 "oir": {
                     "enabled": true,
-                    "windowMs": 300000,
+                    "windowMs": 120000,
                     "buyDominanceThreshold": 0.6,
                     "sellDominanceThreshold": 0.4,
                     "neutralZone": 0.1,

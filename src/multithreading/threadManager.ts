@@ -13,6 +13,7 @@ import type { SignalTracker } from "../analysis/signalTracker.js";
 import type { EnhancedMetrics } from "../infrastructure/metricsCollector.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import { WorkerProxyLogger } from "./shared/workerProxylogger.js";
+import type { Storage } from "./storage.js";
 
 export interface BinanceWorkerMetrics {
     connection: {
@@ -507,7 +508,11 @@ export class ThreadManager {
             | "getMarketContext"
             | "saveFailedSignalAnalysis"
             | "getFailedSignalAnalyses"
-            | "purgeOldSignalData",
+            | "purgeOldSignalData"
+            | "saveRSIData"
+            | "getRSIData"
+            | "purgeOldRSIData"
+            | "clearAllRSIData",
     >(
         method: M,
         ...args: Parameters<Storage[M]>
@@ -636,11 +641,12 @@ export class ThreadManager {
     public sendBacklogToSpecificClient(
         clientId: string,
         backlog: unknown[],
-        signals: unknown[]
+        signals: unknown[],
+        rsiBacklog?: unknown[]
     ): void {
         this.commWorker.postMessage({
             type: "send_backlog",
-            data: { backlog, signals, targetClientId: clientId },
+            data: { backlog, signals, rsiBacklog, targetClientId: clientId },
         });
     }
 

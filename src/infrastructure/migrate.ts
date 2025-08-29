@@ -42,11 +42,21 @@ export function runMigrations(db: Database): void {
       CREATE INDEX IF NOT EXISTS idx_hist_sym_ts
           ON signal_history (symbol, timestamp DESC);
 
-      CREATE TABLE IF NOT EXISTS depth_snapshots (
-          id TEXT PRIMARY KEY,
-          symbol TEXT NOT NULL,
-          json BLOB NOT NULL,
-          ts INTEGER NOT NULL
-       );
+       CREATE TABLE IF NOT EXISTS depth_snapshots (
+           id TEXT PRIMARY KEY,
+           symbol TEXT NOT NULL,
+           json BLOB NOT NULL,
+           ts INTEGER NOT NULL
+        );
+
+       CREATE TABLE IF NOT EXISTS rsi_data (
+           id INTEGER PRIMARY KEY,
+           symbol TEXT NOT NULL,
+           timestamp INTEGER NOT NULL,
+           rsi_value REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_rsi_timestamp ON rsi_data (timestamp);
+        CREATE INDEX IF NOT EXISTS idx_rsi_symbol ON rsi_data (symbol);
+        CREATE INDEX IF NOT EXISTS idx_rsi_symbol_timestamp ON rsi_data (symbol, timestamp DESC);
   `);
 }

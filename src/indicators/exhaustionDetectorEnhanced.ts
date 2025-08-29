@@ -332,7 +332,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
         );
 
         let passesThreshold_passiveRatioBalanceThreshold =
-            volumePressure.accumulatedPassiveRatio >
+            volumePressure.accumulatedPassiveRatio <=
             this.rollingPassiveRatioAverage +
                 stdDev * this.settings.passiveRatioAnomalyStdDev;
 
@@ -366,7 +366,7 @@ export class ExhaustionDetectorEnhanced extends Detector {
             passiveRatioBalanceThreshold: {
                 threshold: this.settings.passiveRatioBalanceThreshold,
                 calculated: volumePressure.accumulatedPassiveRatio,
-                op: "EQL", // Check: accumulatedPassiveRatio >= this.enhancementConfig.passiveRatioBalanceThreshold
+                op: "EQS", // Check: accumulatedPassiveRatio >= this.enhancementConfig.passiveRatioBalanceThreshold
             },
             exhaustionThreshold: {
                 threshold: this.settings.exhaustionThreshold,

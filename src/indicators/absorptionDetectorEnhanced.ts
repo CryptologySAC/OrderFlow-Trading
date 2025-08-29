@@ -328,10 +328,14 @@ export class AbsorptionDetectorEnhanced extends Detector {
         const sortedHistory = [...this.passiveVolumeRatioHistory].sort(
             (a, b) => a - b
         );
-        const percentileIndex = Math.floor(sortedHistory.length * 0.99);
-        const dynamicPassiveThreshold =
+        const percentileIndex = Math.floor(sortedHistory.length * 0.9);
+        let dynamicPassiveThreshold =
             sortedHistory[percentileIndex] ??
             this.settings.passiveAbsorptionThreshold;
+        dynamicPassiveThreshold = Math.max(
+            dynamicPassiveThreshold,
+            this.settings.passiveAbsorptionThreshold
+        );
 
         const passesThreshold_passiveAbsorptionThreshold =
             passiveVolumeRatio >= dynamicPassiveThreshold;
@@ -651,7 +655,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
             } else if (!passesThreshold_passiveAbsorptionThreshold) {
                 rejectionReason = "passive_volume_ratio_too_low";
                 thresholdType = "passive_volume_ratio";
-                thresholdValue = this.settings.passiveAbsorptionThreshold;
+                thresholdValue = dynamicPassiveThreshold;
                 actualValue = passiveVolumeRatio;
             } else if (!passesThreshold_priceEfficiencyThreshold) {
                 rejectionReason = "price_efficiency_too_high";
