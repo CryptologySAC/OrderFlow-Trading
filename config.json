@@ -280,7 +280,21 @@
 
                 "absorptionDirectionThreshold": 0.6,
                 "minPassiveVolumeForDirection": 10,
-                "useZoneSpecificPassiveVolume": true
+                "useZoneSpecificPassiveVolume": true,
+
+                "performanceOptimization": {
+                    "maxEventsPerZone": 25,
+                    "eventRetentionMs": 60000,
+                    "memoryMonitoringThreshold": 0.1,
+                    "prioritizationWeights": {
+                        "recency": 0.4,
+                        "confidence": 0.4,
+                        "significance": 0.2
+                    },
+                    "optimizationEnabled": true,
+                    "memoryCheckIntervalMs": 30000,
+                    "maxMemoryReductionPercent": 95
+                }
             },
 
             "spoofingDetector": {
