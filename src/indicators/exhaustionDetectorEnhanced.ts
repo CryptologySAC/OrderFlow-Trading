@@ -17,9 +17,10 @@ import type {
 } from "./helpers/traditionalIndicators.js";
 import type {
     EnrichedTradeEvent,
-    StandardZoneData,
     ZoneSnapshot,
+    StandardZoneData,
 } from "../types/marketEvents.js";
+import type { PhaseContext } from "../types/marketEvents.js";
 import type {
     SignalCandidate,
     ExhaustionThresholdChecks,
@@ -197,6 +198,41 @@ export class ExhaustionDetectorEnhanced extends Detector {
         if (phaseContext?.currentPhase) {
             const phaseDirection = phaseContext.currentPhase.direction;
             const signalSide = signalCandidate.side;
+
+            // STEP 2.5: Phase extreme proximity validation (within 0.1% of extreme)
+            const phaseExtreme = this.calculatePhaseExtreme(phaseContext);
+            if (phaseExtreme !== null) {
+                const distanceFromExtreme =
+                    Math.abs(event.price - phaseExtreme) / event.price;
+                const maxDistance = 0.001; // 0.1% threshold
+
+                if (distanceFromExtreme > maxDistance) {
+                    this.logger.debug(
+                        "ExhaustionDetectorEnhanced: Signal too far from phase extreme",
+                        {
+                            detectorId: this.getId(),
+                            price: event.price,
+                            phaseExtreme,
+                            distanceFromExtreme:
+                                (distanceFromExtreme * 100).toFixed(3) + "%",
+                            maxAllowed: maxDistance * 100 + "%",
+                            reason: "phase_extreme_proximity",
+                        }
+                    );
+                    return; // Reject signal - too far from phase extreme
+                }
+
+                this.logger.debug(
+                    "ExhaustionDetectorEnhanced: Phase extreme proximity validated",
+                    {
+                        detectorId: this.getId(),
+                        price: event.price,
+                        phaseExtreme,
+                        distanceFromExtreme:
+                            (distanceFromExtreme * 100).toFixed(3) + "%",
+                    }
+                );
+            }
 
             // Only emit reversal signals for directional phases:
             // - Bid exhaustion during UP phase (potential top reversal)
@@ -387,8 +423,22 @@ export class ExhaustionDetectorEnhanced extends Detector {
         // Update current price for signal validation
         this.validationLogger.updateCurrentPrice(event.price);
 
-        const signalSide =
-            dominantSide ?? (event.buyerIsMaker ? "sell" : "buy");
+        // CRITICAL FIX: Remove buyerIsMaker fallback - use passive-side logic only
+        const signalSide = dominantSide;
+
+        // Skip signal if direction is ambiguous (both sides depleted)
+        if (!signalSide) {
+            this.logger.debug(
+                "ExhaustionDetectorEnhanced: Ambiguous exhaustion direction - skipping signal",
+                {
+                    detectorId: this.getId(),
+                    price: event.price,
+                    dominantSide: null,
+                    reason: "both_sides_depleted",
+                }
+            );
+            return null;
+        }
 
         // MANDATORY: Calculate traditional indicators for ALL signals (pass or reject)
         // Exhaustion signals are reversal signals - liquidity depletion at extremes
@@ -401,7 +451,6 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         if (
             isExhaustion &&
-            dominantSide &&
             traditionalIndicatorResult.overallDecision !== "filter"
         ) {
             // Signal passes all thresholds AND traditional indicators
@@ -746,5 +795,44 @@ export class ExhaustionDetectorEnhanced extends Detector {
         }
 
         return relevantZones;
+    }
+
+    /**
+     * Calculate the phase extreme price for proximity validation
+     * Returns the highest/lowest price in the current phase
+     */
+    private calculatePhaseExtreme(phaseContext: PhaseContext): number | null {
+        if (!phaseContext?.currentPhase) {
+            return null;
+        }
+
+        const phase = phaseContext.currentPhase;
+
+        // For UP phases, the extreme is the start price + current size (highest point)
+        // For DOWN phases, the extreme is the start price - current size (lowest point)
+        // For SIDEWAYS phases, use the consolidation boundaries
+
+        switch (phase.direction) {
+            case "UP":
+                // UP phase extreme is the highest point reached
+                return (
+                    phase.startPrice * (1 + Math.abs(phase.currentSize) / 100)
+                );
+            case "DOWN":
+                // DOWN phase extreme is the lowest point reached
+                return (
+                    phase.startPrice * (1 - Math.abs(phase.currentSize) / 100)
+                );
+            case "SIDEWAYS":
+                // For sideways phases, use the consolidation range center
+                if (phase.consolidationHigh && phase.consolidationLow) {
+                    return (
+                        (phase.consolidationHigh + phase.consolidationLow) / 2
+                    );
+                }
+                return phase.startPrice; // Fallback to start price
+            default:
+                return null;
+        }
     }
 }

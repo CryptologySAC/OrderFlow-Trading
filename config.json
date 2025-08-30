@@ -237,10 +237,10 @@
             "exhaustion": {
                 "passiveRatioBalanceThreshold": 0.9,
                 "exhaustionThreshold": 0.87,
-                "minPeakVolume": 1000,
-                "timeWindowIndex": 0,
+                "minPeakVolume": 5000,
+                "timeWindowIndex": 1,
                 "eventCooldownMs": 1000,
-                "maxZonesPerSide": 10,
+                "maxZonesPerSide": 15,
                 "zoneDepletionThreshold": 0.75,
                 "gapDetectionTicks": 3,
                 "zoneHistoryWindowMs": 300000,
