@@ -107,7 +107,7 @@ export interface ZoneSignalEvent {
     zone: ZoneVisualizationData;
     actionType: string;
     confidence: number;
-    urgency: "high" | "medium" | "low";
+    // urgency removed - use confidence for prioritization
     expectedDirection: "up" | "down";
     detectorId: string;
     timestamp: number;
@@ -202,7 +202,7 @@ export interface ZoneSignal {
         | "exit_zone"
         | "monitor_zone";
     confidence: number;
-    urgency: "low" | "medium" | "high";
+    // urgency removed - use confidence for prioritization
     timeframe: "immediate" | "short_term" | "medium_term";
 
     // Zone-specific signal data

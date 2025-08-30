@@ -1,4 +1,5 @@
 import { MarketAnomaly } from "../utils/types.js";
+import type { PhaseContext } from "./marketEvents.js";
 
 export type DetectorResultType =
     | AbsorptionSignalData
@@ -70,7 +71,6 @@ export interface EnhancedAbsorptionSignalData {
     passive: number;
     refilled: boolean;
     confidence: number;
-    absorptionScore: number;
     passiveMultiplier: number;
     priceEfficiency: number;
     spreadImpact: number;
@@ -182,7 +182,7 @@ export interface BaseSignalEvent {
 
 export interface DeltaCVDConfirmationResult {
     price: number;
-    side: "buy" | "sell" | "neutral";
+    side: "buy" | "sell";
     rateOfChange: number;
     windowVolume: number;
     tradesInWindow: number;
@@ -239,7 +239,7 @@ interface DeltaCVDConfirmationMetadata {
     cvdMovement: {
         totalCVD: number;
         normalizedCVD: number;
-        direction: "bullish" | "bearish" | "neutral";
+        direction: "bullish" | "bearish";
     };
     signalFrequency?: number;
     timeToLastSignal?: number;
@@ -276,11 +276,19 @@ export interface SignalQualityFlags {
 export interface SignalCandidate {
     id: string;
     type: SignalType;
-    side: "buy" | "sell" | "neutral";
+    side: "buy" | "sell";
     confidence: number;
     timestamp: number;
     data: DetectorResultType;
     qualityFlags?: SignalQualityFlags; // Optional quality indicators
+    traditionalIndicators?: {
+        vwap: number | null;
+        rsi: number | null;
+        oir: number | null;
+        decision: "pass" | "filter" | "insufficient_data";
+        filtersTriggered: string[];
+    };
+    enrichedEvent?: unknown; // Carries the enriched trade event with phase context
 }
 
 export interface ProcessedSignal {
@@ -296,6 +304,14 @@ export interface ProcessedSignal {
         enrichments?: Record<string, unknown>[];
     };
     data: DetectorResultType;
+
+    // Phase-based signal classification
+    signalClassification?: "reversal" | "trend_following" | "unknown";
+    phaseContext?: {
+        phaseDirection: "UP" | "DOWN" | null;
+        phaseAge?: number; // ms since phase started
+        phaseSize?: number; // % move in current phase
+    };
 }
 
 // Add these interfaces to your types file
@@ -340,7 +356,7 @@ export interface AnomalyImpactFactors {
     marketVolatility: number;
     impactFactors: Array<{
         anomalyType: string;
-        impact: "positive" | "negative" | "neutral";
+        impact: "positive" | "negative";
         multiplier: number;
         decayedMultiplier: number;
         reasoning: string;
@@ -363,6 +379,14 @@ export interface ConfirmedSignal {
     confirmedAt: number;
     correlationData: CorrelationData;
     anomalyData: AnomalyData;
+
+    // Phase-based signal classification
+    signalClassification?: "reversal" | "trend_following" | "unknown";
+    phaseContext?: {
+        phaseDirection: "UP" | "DOWN" | null;
+        phaseAge?: number;
+        phaseSize?: number;
+    };
 }
 
 // Update TradingSignalData to include correlation data
@@ -535,4 +559,98 @@ export interface SuperiorFlowConditions {
     // Market context
     marketVolatility: number;
     trendStrength: number;
+}
+
+// ============================================================================
+// THRESHOLD CHECK TYPES FOR SIGNAL VALIDATION
+// ============================================================================
+
+/**
+ * Represents a threshold check with config value, calculated value, and operator
+ */
+export interface ThresholdCheck<T = number> {
+    threshold: T; // Config value from config.json
+    calculated: T; // Actual calculated value from signal
+    op: "EQL" | "EQS" | "EQ" | "NONE"; // Comparison operator
+}
+
+/**
+ * Absorption detector threshold checks for all config parameters
+ */
+export interface AbsorptionThresholdChecks {
+    minAggVolume: ThresholdCheck<number>;
+    priceEfficiencyThreshold: ThresholdCheck<number>;
+    maxPriceImpactRatio: ThresholdCheck<number>;
+    minPassiveMultiplier: ThresholdCheck<number>;
+    maxVolumeMultiplierRatio: ThresholdCheck<number>;
+    passiveAbsorptionThreshold: ThresholdCheck<number>;
+    balanceThreshold: ThresholdCheck<number>;
+    priceStabilityTicks: ThresholdCheck<number>;
+    phaseContext: PhaseContext;
+}
+
+/**
+ * Exhaustion detector threshold checks for all config parameters
+ */
+export interface ExhaustionThresholdChecks {
+    exhaustionThreshold: ThresholdCheck<number>;
+    passiveRatioBalanceThreshold: ThresholdCheck<number>;
+    minPeakVolumeCheck: ThresholdCheck<number>; // Added this line
+    phaseContext: PhaseContext;
+}
+
+/**
+ * DeltaCVD detector threshold checks for all config parameters
+ */
+export interface DeltaCVDThresholdChecks {
+    minTradesPerSec: ThresholdCheck<number>;
+    minVolPerSec: ThresholdCheck<number>;
+    signalThreshold: ThresholdCheck<number>;
+    cvdImbalanceThreshold: ThresholdCheck<number>;
+    institutionalThreshold: ThresholdCheck<number>;
+    volumeEfficiencyThreshold: ThresholdCheck<number>;
+    phaseContext: PhaseContext;
+}
+
+/**
+ * Traditional indicators threshold checks for signal filtering
+ */
+export interface TraditionalIndicatorThresholdChecks {
+    vwap: {
+        value: ThresholdCheck<number>;
+        deviation: ThresholdCheck<number>;
+        deviationPercent: ThresholdCheck<number>;
+        maxDeviationThreshold: ThresholdCheck<number>;
+        passed: ThresholdCheck<boolean>;
+        enabled: ThresholdCheck<boolean>;
+        timeframeMs: ThresholdCheck<number>;
+    };
+    rsi: {
+        value: ThresholdCheck<number>;
+        overboughtThreshold: ThresholdCheck<number>;
+        oversoldThreshold: ThresholdCheck<number>;
+        extremeOverbought: ThresholdCheck<number>;
+        extremeOversold: ThresholdCheck<number>;
+        condition: ThresholdCheck<string>; // 'overbought' | 'oversold' | 'neutral' | 'extreme_overbought' | 'extreme_oversold'
+        passed: ThresholdCheck<boolean>;
+        enabled: ThresholdCheck<boolean>;
+        periods: ThresholdCheck<number>;
+        timeframeMs: ThresholdCheck<number>;
+    };
+    oir: {
+        value: ThresholdCheck<number>;
+        buyVolume: ThresholdCheck<number>;
+        sellVolume: ThresholdCheck<number>;
+        totalVolume: ThresholdCheck<number>;
+        buyDominanceThreshold: ThresholdCheck<number>;
+        sellDominanceThreshold: ThresholdCheck<number>;
+        minVolumeThreshold: ThresholdCheck<number>;
+        condition: ThresholdCheck<string>; // 'buy_dominant' | 'sell_dominant' | 'neutral'
+        passed: ThresholdCheck<boolean>;
+        enabled: ThresholdCheck<boolean>;
+        windowMs: ThresholdCheck<number>;
+    };
+    overallDecision: ThresholdCheck<string>; // 'pass' | 'filter' | 'insufficient_data'
+    filtersTriggered: ThresholdCheck<string[]>;
+    combinationMode: ThresholdCheck<string>; // 'all' | 'majority' | 'any'
 }

@@ -69,6 +69,9 @@ import type {
     DetectorErrorEvent,
 } from "./utils/types.js";
 
+// Traditional Indicators
+import { TraditionalIndicators } from "./indicators/helpers/traditionalIndicators.js";
+
 // Storage and processors
 import {
     MarketDataStorageService,
@@ -125,6 +128,9 @@ export class OrderFlowDashboard {
     // Indicators (initialized in initializeDetectors)
     private deltaCVDConfirmation!: DeltaCVDDetectorEnhanced;
 
+    // Traditional Indicators (initialized in initializeDetectors)
+    private traditionalIndicators!: TraditionalIndicators;
+
     // State
     private isShuttingDown = false;
     private readonly purgeIntervalMs = 10 * 60 * 1000; // 10 minutes
@@ -133,6 +139,10 @@ export class OrderFlowDashboard {
     private readonly broadcastMessage: (msg: WebSocketMessage) => void =
         () => {};
     private lastTradePrice = 0; // Track last trade price for anomaly context
+
+    // RSI Dashboard Integration
+    private rsiMessageCounter = 0;
+    private rsiBacklog: Array<{ time: number; rsi: number }> = [];
 
     public static async create(
         dependencies: Dependencies
@@ -164,7 +174,7 @@ export class OrderFlowDashboard {
             );
 
             // 🚨 CRITICAL FIX: Initialize detectors AFTER orderBook is ready
-            this.initializeDetectors(dependencies);
+            await this.initializeDetectors(dependencies);
 
             // Initialize market data storage for backtesting
             this.initializeMarketDataStorage();
@@ -308,7 +318,9 @@ export class OrderFlowDashboard {
     /**
      * Initialize all detectors after orderBook is ready
      */
-    private initializeDetectors(dependencies: Dependencies): void {
+    private async initializeDetectors(
+        dependencies: Dependencies
+    ): Promise<void> {
         this.logger.info("[OrderFlowDashboard] Initializing detectors...");
 
         // Create DetectorDependencies with preprocessor for enhanced detectors
@@ -318,6 +330,14 @@ export class OrderFlowDashboard {
             );
         }
 
+        // Initialize Traditional Indicators for signal filtering
+        const traditionalIndicatorsConfig =
+            Config.TRADITIONAL_INDICATORS_CONFIG;
+        this.traditionalIndicators = new TraditionalIndicators(
+            traditionalIndicatorsConfig,
+            dependencies.logger
+        );
+
         const detectorDependencies: DetectorDependencies = {
             logger: dependencies.logger,
             spoofingDetector: dependencies.spoofingDetector,
@@ -325,15 +345,17 @@ export class OrderFlowDashboard {
             signalLogger: dependencies.signalLogger,
             preprocessor: this.preprocessor,
             signalValidationLogger: dependencies.signalValidationLogger,
+            traditionalIndicators: this.traditionalIndicators,
         };
 
         DetectorFactory.initialize(detectorDependencies);
 
         // Absorption Detector - Standalone Enhanced
-        this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
-            detectorDependencies,
-            { id: "ltcusdt-absorption-main" }
-        );
+        this.absorptionDetector =
+            await DetectorFactory.createAbsorptionDetector(
+                detectorDependencies,
+                { id: "ltcusdt-absorption-main" }
+            );
         this.signalCoordinator.registerDetector(
             this.absorptionDetector,
             ["absorption"],
@@ -368,20 +390,6 @@ export class OrderFlowDashboard {
             true
         );
 
-        // Support/Resistance Detector - DISABLED: Generating too many useless signals
-        // this.supportResistanceDetector =
-        //     DetectorFactory.createSupportResistanceDetector(
-        //         Config.SUPPORT_RESISTANCE_DETECTOR,
-        //         dependencies,
-        //         { id: "ltcusdt-support-resistance-main" }
-        //     );
-        // this.signalCoordinator.registerDetector(
-        //     this.supportResistanceDetector,
-        //     ["support_resistance_level"],
-        //     10,
-        //     true
-        // );
-
         // Accumulation Zone Detector
         this.accumulationZoneDetector =
             DetectorFactory.createAccumulationDetector(detectorDependencies, {
@@ -390,7 +398,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.accumulationZoneDetector,
             ["accumulation"],
-            40,
+            Config.SIGNAL_MANAGER.accumulationDetectorPriority,
             true
         );
 
@@ -402,7 +410,7 @@ export class OrderFlowDashboard {
         this.signalCoordinator.registerDetector(
             this.distributionZoneDetector,
             ["distribution"],
-            50,
+            Config.SIGNAL_MANAGER.distributionDetectorPriority,
             true
         );
 
@@ -481,7 +489,7 @@ export class OrderFlowDashboard {
                         zone: signal.zone,
                         actionType: signal.actionType,
                         confidence: signal.confidence,
-                        urgency: signal.urgency,
+                        // urgency removed - use confidence for prioritization
                         expectedDirection: signal.expectedDirection,
                         detectorId: signal.detectorId,
                     },
@@ -534,7 +542,7 @@ export class OrderFlowDashboard {
                         zone: signal.zone,
                         actionType: signal.actionType,
                         confidence: signal.confidence,
-                        urgency: signal.urgency,
+                        // urgency removed - use confidence for prioritization
                         expectedDirection: signal.expectedDirection,
                         detectorId: signal.detectorId,
                     },
@@ -560,17 +568,18 @@ export class OrderFlowDashboard {
             backlog = backlog.reverse();
 
             // Get signal backlog
-            const maxSignalBacklogAge = 90 * 60 * 1000; // 90 minutes
+            const maxSignalBacklogAge =
+                Config.SIGNAL_MANAGER.maxSignalBacklogAgeMinutes * 60 * 1000;
             const since = Math.max(
                 backlog.length > 0 ? backlog[0]!.time : Date.now(),
                 Date.now() - maxSignalBacklogAge
             );
 
-            const signals = (await this.dependencies.threadManager.callStorage(
+            const signals = await this.dependencies.threadManager.callStorage(
                 "getRecentConfirmedSignals",
                 since,
                 100
-            )) as ConfirmedSignal[];
+            );
             const deduplicatedSignals = this.deduplicateSignals(signals);
 
             this.logger.info(`Sending backlog to client ${clientId}`, {
@@ -582,7 +591,8 @@ export class OrderFlowDashboard {
             this.threadManager.sendBacklogToSpecificClient(
                 clientId,
                 backlog,
-                deduplicatedSignals
+                deduplicatedSignals,
+                this.rsiBacklog
             );
         } catch (error) {
             this.logger.error(
@@ -833,6 +843,9 @@ export class OrderFlowDashboard {
                         this.marketDataStorage.storeTrade(enrichedTrade);
                     }
 
+                    // Update traditional indicators with trade data (MANDATORY)
+                    this.traditionalIndicators.updateIndicators(enrichedTrade);
+
                     // Feed trade data to event-based detectors
                     this.absorptionDetector.onEnrichedTrade(enrichedTrade);
                     this.exhaustionDetector.onEnrichedTrade(enrichedTrade);
@@ -865,6 +878,22 @@ export class OrderFlowDashboard {
                         );
                     if (aggTradeMessage) {
                         this.broadcastMessage(aggTradeMessage);
+
+                        // RSI Dashboard Integration: Send RSI data every 1/10 price messages as requested
+                        this.rsiMessageCounter++;
+                        if (
+                            this.rsiMessageCounter >=
+                            Config.SIGNAL_MANAGER.rsiUpdateFrequency
+                        ) {
+                            this.logger.debug("Triggering RSI broadcast", {
+                                messageCounter: this.rsiMessageCounter,
+                                updateFrequency:
+                                    Config.SIGNAL_MANAGER.rsiUpdateFrequency,
+                                timestamp: enrichedTrade.timestamp,
+                            });
+                            void this.broadcastRSIData(enrichedTrade.timestamp);
+                            this.rsiMessageCounter = 0;
+                        }
                     }
                 }
             );
@@ -1492,6 +1521,156 @@ export class OrderFlowDashboard {
     }
 
     /**
+     * RSI Dashboard Integration: Load initial RSI backlog from storage
+     */
+    private async loadInitialRSIBacklog(): Promise<void> {
+        try {
+            if (
+                !Config.TRADITIONAL_INDICATORS_CONFIG.enabled ||
+                !Config.TRADITIONAL_INDICATORS_CONFIG.rsi.enabled
+            ) {
+                this.logger.info("RSI disabled, skipping backlog load.");
+                return;
+            }
+
+            const backlogSize = Config.SIGNAL_MANAGER.maxRsiBacklogSize;
+            this.logger.info(
+                `Loading initial RSI backlog of size ${backlogSize}`
+            );
+
+            const rsiDataFromDb = (await this.threadManager.callStorage(
+                "getRSIData",
+                Config.SYMBOL,
+                backlogSize
+            )) as Array<{ timestamp: number; rsi_value: number }>;
+
+            if (rsiDataFromDb && rsiDataFromDb.length > 0) {
+                // Data from DB is newest first, reverse it for chronological order
+                const chronologicalRsiData = rsiDataFromDb.reverse();
+
+                // Map to the format expected by the frontend
+                this.rsiBacklog = chronologicalRsiData.map((data) => ({
+                    time: data.timestamp,
+                    rsi: data.rsi_value,
+                }));
+
+                this.logger.info(
+                    `Successfully loaded ${this.rsiBacklog.length} RSI data points into the backlog.`
+                );
+            } else {
+                this.logger.info("No historical RSI data found in storage.");
+            }
+        } catch (error) {
+            this.logger.error("Failed to load initial RSI backlog", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            // Do not throw, as this is not a critical failure for startup
+        }
+    }
+
+    /**
+     * RSI Dashboard Integration: Broadcast RSI data to WebSocket clients and save to Storage Worker
+     */
+    private async broadcastRSIData(timestamp: number): Promise<void> {
+        try {
+            // Check if traditional indicators are enabled
+            if (
+                !Config.TRADITIONAL_INDICATORS_CONFIG.enabled ||
+                !Config.TRADITIONAL_INDICATORS_CONFIG.rsi.enabled
+            ) {
+                this.logger.debug("RSI disabled in configuration");
+                return;
+            }
+
+            const currentValues = this.traditionalIndicators.getCurrentValues();
+            const rsiValue = currentValues.rsi;
+
+            this.logger.info("RSI broadcast attempt", {
+                rsiValue,
+                dataPoints: currentValues.dataPoints,
+                timestamp,
+                rsiEnabled: Config.TRADITIONAL_INDICATORS_CONFIG.rsi.enabled,
+                rsiPeriod: Config.TRADITIONAL_INDICATORS_CONFIG.rsi.period,
+                messageCounter: this.rsiMessageCounter,
+                updateFrequency: Config.SIGNAL_MANAGER.rsiUpdateFrequency,
+            });
+
+            if (rsiValue !== null && !isNaN(rsiValue)) {
+                const rsiData = {
+                    time: timestamp,
+                    rsi: rsiValue,
+                };
+
+                // Save to Storage Worker (MANDATORY - no direct database access from main thread)
+                await this.threadManager.callStorage(
+                    "saveRSIData",
+                    Config.SYMBOL,
+                    timestamp,
+                    rsiValue
+                );
+
+                // Add to backlog for new connections
+                this.rsiBacklog.push(rsiData);
+                if (
+                    this.rsiBacklog.length >
+                    Config.SIGNAL_MANAGER.maxRsiBacklogSize
+                ) {
+                    this.rsiBacklog.shift(); // Remove oldest entry
+                }
+
+                // Broadcast to connected clients
+                this.broadcastMessage({
+                    type: "rsi",
+                    data: rsiData,
+                    now: Date.now(),
+                });
+
+                this.logger.info("✅ RSI data broadcast and saved", {
+                    rsi: rsiValue,
+                    timestamp,
+                    backlogSize: this.rsiBacklog.length,
+                    symbol: Config.SYMBOL,
+                });
+            } else {
+                this.logger.debug("RSI value is null or NaN", {
+                    rsiValue,
+                    timestamp,
+                });
+            }
+        } catch (error) {
+            this.logger.error("❌ RSI broadcast failed", {
+                error: error instanceof Error ? error.message : String(error),
+                timestamp,
+            });
+            this.handleError(error as Error, "rsi_broadcast");
+        }
+    }
+
+    /**
+     * RSI Dashboard Integration: Send RSI backlog to specific client
+     */
+    public sendRSIBacklog(clientId: string): void {
+        try {
+            if (this.rsiBacklog.length > 0) {
+                // Send backlog to specific client via thread manager
+                this.threadManager.sendBacklogToSpecificClient(
+                    clientId,
+                    [], // Empty trades backlog
+                    [], // Empty signals backlog
+                    this.rsiBacklog // RSI backlog
+                );
+
+                this.logger.debug("RSI backlog sent to client", {
+                    clientId,
+                    backlogSize: this.rsiBacklog.length,
+                });
+            }
+        } catch (error) {
+            this.handleError(error as Error, "rsi_backlog_send");
+        }
+    }
+
+    /**
      * Start stream connection for live data (runs parallel with backlog fill)
      */
     private async startStreamConnection(): Promise<void> {
@@ -1541,13 +1720,49 @@ export class OrderFlowDashboard {
                 this.dependencies.tradesProcessor.fillBacklog()
             );
 
+            // ✅ FIX: Prime TraditionalIndicators and save initial RSI data
+            this.logger.info(
+                "Priming TraditionalIndicators and saving initial RSI data..."
+            );
+            const historicalTrades =
+                await this.dependencies.tradesProcessor.requestBacklog(50000); // Request a large number to get all recent trades
+
+            // Sort trades chronologically (oldest first) to ensure correct indicator calculation
+            historicalTrades.sort((a, b) => a.time - b.time);
+
+            let primedCount = 0;
+            for (const trade of historicalTrades) {
+                // Create a minimal EnrichedTradeEvent for the indicator
+                const enrichedEvent: Partial<EnrichedTradeEvent> = {
+                    timestamp: trade.time,
+                    price: trade.price,
+                    quantity: trade.quantity,
+                    buyerIsMaker: trade.orderType === "SELL", // orderType 'SELL' implies buyer was maker
+                };
+                this.traditionalIndicators.updateIndicators(
+                    enrichedEvent as EnrichedTradeEvent
+                );
+
+                // After updating, immediately try to broadcast/save the RSI data
+                // This simulates the live flow and ensures data is saved to DB
+                await this.broadcastRSIData(trade.time);
+                primedCount++;
+            }
+
+            this.logger.info(
+                `Primed TraditionalIndicators with ${primedCount} trades and saved initial RSI data.`
+            );
+
             this.logger.info(
                 "Historical data preloaded successfully",
                 {},
                 correlationId
             );
         } catch (error) {
-            this.logger.error("WRONG!", { error });
+            this.logger.error(
+                "Error during historical data preload and indicator priming",
+                { error }
+            );
             this.handleError(error as Error, "preload_data", correlationId);
             throw error;
         }
@@ -1603,8 +1818,8 @@ export class OrderFlowDashboard {
             const correlationId = randomUUID();
             this.logger.info("Starting scheduled purge", {}, correlationId);
 
-            // 🔧 ANALYSIS: Use 24 hours retention for signal analysis, startup still loads 90 minutes
-            const retentionHours = 24; // Full day retention for retrospective signal analysis
+            // 🔧 ANALYSIS: Use 72 hours retention for signal analysis, startup still loads 90 minutes
+            const retentionHours = 72; // 3-day retention for retrospective signal analysis
 
             this.threadManager
                 .callStorage("purgeOldEntries", correlationId, retentionHours)
@@ -1773,7 +1988,6 @@ export class OrderFlowDashboard {
      */
     public async startDashboard(): Promise<void> {
         const correlationId = randomUUID();
-
         try {
             this.logger.info(
                 "Starting Order Flow Dashboard",
@@ -1781,18 +1995,28 @@ export class OrderFlowDashboard {
                 correlationId
             );
 
-            // 🚨 CRITICAL FIX: Parallel execution to prevent data gaps
-            // Stream and backfill MUST run simultaneously as per CLAUDE.md architecture
+            // 🚨 CRITICAL: Data loading and priming must be sequential and complete before starting live stream.
             this.logger.info(
-                "Starting parallel data loading: live stream + 90min backfill",
+                "Starting historical data preload and indicator priming...",
                 {},
                 correlationId
             );
+            await this.preloadHistoricalData(); // This now populates trade AND rsi data in the DB.
 
-            await Promise.all([
-                this.startStreamConnection(), // Live data stream
-                this.preloadHistoricalData(), // 90-minute backfill
-            ]);
+            this.logger.info(
+                "Loading initial RSI backlog from database...",
+                {},
+                correlationId
+            );
+            await this.loadInitialRSIBacklog(); // This now loads the newly created RSI data into memory.
+
+            this.logger.info(
+                "Starting live data stream connection...",
+                {},
+                correlationId
+            );
+            await this.startStreamConnection(); // Start live stream AFTER historical data is ready.
+
             await this.startHttpServer();
 
             // Start periodic tasks
@@ -1806,7 +2030,9 @@ export class OrderFlowDashboard {
         } catch (error) {
             this.handleError(
                 new Error(
-                    `Error starting Order Flow Dashboard: ${(error as Error).message}`
+                    `Error starting Order Flow Dashboard: ${
+                        (error as Error).message
+                    }`
                 ),
                 "dashboard_startup",
                 correlationId

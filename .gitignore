@@ -20,3 +20,5 @@ logs/
 !.yarn/sdks
 !.yarn/versions
 .pnp.*
+analysis/reports/*
+*.log

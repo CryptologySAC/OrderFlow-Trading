@@ -7,6 +7,7 @@ vi.mock("../src/infrastructure/metricsCollector");
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
 import { createMockSignalLogger } from "../__mocks__/src/infrastructure/signalLoggerInterface.js";
+import { createMockTraditionalIndicators } from "../__mocks__/src/indicators/helpers/traditionalIndicators.js";
 import type { ILogger } from "../src/infrastructure/loggerInterface.js";
 import { MetricsCollector } from "../src/infrastructure/metricsCollector.js";
 import type { IOrderflowPreprocessor } from "../src/market/orderFlowPreprocessor.js";
@@ -95,6 +96,7 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
 
         // 🚫 NUCLEAR CLEANUP: Use complete mock config settings instead of empty object
         const mockSignalLogger = createMockSignalLogger();
+        const mockTraditionalIndicators = createMockTraditionalIndicators();
 
         detector = new DeltaCVDDetectorEnhanced(
             "test-cvd",
@@ -103,7 +105,8 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
             mockLogger,
             mockMetrics,
             mockSignalValidationLogger,
-            mockSignalLogger
+            mockSignalLogger,
+            mockTraditionalIndicators
         );
 
         // Set up signal emission spy
@@ -176,13 +179,14 @@ describe("DeltaCVD Standalone Detector - Core Functionality", () => {
     it("should validate CVD detection parameters from config", () => {
         const config = mockConfig.symbols.LTCUSDT.deltaCVD;
 
-        // Verify key CVD detection parameters are present (post nuclear cleanup)
+        // Verify key CVD detection parameters are present (ONLY VALID SCHEMA PROPERTIES)
         expect(config.minTradesPerSec).toBeDefined();
         expect(config.minVolPerSec).toBeDefined();
         expect(config.signalThreshold).toBeDefined();
-        expect(config.enhancementMode).toBeDefined();
         expect(config.cvdImbalanceThreshold).toBeDefined();
         expect(config.eventCooldownMs).toBeDefined();
+        expect(config.timeWindowIndex).toBeDefined();
+        expect(config.institutionalThreshold).toBeDefined();
 
         // Verify production-grade thresholds
         expect(config.minTradesPerSec).toBeGreaterThan(0);

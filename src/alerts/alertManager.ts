@@ -6,6 +6,7 @@ import {
     calculateProfitTarget,
 } from "../utils/calculations.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
+import { PERCENT_1, PERCENT_2, PERCENT_98 } from "../core/constants.js";
 
 export class AlertManager {
     private lastAlertTime = 0;
@@ -70,8 +71,8 @@ export class AlertManager {
         const side: "buy" | "sell" = signal.side;
 
         const breakeven = calculateBreakeven(signal.price, side);
-        const profit1 = calculateProfitTarget(signal.price, side, 0.01); // 1%
-        const profit2 = calculateProfitTarget(signal.price, side, 0.02); // 2%
+        const profit1 = calculateProfitTarget(signal.price, side, PERCENT_1); // 1%
+        const profit2 = calculateProfitTarget(signal.price, side, PERCENT_2); // 2%
 
         const reasoning: string[] = [];
 
@@ -125,7 +126,7 @@ export class AlertManager {
                 breakeven,
                 profit1: profit1.price,
                 profit2: profit2.price,
-                stopLoss: signal.stopLoss ?? signal.price * 0.98,
+                stopLoss: signal.stopLoss ?? signal.price * PERCENT_98,
             },
             reasoning,
             timestamp: new Date().toISOString(),

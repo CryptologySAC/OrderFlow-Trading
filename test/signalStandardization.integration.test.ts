@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SignalCandidate } from "../src/types/signalTypes.js";
 import type { EnrichedTradeEvent } from "../src/types/marketEvents.js";
 import { SignalValidationLogger } from "../__mocks__/src/utils/signalValidationLogger.js";
+import { createMockTraditionalIndicators } from "../__mocks__/src/indicators/helpers/traditionalIndicators.js";
 import { AbsorptionDetectorEnhanced } from "../src/indicators/absorptionDetectorEnhanced.js";
 import { ExhaustionDetectorEnhanced } from "../src/indicators/exhaustionDetectorEnhanced.js";
 import { DeltaCVDDetectorEnhanced } from "../src/indicators/deltaCVDDetectorEnhanced.js";
@@ -40,6 +41,7 @@ describe("Signal Type Standardization Integration Tests", () => {
     const mockMetrics = new MetricsCollector();
     const mockSignalValidationLogger = new SignalValidationLogger(mockLogger);
     const mockSignalLogger = createMockSignalLogger();
+    const mockTraditionalIndicators = createMockTraditionalIndicators();
 
     // Simple mock preprocessor
     const mockPreprocessor = {
@@ -270,7 +272,8 @@ describe("Signal Type Standardization Integration Tests", () => {
                 mockLogger,
                 mockMetrics,
                 mockSignalValidationLogger,
-                mockSignalLogger
+                mockSignalLogger,
+                mockTraditionalIndicators
             );
 
             const accumulationDetector = new AccumulationZoneDetectorEnhanced(

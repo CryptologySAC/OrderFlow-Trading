@@ -10,6 +10,7 @@ import type {
     ZoneSnapshot,
     StandardZoneData,
     ZoneTradeRecord,
+    PhaseContext,
 } from "../types/marketEvents.js";
 import { IOrderBookState } from "./orderBookState.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
@@ -50,6 +51,16 @@ export interface OrderflowPreprocessorOptions {
     defaultPassiveVolumeAbsolute: number; // LTCUSDT: 5+ LTC (top 15% of trades)
     defaultInstitutionalVolumeAbsolute: number; // LTCUSDT: 50+ LTC (<1% whale trades)
     maxTradesPerZone: number; // Maximum individual trades stored per zone for VWAP calculation
+
+    // Phase detection configuration
+    phaseDetectionEnabled: boolean;
+    phaseThresholdPercent: number; // 0.35% default
+    minPhaseDurationMs: number; // Minimum duration for a phase to be valid
+
+    // Sideways phase detection configuration
+    sidewaysDetectionEnabled: boolean; // Enable/disable sideways phase detection
+    minSidewaysDurationMs: number; // Minimum duration to confirm sideways phase
+    sidewaysBreakoutThreshold: number; // % threshold to break out of sideways range
 }
 
 export interface IOrderflowPreprocessor {
@@ -123,6 +134,40 @@ export class OrderflowPreprocessor
     private processedTrades = 0;
     private processedDepthUpdates = 0;
 
+    // Phase detection configuration
+    private readonly phaseDetectionEnabled: boolean;
+    private readonly phaseThresholdPercent: number;
+    private readonly minPhaseDurationMs: number;
+
+    // Sideways detection configuration
+    private readonly sidewaysDetectionEnabled: boolean;
+    private readonly minSidewaysDurationMs: number;
+    private readonly sidewaysBreakoutThreshold: number;
+
+    // Phase tracking state
+    private phaseTracker = {
+        high: 0,
+        low: 0,
+        highTime: 0,
+        lowTime: 0,
+        currentPhase: null as PhaseContext["currentPhase"],
+        previousPhase: undefined as PhaseContext["previousPhase"],
+        phaseStartTime: 0,
+        highReachedAfterStart: false,
+        lowReachedAfterStart: false,
+
+        // SIDEWAYS phase detection boundaries
+        consolidationHigh: 0, // Upper boundary for sideways detection
+        consolidationLow: 0, // Lower boundary for sideways detection
+        lastPhaseDirection: null as "UP" | "DOWN" | null, // Track direction before potential sideways
+        sidewaysStartTime: 0, // When potential sideways phase started
+        inSidewaysCandidate: false, // Flag for detecting sideways transition
+    };
+
+    private readonly zoneRelevanceVolumeFactor = 100;
+    private readonly zoneRelevanceProximityFactor = 0.05;
+    private readonly zoneRelevanceWeight = 0.5;
+
     constructor(
         opts: OrderflowPreprocessorOptions,
         orderBook: IOrderBookState,
@@ -150,6 +195,16 @@ export class OrderflowPreprocessor
 
         // LTCUSDT volume thresholds - absolute values from trade distribution analysis
         this.maxTradesPerZone = opts.maxTradesPerZone; // Maximum individual trades stored per zone
+
+        // Phase detection configuration
+        this.phaseDetectionEnabled = opts.phaseDetectionEnabled;
+        this.phaseThresholdPercent = opts.phaseThresholdPercent;
+        this.minPhaseDurationMs = opts.minPhaseDurationMs;
+
+        // Sideways detection configuration
+        this.sidewaysDetectionEnabled = opts.sidewaysDetectionEnabled;
+        this.minSidewaysDurationMs = opts.minSidewaysDurationMs;
+        this.sidewaysBreakoutThreshold = opts.sidewaysBreakoutThreshold;
 
         // NEW: Initialize standardized zone configuration (LTCUSDT data-driven defaults) - AFTER defaults set
         this.standardZoneConfig = opts.standardZoneConfig;
@@ -302,7 +357,13 @@ export class OrderflowPreprocessor
                 aggressive.timestamp
             );
 
-            // Create basic enriched trade with updated zone data
+            // Get phase context for this trade
+            const phaseContext = this.updatePhaseContext(
+                aggressive.price,
+                aggressive.timestamp
+            );
+
+            // Create basic enriched trade with updated zone data and phase context
             const baseEnriched = {
                 ...aggressive,
                 passiveBidVolume: bookLevel?.bid ?? 0,
@@ -313,6 +374,8 @@ export class OrderflowPreprocessor
                 bestAsk: this.bookState.getBestAsk(),
                 // Zone data will be populated after trade aggregation
                 zoneData: zoneData,
+                // Phase detection context
+                phaseContext: phaseContext,
             };
 
             // Handle depthSnapshot conditionally to satisfy exactOptionalPropertyTypes
@@ -515,6 +578,330 @@ export class OrderflowPreprocessor
      */
     private getLargeTradeThreshold(): number {
         return this.largeTradeThreshold;
+    }
+
+    /**
+     * Update phase context based on current price
+     * Detects phase changes when price moves 0.35% from local extremes
+     */
+    private updatePhaseContext(price: number, timestamp: number): PhaseContext {
+        if (!this.phaseDetectionEnabled) {
+            return {
+                currentPhase: null,
+                previousPhase: undefined,
+                phaseConfirmed: false,
+            };
+        }
+
+        // Initialize on first trade
+        if (this.phaseTracker.high === 0) {
+            this.phaseTracker.high = price;
+            this.phaseTracker.low = price;
+            this.phaseTracker.highTime = timestamp;
+            this.phaseTracker.lowTime = timestamp;
+            this.phaseTracker.phaseStartTime = timestamp;
+        }
+
+        // Update high/low tracking
+        if (price > this.phaseTracker.high) {
+            this.phaseTracker.high = price;
+            this.phaseTracker.highTime = timestamp;
+            this.phaseTracker.highReachedAfterStart = true;
+        }
+        if (price < this.phaseTracker.low) {
+            this.phaseTracker.low = price;
+            this.phaseTracker.lowTime = timestamp;
+            this.phaseTracker.lowReachedAfterStart = true;
+        }
+
+        // Check for phase change (0.35% contra move from extremes)
+        const threshold = this.phaseThresholdPercent / 100; // Convert percentage to decimal
+        const downMove = this.phaseTracker.highReachedAfterStart
+            ? (this.phaseTracker.high - price) / this.phaseTracker.high
+            : 0;
+        const upMove = this.phaseTracker.lowReachedAfterStart
+            ? (price - this.phaseTracker.low) / this.phaseTracker.low
+            : 0;
+
+        // Check for directional phase change
+        if (downMove > threshold || upMove > threshold) {
+            // Phase change detected
+            const newDirection: "UP" | "DOWN" =
+                downMove > threshold ? "DOWN" : "UP";
+            const phaseEndPrice =
+                downMove > threshold
+                    ? this.phaseTracker.high
+                    : this.phaseTracker.low;
+            const phaseEndTime =
+                downMove > threshold
+                    ? this.phaseTracker.highTime
+                    : this.phaseTracker.lowTime;
+
+            this.confirmPhaseChange(
+                newDirection,
+                phaseEndPrice,
+                phaseEndTime,
+                price,
+                timestamp
+            );
+        } else {
+            // Check for SIDEWAYS phase transition
+            this.checkSidewaysTransition(price, timestamp);
+        }
+
+        // Calculate current phase metrics
+        let currentSize = 0;
+        let age = 0;
+
+        if (this.phaseTracker.currentPhase) {
+            currentSize =
+                Math.abs(price - this.phaseTracker.currentPhase.startPrice) /
+                this.phaseTracker.currentPhase.startPrice;
+            age = timestamp - this.phaseTracker.currentPhase.startTime;
+
+            // Update current phase metrics
+            this.phaseTracker.currentPhase.currentSize = currentSize;
+            this.phaseTracker.currentPhase.age = age;
+        }
+
+        return {
+            currentPhase: this.phaseTracker.currentPhase,
+            previousPhase: this.phaseTracker.previousPhase,
+            phaseConfirmed: this.phaseTracker.currentPhase !== null,
+        };
+    }
+
+    /**
+     * Check for SIDEWAYS phase transition when price stays within consolidation boundaries
+     */
+    private checkSidewaysTransition(price: number, timestamp: number): void {
+        // Check if sideways detection is enabled
+        if (!this.sidewaysDetectionEnabled) {
+            return;
+        }
+
+        // Need existing phase and consolidation boundaries to detect sideways
+        if (
+            !this.phaseTracker.currentPhase ||
+            !this.phaseTracker.consolidationHigh ||
+            !this.phaseTracker.consolidationLow
+        ) {
+            return;
+        }
+
+        // Already in SIDEWAYS phase
+        if (this.phaseTracker.currentPhase.direction === "SIDEWAYS") {
+            // Check for breakout from sideways range
+            const threshold = this.sidewaysBreakoutThreshold / 100;
+            const breakoutUp =
+                (price - this.phaseTracker.consolidationHigh) /
+                this.phaseTracker.consolidationHigh;
+            const breakoutDown =
+                (this.phaseTracker.consolidationLow - price) /
+                this.phaseTracker.consolidationLow;
+
+            if (breakoutUp > threshold) {
+                // Breaking out upward
+                this.confirmPhaseChange(
+                    "UP",
+                    this.phaseTracker.consolidationHigh,
+                    this.phaseTracker.highTime,
+                    price,
+                    timestamp
+                );
+            } else if (breakoutDown > threshold) {
+                // Breaking out downward
+                this.confirmPhaseChange(
+                    "DOWN",
+                    this.phaseTracker.consolidationLow,
+                    this.phaseTracker.lowTime,
+                    price,
+                    timestamp
+                );
+            }
+            return;
+        }
+
+        // Check if price is within consolidation boundaries
+        const withinRange =
+            price >= this.phaseTracker.consolidationLow &&
+            price <= this.phaseTracker.consolidationHigh;
+
+        if (withinRange) {
+            // Price is within consolidation range
+            if (!this.phaseTracker.inSidewaysCandidate) {
+                // Start tracking potential sideways phase
+                this.phaseTracker.inSidewaysCandidate = true;
+                this.phaseTracker.sidewaysStartTime = timestamp;
+                this.phaseTracker.lastPhaseDirection = this.phaseTracker
+                    .currentPhase.direction as "UP" | "DOWN";
+            } else {
+                // Check if we've been sideways long enough
+                const sidewaysDuration =
+                    timestamp - this.phaseTracker.sidewaysStartTime;
+                if (sidewaysDuration >= this.minSidewaysDurationMs) {
+                    // Confirm SIDEWAYS phase
+                    this.confirmSidewaysPhase(price, timestamp);
+                }
+            }
+        } else {
+            // Price moved outside consolidation range - cancel sideways candidate
+            this.phaseTracker.inSidewaysCandidate = false;
+        }
+    }
+
+    /**
+     * Confirm SIDEWAYS phase transition
+     */
+    private confirmSidewaysPhase(
+        currentPrice: number,
+        currentTime: number
+    ): void {
+        // Save previous phase if it exists and meets minimum duration
+        if (this.phaseTracker.currentPhase) {
+            const rangeSize =
+                (this.phaseTracker.consolidationHigh -
+                    this.phaseTracker.consolidationLow) /
+                this.phaseTracker.consolidationLow;
+            const phaseDuration =
+                currentTime - this.phaseTracker.sidewaysStartTime;
+
+            if (phaseDuration >= this.minSidewaysDurationMs) {
+                this.phaseTracker.previousPhase = {
+                    direction: this.phaseTracker.lastPhaseDirection as
+                        | "UP"
+                        | "DOWN"
+                        | "SIDEWAYS",
+                    size: rangeSize,
+                    duration: phaseDuration,
+                };
+            }
+        }
+
+        // Create SIDEWAYS phase
+        this.phaseTracker.currentPhase = {
+            direction: "SIDEWAYS",
+            startPrice:
+                (this.phaseTracker.consolidationHigh +
+                    this.phaseTracker.consolidationLow) /
+                2, // Midpoint
+            startTime: this.phaseTracker.sidewaysStartTime,
+            currentSize: 0, // No directional movement in sideways
+            age: currentTime - this.phaseTracker.sidewaysStartTime,
+            consolidationHigh: this.phaseTracker.consolidationHigh,
+            consolidationLow: this.phaseTracker.consolidationLow,
+        };
+
+        // Reset sideways tracking flags
+        this.phaseTracker.inSidewaysCandidate = false;
+
+        // Log sideways phase detection
+        this.logger.info("[OrderflowPreprocessor] SIDEWAYS phase detected", {
+            consolidationHigh: this.phaseTracker.consolidationHigh,
+            consolidationLow: this.phaseTracker.consolidationLow,
+            rangeSize:
+                (this.phaseTracker.consolidationHigh -
+                    this.phaseTracker.consolidationLow) /
+                this.phaseTracker.consolidationLow,
+            currentPrice,
+            previousPhase: this.phaseTracker.previousPhase,
+        });
+
+        // Emit phase change event
+        this.emit("phase_change", {
+            timestamp: currentTime,
+            newPhase: this.phaseTracker.currentPhase,
+            previousPhase: this.phaseTracker.previousPhase,
+        });
+    }
+
+    /**
+     * Confirm and record a phase change
+     */
+    private confirmPhaseChange(
+        newDirection: "UP" | "DOWN",
+        phaseEndPrice: number,
+        phaseEndTime: number,
+        currentPrice: number,
+        currentTime: number
+    ): void {
+        // Save previous phase if exists and it meets minimum duration
+        if (this.phaseTracker.currentPhase) {
+            const phaseSize =
+                Math.abs(
+                    phaseEndPrice - this.phaseTracker.currentPhase.startPrice
+                ) / this.phaseTracker.currentPhase.startPrice;
+            const phaseDuration =
+                phaseEndTime - this.phaseTracker.currentPhase.startTime;
+
+            // Only save as previous phase if it lasted long enough
+            if (phaseDuration >= this.minPhaseDurationMs) {
+                this.phaseTracker.previousPhase = {
+                    direction: this.phaseTracker.currentPhase.direction as
+                        | "UP"
+                        | "DOWN"
+                        | "SIDEWAYS",
+                    size: phaseSize,
+                    duration: phaseDuration,
+                };
+            }
+        }
+
+        // Start new phase
+        this.phaseTracker.currentPhase = {
+            direction: newDirection,
+            startPrice: phaseEndPrice,
+            startTime: phaseEndTime,
+            currentSize: Math.abs(currentPrice - phaseEndPrice) / phaseEndPrice,
+            age: currentTime - phaseEndTime,
+        };
+
+        // Set consolidation boundaries for future sideways detection
+        if (newDirection === "DOWN") {
+            // Moving down from a high - set consolidation range
+            this.phaseTracker.consolidationHigh = phaseEndPrice; // The high we're moving down from
+            this.phaseTracker.consolidationLow = currentPrice; // Current price as initial low
+        } else if (newDirection === "UP") {
+            // Moving up from a low - set consolidation range
+            this.phaseTracker.consolidationLow = phaseEndPrice; // The low we're moving up from
+            this.phaseTracker.consolidationHigh = currentPrice; // Current price as initial high
+        }
+
+        // Reset sideways tracking flags for new directional phase
+        this.phaseTracker.inSidewaysCandidate = false;
+        this.phaseTracker.sidewaysStartTime = 0;
+        this.phaseTracker.lastPhaseDirection = null;
+
+        // Reset extremes for new phase tracking
+        if (newDirection === "DOWN") {
+            // We're going down from a high, reset low tracking
+            this.phaseTracker.low = currentPrice;
+            this.phaseTracker.lowTime = currentTime;
+            this.phaseTracker.lowReachedAfterStart = false;
+            this.phaseTracker.highReachedAfterStart = false;
+        } else {
+            // We're going up from a low, reset high tracking
+            this.phaseTracker.high = currentPrice;
+            this.phaseTracker.highTime = currentTime;
+            this.phaseTracker.highReachedAfterStart = false;
+            this.phaseTracker.lowReachedAfterStart = false;
+        }
+
+        // Log phase change
+        this.logger.info("[OrderflowPreprocessor] Phase change detected", {
+            newDirection,
+            startPrice: phaseEndPrice,
+            currentPrice,
+            phaseSize: this.phaseTracker.currentPhase.currentSize,
+            previousPhase: this.phaseTracker.previousPhase,
+        });
+
+        // Emit phase change event for monitoring
+        this.emit("phase_change", {
+            timestamp: currentTime,
+            newPhase: this.phaseTracker.currentPhase,
+            previousPhase: this.phaseTracker.previousPhase,
+        });
     }
 
     /**
@@ -784,12 +1171,18 @@ export class OrderflowPreprocessor
             price,
             8
         );
-        const proximityScore = Math.max(0, 1 - distance / 0.05); // Closer is better
-        const volumeScore = Math.min(1, totalVolume / 100); // Higher volume is better
+        const proximityScore = Math.max(
+            0,
+            1 - distance / this.zoneRelevanceProximityFactor
+        ); // Closer is better
+        const volumeScore = Math.min(
+            1,
+            totalVolume / this.zoneRelevanceVolumeFactor
+        ); // Higher volume is better
 
         return FinancialMath.multiplyQuantities(
             FinancialMath.addAmounts(proximityScore, volumeScore, 8),
-            0.5
+            this.zoneRelevanceWeight
         );
     }
 
@@ -881,17 +1274,15 @@ export class OrderflowPreprocessor
                 FinancialMath.safeMultiply(i, zoneSize)
             );
             // Check cache first for existing zone with trade data
-            const zoneId = `${this.symbol}_${zoneTicks}T_${zoneLowerBoundary.toFixed(this.pricePrecision)}`;
-            const cachedZone = this.getZoneFromCache(zoneId);
+            //const zoneId = `${this.symbol}_${zoneTicks}T_${zoneLowerBoundary.toFixed(this.pricePrecision)}`;
+            //const cachedZone = this.getZoneFromCache(zoneId);
 
-            const zoneSnapshot =
-                cachedZone ||
-                this.createZoneSnapshot(
-                    zoneLowerBoundary,
-                    zoneTicks,
-                    timestamp,
-                    tradePrice
-                );
+            const zoneSnapshot = this.createZoneSnapshot(
+                zoneLowerBoundary,
+                zoneTicks,
+                timestamp,
+                tradePrice
+            );
 
             if (zoneSnapshot) {
                 snapshots.push(zoneSnapshot);
@@ -944,11 +1335,11 @@ export class OrderflowPreprocessor
                 }
             );
 
-            // CRITICAL FIX: Use actual trade price for passive volume calculation
-            // This ensures we get the correct bid/ask volumes around the trade price
+            // CRITICAL FIX: Use wider band for passive volume calculation
+            // Use bandTicks (7) instead of zoneTicks (1) to capture more order book liquidity
             const band = this.bookState.sumBand(
                 tradePrice,
-                zoneTicks,
+                this.bandTicks,
                 this.tickSize
             );
 

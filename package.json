@@ -1,7 +1,7 @@
 {
     "name": "orderflow-trading",
     "type": "module",
-    "version": "1.0.0-beta",
+    "version": "1.0.3",
     "license": "MIT",
     "author": "Cryptology",
     "description": "Cryptology OrderFlow Trading",
@@ -16,12 +16,12 @@
         "streamer": "bin/app"
     },
     "scripts": {
-        "start": "bin/app",
+        "start": "npx tsx src/app.ts",
         "start:dev": "NODE_ENV=development bin/app",
         "clean": "rm -r dist",
         "format": "yarn prettier && yarn lint",
         "lint": "eslint \"src/**/*.{ts,tsx}\" --fix",
-        "prettier": "npx prettier --write './**/*.{ts,tsx,js,json,css,html,md}'",
+        "prettier": "npx prettier --write './**/*.{ts,tsx}'",
         "updates": "npx npm-check-updates",
         "update": "npx npm-check-updates -u",
         "build": "yarn format && tsc -p tsconfig.build.json",
@@ -29,7 +29,12 @@
         "test:coverage": "vitest run --coverage",
         "check:deps": "yarn install --check-cache",
         "typecheck": "tsc --noEmit",
-        "build:watch": "tsc -p tsconfig.build.json --watch"
+        "build:watch": "tsc -p tsconfig.build.json --watch",
+        "analyze:signals": "npx tsx analysis/analyze_success_with_price_reconstruction.ts",
+        "analyze:thresholds": "npx tsx analysis/analyze_threshold_optimization_binary.ts",
+        "analyze:traditional": "npx  --node-options='--max-old-space-size=16384' tsx analysis/analyze_traditional_indicators.ts",
+        "check": "yarn lint && yarn typecheck && yarn build && yarn test",
+        "check:ci": "yarn lint && yarn typecheck && yarn build --if-present && yarn test:coverage"
     },
     "devDependencies": {
         "@types/better-sqlite3": "7.6.13",
@@ -70,6 +75,7 @@
         "@types/express": "^5.0.3",
         "async-mutex": "^0.5.0",
         "better-sqlite3": "^12.2.0",
+        "decimal.js": "^10.6.0",
         "dotenv": "^17.2.1",
         "express": "^5.1.0",
         "fastpriorityqueue": "^0.7.5",

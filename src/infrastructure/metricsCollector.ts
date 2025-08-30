@@ -155,6 +155,8 @@ export interface Metrics {
     distributionRejectedInsufficientStatisticalSignificance?: number;
     distributionRejectedInsufficientVolume?: number;
     distributionRejectedSpoofingDetected?: number;
+
+    signals_filtered_traditional_indicators?: number;
 }
 
 /**

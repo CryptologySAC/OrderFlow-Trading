@@ -19,6 +19,7 @@ import { AccumulationZoneDetectorEnhanced } from "../indicators/accumulationZone
 import { DistributionDetectorEnhanced } from "../indicators/distributionDetectorEnhanced.js";
 import type { IOrderflowPreprocessor } from "../market/orderFlowPreprocessor.js";
 import { SignalValidationLogger } from "./signalValidationLogger.js";
+import { TraditionalIndicators } from "../indicators/helpers/traditionalIndicators.js";
 
 /**
  * Production detector factory with monitoring, validation, and lifecycle management
@@ -50,10 +51,10 @@ export class DetectorFactory {
     /**
      * Create production-ready absorption detector (standalone enhanced)
      */
-    public static createAbsorptionDetector(
+    public static async createAbsorptionDetector(
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): AbsorptionDetectorEnhanced {
+    ): Promise<AbsorptionDetectorEnhanced> {
         const id = options.id || `absorption-${Date.now()}`;
 
         this.validateCreationLimits();
@@ -68,17 +69,36 @@ export class DetectorFactory {
             dependencies.logger,
             dependencies.metricsCollector,
             dependencies.signalValidationLogger,
-            dependencies.signalLogger
+            dependencies.signalLogger,
+            dependencies.traditionalIndicators
         );
 
         dependencies.logger.info(
             `[DetectorFactory] Created Standalone AbsorptionDetectorEnhanced`,
             {
                 id,
-                enhancementMode: productionSettings.enhancementMode,
-                useStandardizedZones: productionSettings.useStandardizedZones,
             }
         );
+
+        // Initialize A/B testing if enabled
+        if (Config.ABSORPTION_CONFIG.abTestingEnabled) {
+            const { AbsorptionABTestManager } = await import(
+                "../services/absorptionABTestManager.js"
+            );
+            const abTestManager = new AbsorptionABTestManager(
+                dependencies.logger,
+                dependencies.metricsCollector
+            );
+            const testConfig = abTestManager.createDefaultTest();
+            abTestManager.startTest(testConfig);
+
+            dependencies.logger.info("Absorption A/B testing enabled", {
+                testId: testConfig.testId,
+                variants: testConfig.variants.length,
+                duration: testConfig.durationHours + "h",
+                detectorId: id,
+            });
+        }
 
         this.registerDetector(id, detector, dependencies, options);
 
@@ -106,7 +126,8 @@ export class DetectorFactory {
             dependencies.logger,
             dependencies.metricsCollector,
             dependencies.signalLogger,
-            dependencies.signalValidationLogger
+            dependencies.signalValidationLogger,
+            dependencies.traditionalIndicators
         );
 
         dependencies.logger.info(
@@ -114,7 +135,6 @@ export class DetectorFactory {
             {
                 id,
                 settings: productionSettings,
-                enhancementMode: productionSettings.enhancementMode,
             }
         );
 
@@ -217,14 +237,14 @@ export class DetectorFactory {
             dependencies.logger,
             dependencies.metricsCollector,
             dependencies.signalValidationLogger,
-            dependencies.signalLogger
+            dependencies.signalLogger,
+            dependencies.traditionalIndicators
         );
 
         dependencies.logger.info(
             `[DetectorFactory] Created Enhanced DeltaCVDDetector (deprecated originals)`,
             {
                 id,
-                enhancementMode: productionSettings.enhancementMode,
             }
         );
 
@@ -741,6 +761,7 @@ export interface DetectorDependencies {
     signalLogger: ISignalLogger;
     preprocessor: IOrderflowPreprocessor;
     signalValidationLogger: SignalValidationLogger;
+    traditionalIndicators: TraditionalIndicators;
 }
 
 export interface DetectorFactoryOptions {

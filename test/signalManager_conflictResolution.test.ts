@@ -219,6 +219,36 @@ describe("SignalManager Conflict Resolution", () => {
         type: type as any,
         confidence,
         detectorId: `${type}_detector`,
+        originalCandidate: {
+            id: `${id}_candidate`,
+            type: type as any,
+            side,
+            confidence,
+            timestamp,
+            data: {
+                price,
+                side,
+                volume: 100,
+                timestamp: new Date(timestamp),
+            },
+            enrichedEvent: {
+                phaseContext: {
+                    currentPhase: {
+                        direction: "UP" as const,
+                        startPrice: price - 0.5,
+                        startTime: timestamp - 300000,
+                        currentSize: 0.005,
+                        age: 300000,
+                    },
+                    previousPhase: {
+                        direction: "DOWN" as const,
+                        size: 0.008,
+                        duration: 600000,
+                    },
+                    phaseConfirmed: true,
+                },
+            },
+        },
         data: {
             price,
             side,

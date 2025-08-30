@@ -416,28 +416,28 @@ describe("Detector Signal Generation Debug - Real Config & Market Data", () => {
             );
 
             // Verify actual parameters match config
-            expect(
-                (detector as any).enhancementConfig.exhaustionThreshold
-            ).toBe(exhaustionConfig.exhaustionThreshold);
-            expect((detector as any).enhancementConfig.minAggVolume).toBe(
+            expect((detector as any).settings.exhaustionThreshold).toBe(
+                exhaustionConfig.exhaustionThreshold
+            );
+            expect((detector as any).settings.minAggVolume).toBe(
                 exhaustionConfig.minAggVolume
             );
-            expect((detector as any).enhancementConfig.maxPassiveRatio).toBe(
-                exhaustionConfig.maxPassiveRatio
-            );
+            expect(
+                (detector as any).settings.passiveRatioBalanceThreshold
+            ).toBe(exhaustionConfig.passiveRatioBalanceThreshold);
 
             console.log("Exhaustion Detector Parameters:");
             console.log(
                 "  exhaustionThreshold:",
-                (detector as any).enhancementConfig.exhaustionThreshold
+                (detector as any).settings.exhaustionThreshold
             );
             console.log(
                 "  minAggVolume:",
-                (detector as any).enhancementConfig.minAggVolume
+                (detector as any).settings.minAggVolume
             );
             console.log(
-                "  maxPassiveRatio:",
-                (detector as any).enhancementConfig.maxPassiveRatio
+                "  passiveRatioBalanceThreshold:",
+                (detector as any).settings.passiveRatioBalanceThreshold
             );
         });
 

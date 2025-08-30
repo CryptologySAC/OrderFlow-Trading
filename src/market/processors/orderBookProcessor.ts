@@ -234,53 +234,75 @@ export class OrderBookProcessor implements IOrderBookProcessor {
         const bins = new Map<number, PriceLevel>();
         const binIncrement = config.binSize;
 
-        // Initialize bins
-        for (
-            let price = config.minPrice;
-            price <= config.maxPrice;
-            price += binIncrement
-        ) {
-            const binPrice = this.roundToTick(price);
-            bins.set(binPrice, {
-                price: binPrice,
-                bid: 0,
-                ask: 0,
-                bidCount: 0,
-                askCount: 0,
-            });
-        }
+        // When binSize is 1 (1-tick), show actual order book levels without creating empty bins
+        if (this.binSize === 1) {
+            // Just convert the actual depth snapshot to price levels
+            for (const [price, level] of depthSnapshot) {
+                // Skip levels outside our range
+                if (price < config.minPrice || price > config.maxPrice)
+                    continue;
 
-        // Aggregate levels into bins
-        for (const [price, level] of depthSnapshot) {
-            // Skip levels outside our range
-            if (price < config.minPrice || price > config.maxPrice) continue;
-
-            // Bids
-            if (level.bid > 0) {
-                const bidBinPrice = this.roundToTick(
-                    Math.floor(price / binIncrement) * binIncrement
-                );
-                const bin = bins.get(bidBinPrice);
-                if (bin) {
-                    bin.bid += level.bid;
-                    bin.bidCount!++;
+                // Only add levels that have actual liquidity
+                if (level.bid > 0 || level.ask > 0) {
+                    const roundedPrice = this.roundToTick(price);
+                    bins.set(roundedPrice, {
+                        price: roundedPrice,
+                        bid: level.bid || 0,
+                        ask: level.ask || 0,
+                        bidCount: level.bid > 0 ? 1 : 0,
+                        askCount: level.ask > 0 ? 1 : 0,
+                    });
                 }
             }
-            // Asks
-            if (level.ask > 0) {
-                const askBinPrice = this.roundToTick(
-                    Math.ceil(price / binIncrement) * binIncrement
-                );
-                const bin = bins.get(askBinPrice);
-                if (bin) {
-                    bin.ask += level.ask;
-                    bin.askCount!++;
+        } else {
+            // For larger bin sizes, create bins and aggregate
+            // Initialize bins
+            for (
+                let price = config.minPrice;
+                price <= config.maxPrice;
+                price += binIncrement
+            ) {
+                const binPrice = this.roundToTick(price);
+                bins.set(binPrice, {
+                    price: binPrice,
+                    bid: 0,
+                    ask: 0,
+                    bidCount: 0,
+                    askCount: 0,
+                });
+            }
+
+            // Aggregate levels into bins
+            for (const [price, level] of depthSnapshot) {
+                // Skip levels outside our range
+                if (price < config.minPrice || price > config.maxPrice)
+                    continue;
+
+                // Bids
+                if (level.bid > 0) {
+                    const bidBinPrice = this.roundToTick(
+                        Math.floor(price / binIncrement) * binIncrement
+                    );
+                    const bin = bins.get(bidBinPrice);
+                    if (bin) {
+                        bin.bid += level.bid;
+                        bin.bidCount!++;
+                    }
+                }
+                // Asks
+                if (level.ask > 0) {
+                    const askBinPrice = this.roundToTick(
+                        Math.ceil(price / binIncrement) * binIncrement
+                    );
+                    const bin = bins.get(askBinPrice);
+                    if (bin) {
+                        bin.ask += level.ask;
+                        bin.askCount!++;
+                    }
                 }
             }
         }
 
-        // Keep all bins to maintain balanced orderbook display
-        // Don't filter empty bins - this ensures consistent bid/ask level counts
         return bins;
     }
 

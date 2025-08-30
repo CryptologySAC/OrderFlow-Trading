@@ -7,7 +7,7 @@
 
 import { TradeWebSocket } from "./websocket.js";
 
-const TRADE_WEBSOCKET_URL = "wss://api.cryptology.pe/ltcusdt_trades";
+const TRADE_WEBSOCKET_URL = "ws://localhost:3001";
 const MAX_TRADES = 50000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY_MS = 1000;
@@ -50,6 +50,8 @@ let maxSupportResistanceLevels = 20;
 // Zone management
 let activeZones = new Map();
 let maxActiveZones = 10;
+
+// Order book display - backend sends properly configured data
 
 // Used to control badge display
 let badgeTimeout = null;
@@ -445,12 +447,27 @@ function renderSignalsList() {
             ).toFixed(0);
             const timeAgo = formatSignalTime(signal.time);
 
+            // Determine classification display
+            const classification = signal.signal_classification || signal.signalClassification || '';
+            const classificationBadge = classification === 'reversal' 
+                ? '<span class="signal-classification reversal">⚡ REVERSAL</span>'
+                : classification === 'trend_following'
+                ? '<span class="signal-classification trend">📈 TREND</span>'
+                : '';
+            
+            const signalClass = classification === 'reversal' 
+                ? 'signal-reversal' 
+                : classification === 'trend_following' 
+                ? 'signal-trend' 
+                : '';
+
             return `
-                <div class="signal-row signal-${signal.side}" 
+                <div class="signal-row signal-${signal.side} ${signalClass}" 
                      data-signal-id="${signal.id}"
                      title="${getSignalSummary(signal)}">
                     <div class="signal-row-header">
                         <span class="signal-type">${signal.type.replace("_confirmed", "").replace("_", " ")}</span>
+                        ${classificationBadge}
                         <span class="signal-side ${signal.side}">${signal.side.toUpperCase()}</span>
                         <span class="signal-time">${timeAgo}</span>
                     </div>
@@ -617,27 +634,17 @@ const tradeWebsocket = new TradeWebSocket({
         trades.length = 0;
         for (const trade of backLog) {
             if (isValidTrade(trade)) {
-                if (trades.length < MAX_TRADES) {
-                    trades.push(
-                        createTrade(
-                            trade.time,
-                            trade.price,
-                            trade.quantity,
-                            trade.orderType
-                        )
-                    );
-                } else {
-                    const recycled = trades.shift(); // Remove the oldest trade
-                    recycled.x = trade.time;
-                    recycled.y = trade.price;
-                    recycled.quantity = trade.quantity;
-                    recycled.orderType = trade.orderType;
-                    trades.push(recycled); // Push updated object
-                }
+                trades.push(
+                    createTrade(
+                        trade.time,
+                        trade.price,
+                        trade.quantity,
+                        trade.orderType
+                    )
+                );
             }
         }
-        while (trades.length > MAX_TRADES) trades.shift();
-
+        
         tradesChart.data.datasets[0].data = [...trades];
 
         if (trades.length > 0) {
@@ -701,24 +708,14 @@ const tradeWebsocket = new TradeWebSocket({
                 case "trade":
                     const trade = message.data;
                     if (isValidTrade(trade)) {
-                        if (trades.length < MAX_TRADES) {
-                            trades.push(
-                                createTrade(
-                                    trade.time,
-                                    trade.price,
-                                    trade.quantity,
-                                    trade.orderType
-                                )
-                            );
-                        } else {
-                            const recycled = trades.shift(); // Remove the oldest trade
-                            recycled.x = trade.time;
-                            recycled.y = trade.price;
-                            recycled.quantity = trade.quantity;
-                            recycled.orderType = trade.orderType;
-                            trades.push(recycled); // Push updated object
-                        }
-                        while (trades.length > MAX_TRADES) trades.shift();
+                        trades.push(
+                            createTrade(
+                                trade.time,
+                                trade.price,
+                                trade.quantity,
+                                trade.orderType
+                            )
+                        );
 
                         tradesChart.data.datasets[0].data = [...trades];
 
@@ -926,78 +923,10 @@ const tradeWebsocket = new TradeWebSocket({
                     }
 
                     orderBookData = message.data;
-                    if (window.orderBookChart) {
-                        // Update chart data with new structure
-                        const labels = [];
-                        const askData = [];
-                        const bidData = [];
 
-                        // Select levels symmetrically around mid price for balanced display
-                        const maxLevels = 30;
-                        const midPrice = orderBookData.midPrice || 0;
-
-                        // Sort levels by price to ensure proper ordering
-                        const sortedLevels = orderBookData.priceLevels.sort(
-                            (a, b) => a.price - b.price
-                        );
-
-                        // Find the index closest to midPrice
-                        let midIndex = 0;
-                        let minDiff = Infinity;
-                        for (let i = 0; i < sortedLevels.length; i++) {
-                            const diff = Math.abs(
-                                sortedLevels[i].price - midPrice
-                            );
-                            if (diff < minDiff) {
-                                minDiff = diff;
-                                midIndex = i;
-                            }
-                        }
-
-                        // Select symmetric range around midPrice
-                        const levelsPerSide = Math.floor(maxLevels / 2);
-                        const startIndex = Math.max(
-                            0,
-                            midIndex - levelsPerSide
-                        );
-                        const endIndex = Math.min(
-                            sortedLevels.length,
-                            startIndex + maxLevels
-                        );
-                        const levelsToShow = sortedLevels.slice(
-                            startIndex,
-                            endIndex
-                        );
-
-                        levelsToShow.forEach((level) => {
-                            const priceStr = level.price
-                                ? level.price.toFixed(2)
-                                : "0.00";
-
-                            // Add ask position
-                            labels.push(`${priceStr}_ask`);
-                            askData.push(level.ask || 0);
-                            bidData.push(null);
-
-                            // Add bid position
-                            labels.push(`${priceStr}_bid`);
-                            askData.push(null);
-                            bidData.push(level.bid || 0);
-                        });
-
-                        orderBookChart.data.labels = labels;
-                        orderBookChart.data.datasets[0].data = askData;
-                        orderBookChart.data.datasets[1].data = bidData;
-
-                        // Update colors based on current theme
-                        const currentTheme = getCurrentTheme();
-                        const actualTheme =
-                            currentTheme === "system"
-                                ? getSystemTheme()
-                                : currentTheme;
-                        updateOrderBookBarColors(actualTheme);
-
-                        scheduleOrderBookUpdate();
+                    // Display the data directly from backend (already 1-tick precision)
+                    if (orderBookChart) {
+                        updateOrderBookDisplay(orderBookData);
                     } else {
                         console.warn(
                             "Order book chart not initialized; skipping update"
@@ -1056,6 +985,7 @@ function isValidTrade(trade) {
         ["BUY", "SELL"].includes(trade.orderType)
     );
 }
+
 
 /**
  * Gets the background color for a trade based on type and quantity.
@@ -1275,8 +1205,8 @@ function initializeOrderBookChart(ctx) {
             },
             datasets: {
                 bar: {
-                    barPercentage: 0.45,
-                    categoryPercentage: 1.0,
+                    barPercentage: 1.0,
+                    categoryPercentage: 0.5,
                 },
             },
             plugins: {
@@ -3334,6 +3264,74 @@ function cleanupOldZones() {
     }
 }
 
+/**
+ * Update order book display with data from backend
+ */
+function updateOrderBookDisplay(data) {
+    if (!orderBookChart) {
+        return;
+    }
+
+    const labels = [];
+    const askData = [];
+    const bidData = [];
+
+    // Backend sends data already configured with proper binSize (1-tick)
+    // Just display it directly without any local processing
+    const priceLevels = data.priceLevels || [];
+
+    // Select levels symmetrically around mid price for balanced display
+    const maxLevels = 50; // Show more levels since we have 1-tick precision
+    const midPrice = data.midPrice || 0;
+
+    // Sort levels by price
+    const sortedLevels = priceLevels.sort((a, b) => a.price - b.price);
+
+    // Find the index closest to midPrice
+    let midIndex = 0;
+    let minDiff = Infinity;
+    for (let i = 0; i < sortedLevels.length; i++) {
+        const diff = Math.abs(sortedLevels[i].price - midPrice);
+        if (diff < minDiff) {
+            minDiff = diff;
+            midIndex = i;
+        }
+    }
+
+    // Select levels around midpoint
+    const halfLevels = Math.floor(maxLevels / 2);
+    const startIndex = Math.max(0, midIndex - halfLevels);
+    const endIndex = Math.min(sortedLevels.length, startIndex + maxLevels);
+    const displayLevels = sortedLevels.slice(startIndex, endIndex);
+
+    // Build chart data
+    displayLevels.forEach((level) => {
+        const priceStr = level.price.toFixed(2);
+
+        // Add ask position
+        labels.push(`${priceStr}_ask`);
+        askData.push(level.ask || 0);
+        bidData.push(null);
+
+        // Add bid position
+        labels.push(`${priceStr}_bid`);
+        askData.push(null);
+        bidData.push(level.bid || 0);
+    });
+
+    orderBookChart.data.labels = labels;
+    orderBookChart.data.datasets[0].data = askData;
+    orderBookChart.data.datasets[1].data = bidData;
+
+    // Update colors based on theme
+    const currentTheme = getCurrentTheme();
+    const actualTheme =
+        currentTheme === "system" ? getSystemTheme() : currentTheme;
+    updateOrderBookBarColors(actualTheme);
+
+    scheduleOrderBookUpdate();
+}
+
 // Start application
 document.addEventListener("DOMContentLoaded", initialize);
 
@@ -3433,4 +3431,24 @@ document.addEventListener("DOMContentLoaded", () => {
             true
         );
     }
+
+    // Set up efficient trade cleanup every 15 minutes
+    // This prevents memory bloat while maintaining 90 minutes of visible trades
+    setInterval(() => {
+        const cutoffTime = Date.now() - (90 * 60 * 1000); // 90 minutes ago
+        const indexToKeep = trades.findIndex(t => t.x >= cutoffTime);
+        
+        if (indexToKeep > 0) {
+            // Remove all old trades in one efficient operation
+            trades.splice(0, indexToKeep);
+            
+            // Update chart after cleanup
+            if (tradesChart) {
+                tradesChart.data.datasets[0].data = [...trades];
+                scheduleTradesChartUpdate();
+            }
+            
+            console.log(`Cleaned up ${indexToKeep} old trades, ${trades.length} remaining`);
+        }
+    }, 15 * 60 * 1000); // Every 15 minutes
 });

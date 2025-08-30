@@ -77,6 +77,15 @@ export interface SignalManagerConfig {
     priorityQueueHighThreshold: number;
     backpressureYieldMs: number;
     marketVolatilityWeight: number;
+
+    // RSI Dashboard Integration parameters
+    rsiUpdateFrequency: number;
+    maxRsiBacklogSize: number;
+    maxSignalBacklogAgeMinutes: number;
+
+    // Detector priorities (to eliminate magic numbers)
+    accumulationDetectorPriority: number;
+    distributionDetectorPriority: number;
 }
 
 interface SignalCorrelation {
@@ -434,6 +443,13 @@ export class SignalManager extends EventEmitter {
                 recentAnomalyTypes: health.recentAnomalyTypes,
                 // Option B: No confidence adjustment in signal manager
             },
+            // Pass through phase-based classification
+            ...(signal.signalClassification && {
+                signalClassification: signal.signalClassification,
+            }),
+            ...(signal.phaseContext && {
+                phaseContext: signal.phaseContext,
+            }),
         };
 
         // Ensure signals are persisted before emitting to prevent backlog issues
@@ -1200,7 +1216,7 @@ export class SignalManager extends EventEmitter {
                 1
             );
 
-            // Process signal through simplified pipeline
+            // Process signal through simplified pipeline (phase logic now in detectors)
             confirmedSignal = this.processSignal(signal);
 
             // Store signal for correlation analysis only if it succeeds

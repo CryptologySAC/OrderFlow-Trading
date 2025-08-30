@@ -585,6 +585,7 @@ interface BacklogMessage {
     data: {
         backlog: unknown[];
         signals: unknown[];
+        rsiBacklog?: unknown[];
         targetClientId?: string;
     };
 }
@@ -855,6 +856,21 @@ parentPort?.on(
                                         JSON.stringify({
                                             type: "signal_backlog",
                                             data: msg.data.signals,
+                                            now: Date.now(),
+                                            correlationId,
+                                        })
+                                    );
+                                }
+
+                                // Send RSI backlog
+                                if (
+                                    msg.data.rsiBacklog &&
+                                    msg.data.rsiBacklog.length > 0
+                                ) {
+                                    ws.send(
+                                        JSON.stringify({
+                                            type: "rsi_backlog",
+                                            data: msg.data.rsiBacklog,
                                             now: Date.now(),
                                             correlationId,
                                         })

@@ -1,0 +1,357 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Harmless vs Harmful False Positives Analysis</title>
+        <style>
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                margin: 20px;
+                background-color: #1a1a1a;
+                color: #e0e0e0;
+            }
+            h1,
+            h2 {
+                color: #4caf50;
+                border-bottom: 2px solid #4caf50;
+                padding-bottom: 10px;
+            }
+            .summary {
+                background-color: #2a2a2a;
+                padding: 20px;
+                border-radius: 5px;
+                margin: 20px 0;
+                border: 1px solid #444;
+            }
+            .stat {
+                font-size: 36px;
+                font-weight: bold;
+                color: #4caf50;
+            }
+            .good {
+                color: #4caf50;
+            }
+            .bad {
+                color: #f44336;
+            }
+            .neutral {
+                color: #ffa726;
+            }
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                background-color: #2a2a2a;
+                margin: 20px 0;
+            }
+            th {
+                background-color: #4caf50;
+                color: white;
+                padding: 10px;
+                text-align: left;
+            }
+            td {
+                padding: 8px;
+                border-bottom: 1px solid #444;
+            }
+            .harmless {
+                background-color: #1b5e20;
+            }
+            .harmful {
+                background-color: #b71c1c;
+            }
+            .buy {
+                color: #4caf50;
+            }
+            .sell {
+                color: #f44336;
+            }
+            .overlap-info {
+                font-size: 11px;
+                color: #888;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Harmless vs Harmful False Positives Analysis</h1>
+
+        <div class="summary">
+            <h2>Key Findings</h2>
+            <p>
+                <span class="stat">68</span> total false positives with
+                optimized thresholds
+            </p>
+            <p>
+                <span class="stat good">9</span> HARMLESS (occur during active
+                trades)
+            </p>
+            <p>
+                <span class="stat bad">59</span> HARMFUL (would trigger losing
+                trades)
+            </p>
+            <p>
+                <span class="stat">13.2%</span> of false positives are harmless!
+            </p>
+        </div>
+
+        <div class="summary">
+            <h2>Swing Movement Analysis</h2>
+            <p>
+                Successful signals: <span class="good">6 swings</span> (all
+                profitable)
+            </p>
+            <p>
+                Harmful false positives:
+                <span class="bad">18 swings</span> (analyzed below)
+            </p>
+            <p>
+                Average FP per swing: <span class="neutral">3.3 signals</span>
+            </p>
+            <p>
+                Total unique swings: <span class="stat">24</span> swing
+                movements
+            </p>
+            <p>Win rate by swing: <span class="stat">25.0%</span></p>
+        </div>
+
+        <div class="summary">
+            <h2>Harmful Swing Best Outcomes (Before 0.35% SL)</h2>
+
+            <p>Could reach 0.7% TP: <span class="good">0 swings</span></p>
+            <p>Could reach 0.5% TP: <span class="good">1 swings</span></p>
+            <p>Could reach 0.3% TP: <span class="neutral">2 swings</span></p>
+            <p>Breakeven (0-0.3%): <span class="neutral">15 swings</span></p>
+            <p>Small Loss (<0.35%): <span class="bad">0 swings</span></p>
+            <p>Hit Stop Loss (0.35%): <span class="bad">0 swings</span></p>
+            <hr style="border-color: #444; margin: 15px 0" />
+            <p>Potential winners (≥0.3% TP): <span class="stat">3</span></p>
+            <p>Actual losers: <span class="stat">0</span></p>
+        </div>
+
+        <div class="summary">
+            <h2>Effective Accuracy After Filtering Harmless FPs</h2>
+            <p>True Positives: <span class="good">35</span></p>
+            <p>Harmful False Positives: <span class="bad">59</span></p>
+            <p>Effective Accuracy: <span class="stat">37.2%</span></p>
+            <p class="neutral">vs Original: 34.0%</p>
+        </div>
+
+        <h2>Harmless False Positives (First 20 of 9)</h2>
+        <table>
+            <tr>
+                <th>Time (Lima)</th>
+                <th>Side</th>
+                <th>Price</th>
+                <th>Overlapping Trade Window</th>
+            </tr>
+
+            <tr class="harmless">
+                <td>08/12, 00:39:21</td>
+                <td class="sell">SELL</td>
+                <td>$118.84</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+            <tr class="harmless">
+                <td>08/12, 00:39:44</td>
+                <td class="sell">SELL</td>
+                <td>$118.74</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+            <tr class="harmless">
+                <td>08/12, 00:41:36</td>
+                <td class="sell">SELL</td>
+                <td>$118.74</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+            <tr class="harmless">
+                <td>08/12, 00:41:40</td>
+                <td class="sell">SELL</td>
+                <td>$118.71</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+            <tr class="harmless">
+                <td>08/12, 00:41:47</td>
+                <td class="sell">SELL</td>
+                <td>$118.65</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+            <tr class="harmless">
+                <td>08/12, 00:41:51</td>
+                <td class="sell">SELL</td>
+                <td>$118.66</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+            <tr class="harmless">
+                <td>08/12, 00:41:55</td>
+                <td class="sell">SELL</td>
+                <td>$118.65</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+            <tr class="harmless">
+                <td>08/12, 00:41:57</td>
+                <td class="sell">SELL</td>
+                <td>$118.63</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+            <tr class="harmless">
+                <td>08/12, 00:41:58</td>
+                <td class="sell">SELL</td>
+                <td>$118.62</td>
+                <td class="overlap-info">
+                    Trade: 08/12, 00:33:00 → 08/12, 00:42:03 @ $119.50
+                </td>
+            </tr>
+        </table>
+
+        <h2>Harmful False Positives (First 20 of 59)</h2>
+        <table>
+            <tr>
+                <th>Time (Lima)</th>
+                <th>Side</th>
+                <th>Price</th>
+                <th>Status</th>
+            </tr>
+
+            <tr class="harmful">
+                <td>08/11, 19:08:18</td>
+                <td class="sell">SELL</td>
+                <td>$119.84</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/11, 19:09:13</td>
+                <td class="sell">SELL</td>
+                <td>$119.84</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/11, 19:09:20</td>
+                <td class="sell">SELL</td>
+                <td>$119.84</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/11, 19:09:21</td>
+                <td class="sell">SELL</td>
+                <td>$119.84</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/11, 19:09:35</td>
+                <td class="sell">SELL</td>
+                <td>$119.83</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/11, 20:45:26</td>
+                <td class="sell">SELL</td>
+                <td>$120.94</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/11, 21:51:58</td>
+                <td class="buy">BUY</td>
+                <td>$120.45</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/11, 21:52:10</td>
+                <td class="buy">BUY</td>
+                <td>$120.45</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 01:35:06</td>
+                <td class="sell">SELL</td>
+                <td>$119.61</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:16:15</td>
+                <td class="sell">SELL</td>
+                <td>$119.14</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:21:04</td>
+                <td class="sell">SELL</td>
+                <td>$119.13</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:21:40</td>
+                <td class="sell">SELL</td>
+                <td>$119.24</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:21:58</td>
+                <td class="sell">SELL</td>
+                <td>$119.14</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:47:24</td>
+                <td class="sell">SELL</td>
+                <td>$119.04</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:47:28</td>
+                <td class="sell">SELL</td>
+                <td>$119.04</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:47:29</td>
+                <td class="sell">SELL</td>
+                <td>$119.03</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:47:30</td>
+                <td class="sell">SELL</td>
+                <td>$119.03</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:47:31</td>
+                <td class="sell">SELL</td>
+                <td>$119.02</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:47:34</td>
+                <td class="sell">SELL</td>
+                <td>$119.00</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+            <tr class="harmful">
+                <td>08/12, 02:47:41</td>
+                <td class="sell">SELL</td>
+                <td>$118.94</td>
+                <td class="bad">Would trigger losing trade</td>
+            </tr>
+        </table>
+
+        <p style="margin-top: 40px; color: #888; font-size: 12px">
+            Generated: 2025-08-12T18:17:15.809Z<br />
+            Analysis based on optimized thresholds that capture all swing
+            movements
+        </p>
+    </body>
+</html>

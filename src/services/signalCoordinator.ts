@@ -23,7 +23,6 @@ import type {
     SignalProcessedEvent,
     SignalQueuedEvent,
 } from "../utils/types.js";
-import { DetectorStub } from "../utils/detectorStub.js";
 
 type DetectorLike = Detector | { id?: unknown; detectorId?: unknown };
 
@@ -253,9 +252,7 @@ export class SignalCoordinator extends EventEmitter {
 
             /* restore any jobs left in the DB from a previous run */
             const restoreQueuedJobs: ProcessingJob[] =
-                (await this.threadManager.callStorage(
-                    "restoreQueuedJobs"
-                )) as ProcessingJob[];
+                await this.threadManager.callStorage("restoreQueuedJobs");
             for (const j of restoreQueuedJobs) {
                 this.queue.push(j);
             }
@@ -438,13 +435,11 @@ export class SignalCoordinator extends EventEmitter {
         } as SignalQueuedEvent);
     }
 
-    private createSerializableJob(job: ProcessingJob): ProcessingJob {
+    private createSerializableJob(job: ProcessingJob): SerializableJobData {
         return {
-            id: job.id,
+            jobId: job.id,
+            detectorId: job.detector.getId(),
             candidate: job.candidate,
-            detector: new DetectorStub(
-                job.detector.getId()
-            ) as unknown as Detector,
             startTime: job.startTime,
             retryCount: job.retryCount,
             priority: job.priority,
@@ -462,10 +457,10 @@ export class SignalCoordinator extends EventEmitter {
             /* if the in-memory queue is drained, refill from persistent storage */
             if (this.queue.size === 0) {
                 try {
-                    const jobs = (await this.threadManager.callStorage(
+                    const jobs = await this.threadManager.callStorage(
                         "dequeueJobs",
                         slots
-                    )) as ProcessingJob[];
+                    );
                     for (const j of jobs) {
                         this.queue.push(j);
                     }

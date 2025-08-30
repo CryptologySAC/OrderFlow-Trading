@@ -13,6 +13,7 @@
 //
 
 import { FinancialMath } from "../../utils/financialMath.js";
+import { Config } from "../../core/config.js";
 import type { ZoneSnapshot } from "../../types/marketEvents.js";
 
 /**
@@ -38,6 +39,8 @@ interface TrackedZone {
     maxPassiveAskVolume: number; // Peak ask volume seen
     lastUpdate: number;
     depletionEvents: number; // Count of significant depletion events
+    consumptionConfidence: number; // Confidence that depletion is from real consumption (0-1)
+    lastConfirmedConsumption: number; // Timestamp of last confirmed consumption
 }
 
 /**
@@ -51,17 +54,26 @@ export interface ExhaustionPattern {
     affectedZones: number;
     confidence: number;
     gapCreated: boolean; // True if liquidity moved to wider levels
+    passesMinPeakVolume: boolean; // Added: Indicates if minPeakVolume was met for any affected zone
 }
 
 /**
  * Configuration for zone tracking
  */
 export interface ZoneTrackerConfig {
-    maxZonesPerSide: number; // Number of zones to track on each side of spread
+    maxZonesPerSide: number; // Number of zones to track on each side
     historyWindowMs: number; // How long to keep zone history
     depletionThreshold: number; // Minimum depletion ratio to consider exhaustion (e.g., 0.7 = 70% depleted)
     minPeakVolume: number; // Minimum peak volume to consider for exhaustion
     gapDetectionTicks: number; // Price distance in ticks to detect gap creation
+    consumptionValidation?:
+        | {
+              maxReasonableVelocity: number; // Maximum reasonable depletion velocity
+              minConsumptionConfidence: number; // Minimum confidence required for exhaustion
+              confidenceDecayTimeMs: number; // Time after which confidence decays
+              minAggressiveVolume: number; // Minimum aggressive volume for validation
+          }
+        | undefined;
 }
 
 /**
@@ -73,6 +85,17 @@ export class ExhaustionZoneTracker {
     private currentSpread: { bid: number; ask: number } | null = null;
     private readonly config: ZoneTrackerConfig;
     private readonly tickSize: number;
+
+    // Confidence calculation constants
+    private static readonly CONFIDENCE_BASE_MAX = 0.4;
+    private static readonly CONFIDENCE_BASE_MULTIPLIER = 0.5;
+    private static readonly CONFIDENCE_ZONES_CONTRIBUTION = 0.2;
+    private static readonly CONFIDENCE_DEPLETION_CONTRIBUTION = 0.2;
+    private static readonly CONFIDENCE_DEPLETION_MULTIPLIER = 0.25;
+    private static readonly CONFIDENCE_GAP_BONUS = 0.2;
+
+    // Zone distance constants
+    private static readonly ZONE_SPREAD_TOLERANCE_TICKS = 2; // Allow zones 2 ticks inside spread
 
     constructor(config: ZoneTrackerConfig, tickSize: number) {
         this.config = config;
@@ -91,50 +114,98 @@ export class ExhaustionZoneTracker {
      * Process zone update and track passive volume changes
      */
     public updateZone(zone: ZoneSnapshot, timestamp: number): void {
-        const zoneId = zone.zoneId;
+        // Track all zones including depleted ones (passive volume = 0) to detect exhaustion patterns
+
+        if (!this.currentSpread) {
+            return; // Wait for spread to be set
+        }
+
         const isNearBid = this.isNearBid(zone.priceLevel);
         const isNearAsk = this.isNearAsk(zone.priceLevel);
 
         if (!isNearBid && !isNearAsk) {
-            return; // Zone too far from spread
+            // Zone too far from spread - skip silently
+            return;
         }
 
-        const trackedZones = isNearBid ? this.bidZones : this.askZones;
-        let tracked = trackedZones.get(zoneId);
+        // Precise zone classification: check exact prices first
+        let isAskZone: boolean;
+        if (this.currentSpread && zone.priceLevel === this.currentSpread.ask) {
+            isAskZone = true; // Exactly at ask price -> ask zone
+        } else if (
+            this.currentSpread &&
+            zone.priceLevel === this.currentSpread.bid
+        ) {
+            isAskZone = false; // Exactly at bid price -> bid zone
+        } else if (isNearAsk && !isNearBid) {
+            isAskZone = true; // Only near ask -> ask zone
+        } else if (isNearBid && !isNearAsk) {
+            isAskZone = false; // Only near bid -> bid zone
+        } else {
+            // Both near bid and ask (in spread) - use distance to determine
+            const bidDistance = Math.abs(
+                zone.priceLevel - (this.currentSpread?.bid || 0)
+            );
+            const askDistance = Math.abs(
+                zone.priceLevel - (this.currentSpread?.ask || 0)
+            );
+            isAskZone = askDistance <= bidDistance;
+        }
+
+        const trackedZones = isAskZone ? this.askZones : this.bidZones;
+
+        // Use price level as key for better zone continuity
+        // Normalize to tick size using FinancialMath for consistency
+        const normalizedPrice = FinancialMath.normalizePriceToTick(
+            zone.priceLevel,
+            this.tickSize
+        );
+        const zoneKey = `${isAskZone ? "ask" : "bid"}_${normalizedPrice.toFixed(Config.PRICE_PRECISION)}`;
+        let tracked = trackedZones.get(zoneKey);
 
         if (!tracked) {
             // Initialize new tracked zone
             tracked = {
-                zoneId,
+                zoneId: zoneKey,
                 priceLevel: zone.priceLevel,
                 history: [],
                 maxPassiveBidVolume: zone.passiveBidVolume,
                 maxPassiveAskVolume: zone.passiveAskVolume,
                 lastUpdate: timestamp,
                 depletionEvents: 0,
+                consumptionConfidence: 0.5, // Start with neutral confidence
+                lastConfirmedConsumption: 0,
             };
-            trackedZones.set(zoneId, tracked);
+            trackedZones.set(zoneKey, tracked);
         }
 
-        // Update peak volumes
+        // Update peak volumes - use cumulative maximum for proper depletion detection
+        const currentBidVolume = zone.passiveBidVolume || 0;
+        const currentAskVolume = zone.passiveAskVolume || 0;
+
+        // Track cumulative maximum volumes - never decrease peaks
         tracked.maxPassiveBidVolume = Math.max(
-            tracked.maxPassiveBidVolume,
-            zone.passiveBidVolume
+            tracked.maxPassiveBidVolume || 0,
+            currentBidVolume
         );
         tracked.maxPassiveAskVolume = Math.max(
-            tracked.maxPassiveAskVolume,
-            zone.passiveAskVolume
+            tracked.maxPassiveAskVolume || 0,
+            currentAskVolume
         );
 
-        // Add history entry
+        // Add history entry with proper defaults
         const entry: ZoneHistoryEntry = {
             timestamp,
-            passiveBidVolume: zone.passiveBidVolume,
-            passiveAskVolume: zone.passiveAskVolume,
-            aggressiveVolume: zone.aggressiveVolume,
+            passiveBidVolume: currentBidVolume,
+            passiveAskVolume: currentAskVolume,
+            aggressiveVolume: zone.aggressiveVolume || 0,
             priceLevel: zone.priceLevel,
             spread: this.currentSpread
-                ? this.currentSpread.ask - this.currentSpread.bid
+                ? FinancialMath.calculateSpread(
+                      this.currentSpread.ask,
+                      this.currentSpread.bid,
+                      4
+                  )
                 : 0,
         };
 
@@ -142,7 +213,7 @@ export class ExhaustionZoneTracker {
         tracked.lastUpdate = timestamp;
 
         // Check for depletion event
-        this.detectDepletionEvent(tracked, isNearBid ? "bid" : "ask");
+        this.detectDepletionEvent(tracked, isAskZone ? "ask" : "bid");
 
         // Clean old history
         this.cleanOldHistory(tracked, timestamp);
@@ -154,29 +225,39 @@ export class ExhaustionZoneTracker {
     public analyzeExhaustion(isBuyTrade: boolean): ExhaustionPattern {
         const relevantZones = isBuyTrade ? this.askZones : this.bidZones;
         const exhaustionType = isBuyTrade ? "ask" : "bid";
-
-        let totalDepletionRatio = 0;
+        let totalWeightedDepletion = 0;
+        let totalPeakVolume = 0;
         let totalVelocity = 0;
         let affectedZones = 0;
         let maxDepletion = 0;
         let hasSignificantExhaustion = false;
+        let passesMinPeakVolumeOverall = false; // Initialize
 
         for (const zone of relevantZones.values()) {
             const analysis = this.analyzeZoneExhaustion(zone, exhaustionType);
 
             if (analysis.isExhausted) {
                 affectedZones++;
-                totalDepletionRatio += analysis.depletionRatio;
+                const peakVolume =
+                    exhaustionType === "bid"
+                        ? zone.maxPassiveBidVolume
+                        : zone.maxPassiveAskVolume;
+                totalWeightedDepletion += analysis.depletionRatio * peakVolume;
+                totalPeakVolume += peakVolume;
                 totalVelocity += analysis.velocity;
                 maxDepletion = Math.max(maxDepletion, analysis.depletionRatio);
 
                 if (analysis.depletionRatio >= this.config.depletionThreshold) {
                     hasSignificantExhaustion = true;
                 }
+                // Add this line:
+                if (peakVolume >= this.config.minPeakVolume) {
+                    passesMinPeakVolumeOverall = true;
+                }
             }
         }
 
-        if (affectedZones === 0) {
+        if (affectedZones === 0 || totalPeakVolume === 0) {
             return {
                 hasExhaustion: false,
                 exhaustionType: null,
@@ -185,16 +266,18 @@ export class ExhaustionZoneTracker {
                 affectedZones: 0,
                 confidence: 0,
                 gapCreated: false,
+                passesMinPeakVolume: false, // Added this line
             };
         }
 
-        const avgDepletionRatio = totalDepletionRatio / affectedZones;
+        const weightedAvgDepletionRatio =
+            totalWeightedDepletion / totalPeakVolume;
         const avgVelocity = totalVelocity / affectedZones;
         const gapCreated = this.detectGapCreation(exhaustionType);
 
         // Calculate confidence based on multiple factors
         const confidence = this.calculateExhaustionConfidence(
-            avgDepletionRatio,
+            weightedAvgDepletionRatio,
             affectedZones,
             maxDepletion,
             gapCreated
@@ -203,11 +286,12 @@ export class ExhaustionZoneTracker {
         return {
             hasExhaustion: hasSignificantExhaustion,
             exhaustionType,
-            depletionRatio: avgDepletionRatio,
+            depletionRatio: weightedAvgDepletionRatio,
             depletionVelocity: avgVelocity,
             affectedZones,
             confidence,
             gapCreated,
+            passesMinPeakVolume: passesMinPeakVolumeOverall, // Added this line
         };
     }
 
@@ -226,19 +310,15 @@ export class ExhaustionZoneTracker {
             return { isExhausted: false, depletionRatio: 0, velocity: 0 };
         }
 
-        const peakVolume =
-            side === "bid"
-                ? zone.maxPassiveBidVolume
-                : zone.maxPassiveAskVolume;
-
-        if (peakVolume < this.config.minPeakVolume) {
-            return { isExhausted: false, depletionRatio: 0, velocity: 0 };
-        }
-
         const lastEntry = zone.history[zone.history.length - 1];
         if (!lastEntry) {
             return { isExhausted: false, depletionRatio: 0, velocity: 0 };
         }
+
+        const peakVolume =
+            side === "bid"
+                ? zone.maxPassiveBidVolume
+                : zone.maxPassiveAskVolume;
 
         const currentVolume =
             side === "bid"
@@ -253,7 +333,25 @@ export class ExhaustionZoneTracker {
         // Calculate velocity (rate of depletion)
         const velocity = this.calculateDepletionVelocity(zone, side);
 
-        const isExhausted = depletionRatio >= this.config.depletionThreshold;
+        if (peakVolume < this.config.minPeakVolume) {
+            return {
+                isExhausted: false,
+                depletionRatio: depletionRatio,
+                velocity: velocity,
+            };
+        }
+
+        // Validate that depletion is from real consumption, not spoofing
+        const isValidConsumption = this.validateConsumptionPattern(
+            zone,
+            side,
+            depletionRatio,
+            velocity
+        );
+
+        const isExhausted =
+            depletionRatio >= this.config.depletionThreshold &&
+            isValidConsumption;
 
         return { isExhausted, depletionRatio, velocity };
     }
@@ -265,15 +363,23 @@ export class ExhaustionZoneTracker {
         zone: TrackedZone,
         side: "bid" | "ask"
     ): number {
-        if (zone.history.length < 3) {
+        if (zone.history.length < 2) {
             return 0;
         }
 
-        // Look at recent history (last N entries or available)
         const historyLookback = 5; // Number of recent entries to analyze
         const recentHistory = zone.history.slice(-historyLookback);
+        if (recentHistory.length < 2) {
+            return 0;
+        }
+
         let totalChange = 0;
-        let timeSpan = 0;
+        const startTime = recentHistory[0]?.timestamp;
+        const endTime = recentHistory[recentHistory.length - 1]?.timestamp;
+
+        if (!startTime || !endTime || startTime === endTime) {
+            return 0;
+        }
 
         for (let i = 1; i < recentHistory.length; i++) {
             const prev = recentHistory[i - 1];
@@ -293,11 +399,10 @@ export class ExhaustionZoneTracker {
                 // Only count depletion
                 totalChange += change;
             }
-
-            timeSpan = curr.timestamp - prev.timestamp;
         }
 
-        if (timeSpan === 0) {
+        const timeSpan = endTime - startTime;
+        if (timeSpan <= 0) {
             return 0;
         }
 
@@ -309,6 +414,104 @@ export class ExhaustionZoneTracker {
     }
 
     /**
+     * Validate that depletion is from real consumption, not spoofing
+     * Uses multiple heuristics to distinguish genuine trading activity from order manipulation
+     */
+    private validateConsumptionPattern(
+        zone: TrackedZone,
+        side: "bid" | "ask",
+        depletionRatio: number,
+        velocity: number
+    ): boolean {
+        if (zone.history.length < 3) {
+            return false; // Need more data for validation
+        }
+
+        // Heuristic 1: Check for suspicious velocity patterns (too fast = likely spoofing)
+        const maxReasonableVelocity =
+            this.config.consumptionValidation?.maxReasonableVelocity ?? 1000;
+        if (velocity > maxReasonableVelocity) {
+            return false; // Too fast, likely spoofing
+        }
+
+        // Heuristic 2: Check for gradual vs sudden depletion patterns
+        const recentHistory = zone.history.slice(-5);
+        let suddenDrops = 0;
+        let gradualChanges = 0;
+
+        for (let i = 1; i < recentHistory.length; i++) {
+            const prev = recentHistory[i - 1];
+            const curr = recentHistory[i];
+
+            if (!prev || !curr) continue;
+
+            const prevVolume =
+                side === "bid" ? prev.passiveBidVolume : prev.passiveAskVolume;
+            const currVolume =
+                side === "bid" ? curr.passiveBidVolume : curr.passiveAskVolume;
+
+            if (prevVolume > 0) {
+                const changeRatio = (prevVolume - currVolume) / prevVolume;
+
+                if (changeRatio > 0.5) {
+                    suddenDrops++; // >50% drop in single update
+                } else if (changeRatio > 0.05) {
+                    gradualChanges++; // 5-50% drop (reasonable trading)
+                }
+            }
+        }
+
+        // If mostly sudden drops with few gradual changes, likely spoofing
+        if (suddenDrops > gradualChanges * 2) {
+            return false;
+        }
+
+        // Heuristic 3: Check for consumption confidence based on recent activity
+        const timeSinceLastConsumption =
+            Date.now() - zone.lastConfirmedConsumption;
+        const confidenceDecayTime =
+            this.config.consumptionValidation?.confidenceDecayTimeMs ?? 30000;
+
+        if (timeSinceLastConsumption > confidenceDecayTime) {
+            // Confidence decays over time without confirmed consumption
+            zone.consumptionConfidence = Math.max(
+                0.1,
+                zone.consumptionConfidence * 0.9
+            );
+        }
+
+        // Heuristic 4: Check for realistic depletion patterns
+        // Real consumption typically shows some aggressive volume activity
+        const recentAggressiveVolume = recentHistory.reduce((sum, entry) => {
+            return FinancialMath.safeAdd(sum, entry.aggressiveVolume);
+        }, 0);
+
+        // If significant depletion but no aggressive volume, suspicious
+        const minAggressiveVolume =
+            this.config.consumptionValidation?.minAggressiveVolume ?? 20;
+        if (
+            depletionRatio > 0.3 &&
+            recentAggressiveVolume < minAggressiveVolume
+        ) {
+            return false;
+        }
+
+        // Update confidence based on validation results
+        if (gradualChanges > 0 && recentAggressiveVolume > 0) {
+            zone.consumptionConfidence = Math.min(
+                1.0,
+                zone.consumptionConfidence + 0.1
+            );
+            zone.lastConfirmedConsumption = Date.now();
+        }
+
+        // Require minimum confidence for exhaustion signal
+        const minConfidence =
+            this.config.consumptionValidation?.minConsumptionConfidence ?? 0.4;
+        return zone.consumptionConfidence >= minConfidence;
+    }
+
+    /**
      * Detect if liquidity has moved to wider levels (gap creation)
      */
     private detectGapCreation(side: "bid" | "ask"): boolean {
@@ -317,25 +520,83 @@ export class ExhaustionZoneTracker {
         }
 
         const zones = side === "bid" ? this.bidZones : this.askZones;
+        if (zones.size === 0) {
+            return false;
+        }
+
         const spreadPrice =
             side === "bid" ? this.currentSpread.bid : this.currentSpread.ask;
 
-        // Check if nearest zones are depleted
-        let nearestDepleted = false;
-        let hasWiderLiquidity = false;
+        // Find the most relevant, depleted zone at the spread
+        let primaryZone: TrackedZone | null = null;
+        let minDistance = Infinity;
 
         for (const zone of zones.values()) {
             const distance = Math.abs(zone.priceLevel - spreadPrice);
-            const distanceInTicks = distance / this.tickSize;
+            if (distance < minDistance) {
+                minDistance = distance;
+                primaryZone = zone;
+            }
+        }
 
-            if (distanceInTicks <= 1) {
-                // Nearest zone
-                const analysis = this.analyzeZoneExhaustion(zone, side);
-                if (analysis.depletionRatio > 0.8) {
-                    nearestDepleted = true;
-                }
-            } else if (distanceInTicks >= this.config.gapDetectionTicks) {
-                // Wider zone
+        if (!primaryZone) {
+            return false;
+        }
+
+        // 1. Check if the primary zone is significantly depleted
+        const primaryAnalysis = this.analyzeZoneExhaustion(primaryZone, side);
+        if (primaryAnalysis.depletionRatio < 0.8) {
+            // Not depleted enough to be the leading edge of a gap
+            return false;
+        }
+
+        // 2. Define the "gap zone" immediately behind the primary zone
+        const gapZoneStart =
+            side === "bid"
+                ? primaryZone.priceLevel - this.tickSize
+                : primaryZone.priceLevel + this.tickSize;
+        const gapZoneEnd =
+            side === "bid"
+                ? gapZoneStart - this.config.gapDetectionTicks * this.tickSize
+                : gapZoneStart + this.config.gapDetectionTicks * this.tickSize;
+
+        // 3. Check for a lack of liquidity in the gap zone
+        let liquidityInGapZone = 0;
+        for (const zone of zones.values()) {
+            if (
+                (side === "bid" &&
+                    zone.priceLevel < primaryZone.priceLevel &&
+                    zone.priceLevel >= gapZoneEnd) ||
+                (side === "ask" &&
+                    zone.priceLevel > primaryZone.priceLevel &&
+                    zone.priceLevel <= gapZoneEnd)
+            ) {
+                const lastEntry = zone.history[zone.history.length - 1];
+                const currentVolume =
+                    side === "bid"
+                        ? lastEntry?.passiveBidVolume || 0
+                        : lastEntry?.passiveAskVolume || 0;
+                liquidityInGapZone += currentVolume;
+            }
+        }
+
+        // If liquidity in the gap is high, it's not a true gap
+        if (liquidityInGapZone > this.config.minPeakVolume * 0.5) {
+            return false;
+        }
+
+        // 4. Confirm that significant liquidity exists at a wider level
+        let hasWiderLiquidity = false;
+        const widerZoneStart =
+            side === "bid"
+                ? gapZoneEnd - this.tickSize
+                : gapZoneEnd + this.tickSize;
+
+        for (const zone of zones.values()) {
+            if (
+                (side === "bid" && zone.priceLevel <= widerZoneStart) ||
+                (side === "ask" && zone.priceLevel >= widerZoneStart)
+            ) {
                 const lastEntry = zone.history[zone.history.length - 1];
                 const currentVolume =
                     side === "bid"
@@ -344,11 +605,12 @@ export class ExhaustionZoneTracker {
 
                 if (currentVolume > this.config.minPeakVolume) {
                     hasWiderLiquidity = true;
+                    break;
                 }
             }
         }
 
-        return nearestDepleted && hasWiderLiquidity;
+        return hasWiderLiquidity; // A true gap exists if there's a depleted front, a low-liquidity middle, and a high-liquidity back.
     }
 
     /**
@@ -363,21 +625,28 @@ export class ExhaustionZoneTracker {
         let confidence = 0;
 
         // Base confidence from depletion ratio (0-40%)
-        confidence += Math.min(0.4, avgDepletionRatio * 0.5);
+        confidence += Math.min(
+            ExhaustionZoneTracker.CONFIDENCE_BASE_MAX,
+            avgDepletionRatio * ExhaustionZoneTracker.CONFIDENCE_BASE_MULTIPLIER
+        );
 
         // Affected zones contribution (0-20%)
         const zoneScore = Math.min(
             1,
             affectedZones / this.config.maxZonesPerSide
         );
-        confidence += zoneScore * 0.2;
+        confidence +=
+            zoneScore * ExhaustionZoneTracker.CONFIDENCE_ZONES_CONTRIBUTION;
 
         // Max depletion contribution (0-20%)
-        confidence += Math.min(0.2, maxDepletion * 0.25);
+        confidence += Math.min(
+            ExhaustionZoneTracker.CONFIDENCE_DEPLETION_CONTRIBUTION,
+            maxDepletion * ExhaustionZoneTracker.CONFIDENCE_DEPLETION_MULTIPLIER
+        );
 
         // Gap creation bonus (0-20%)
         if (gapCreated) {
-            confidence += 0.2;
+            confidence += ExhaustionZoneTracker.CONFIDENCE_GAP_BONUS;
         }
 
         return confidence;
@@ -392,7 +661,10 @@ export class ExhaustionZoneTracker {
         }
 
         const current = zone.history[zone.history.length - 1];
-        const previous = zone.history[zone.history.length - 2];
+        const previous =
+            zone.history.length > 1
+                ? zone.history[zone.history.length - 2]
+                : null;
 
         if (!current || !previous) {
             return;
@@ -422,9 +694,16 @@ export class ExhaustionZoneTracker {
      */
     private isNearBid(priceLevel: number): boolean {
         if (!this.currentSpread) return false;
+        // Include zones AT and BELOW the bid (and slightly above for spread zones)
         const distance = this.currentSpread.bid - priceLevel;
         const tickDistance = distance / this.tickSize;
-        return tickDistance >= 0 && tickDistance <= this.config.maxZonesPerSide;
+
+        // Allow zones from slightly above bid (negative distance) to maxZonesPerSide below
+        return (
+            tickDistance >=
+                -ExhaustionZoneTracker.ZONE_SPREAD_TOLERANCE_TICKS &&
+            tickDistance <= this.config.maxZonesPerSide
+        );
     }
 
     /**
@@ -432,9 +711,15 @@ export class ExhaustionZoneTracker {
      */
     private isNearAsk(priceLevel: number): boolean {
         if (!this.currentSpread) return false;
+        // Include zones AT and ABOVE the ask (and slightly below for spread zones)
         const distance = priceLevel - this.currentSpread.ask;
         const tickDistance = distance / this.tickSize;
-        return tickDistance >= 0 && tickDistance <= this.config.maxZonesPerSide;
+        // Allow zones from slightly below ask (negative distance) to maxZonesPerSide above
+        return (
+            tickDistance >=
+                -ExhaustionZoneTracker.ZONE_SPREAD_TOLERANCE_TICKS &&
+            tickDistance <= this.config.maxZonesPerSide
+        );
     }
 
     /**
@@ -457,19 +742,30 @@ export class ExhaustionZoneTracker {
     ): void {
         const toRemove: string[] = [];
 
-        for (const [id, zone] of zones) {
+        for (const [key] of zones) {
+            // Extract price from "bid_89.50" or "ask_89.50" key format
+            const parts = key.split("_");
+            if (parts.length !== 2 || !parts[1]) {
+                toRemove.push(key); // Invalid key format
+                continue;
+            }
+
+            const price = parseFloat(parts[1]);
+            if (isNaN(price)) {
+                toRemove.push(key); // Invalid price
+                continue;
+            }
+
             const isNear =
-                side === "bid"
-                    ? this.isNearBid(zone.priceLevel)
-                    : this.isNearAsk(zone.priceLevel);
+                side === "bid" ? this.isNearBid(price) : this.isNearAsk(price);
 
             if (!isNear) {
-                toRemove.push(id);
+                toRemove.push(key);
             }
         }
 
-        for (const id of toRemove) {
-            zones.delete(id);
+        for (const key of toRemove) {
+            zones.delete(key);
         }
     }
 

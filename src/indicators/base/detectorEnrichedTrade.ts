@@ -5,6 +5,10 @@ import type { IMetricsCollector } from "../../infrastructure/metricsCollectorInt
 import { ISignalLogger } from "../../infrastructure/signalLoggerInterface.js";
 import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import type { SignalCandidate } from "../../types/signalTypes.js";
+import type {
+    TraditionalIndicators,
+    TraditionalIndicatorValues,
+} from "../helpers/traditionalIndicators.js";
 
 /**
  * Abstract base for all detectors (handles logging/metrics/signalLogger).
@@ -14,18 +18,23 @@ export abstract class Detector extends EventEmitter {
     protected readonly metricsCollector: IMetricsCollector;
     protected readonly signalLogger?: ISignalLogger;
     protected readonly id: string;
+    protected readonly traditionalIndicators?: TraditionalIndicators;
 
     constructor(
         id: string,
         logger: ILogger,
         metricsCollector: IMetricsCollector,
-        signalLogger: ISignalLogger
+        signalLogger: ISignalLogger,
+        traditionalIndicators?: TraditionalIndicators
     ) {
         super();
         this.id = id;
         this.logger = logger;
         this.metricsCollector = metricsCollector;
         this.signalLogger = signalLogger;
+        if (traditionalIndicators) {
+            this.traditionalIndicators = traditionalIndicators;
+        }
     }
 
     /**
@@ -77,7 +86,50 @@ export abstract class Detector extends EventEmitter {
     }
 
     /**
-     * Emit signal candidate (call this when a signal is detected)
+     * Update traditional indicators with trade data (call this for each trade)
+     */
+    protected updateTraditionalIndicators(trade: EnrichedTradeEvent): void {
+        if (this.traditionalIndicators) {
+            try {
+                this.traditionalIndicators.updateIndicators(trade);
+            } catch (error) {
+                this.logger.warn("Failed to update traditional indicators", {
+                    detectorId: this.id,
+                    trade: trade.tradeId,
+                    error,
+                });
+            }
+        }
+    }
+
+    /**
+     * Validate signal against traditional indicators before emission
+     */
+    protected validateWithTraditionalIndicators(
+        price: number,
+        side: "buy" | "sell",
+        timestamp: number
+    ): TraditionalIndicatorValues | null {
+        if (!this.traditionalIndicators) {
+            return null; // No filtering if traditional indicators not enabled
+        }
+
+        try {
+            return this.traditionalIndicators.validateSignal(price, side);
+        } catch (error) {
+            this.logger.error("Traditional indicators validation failed", {
+                detectorId: this.id,
+                price,
+                side,
+                timestamp,
+                error,
+            });
+            return null; // Allow signal through if validation fails (defensive)
+        }
+    }
+
+    /**
+     * Emit signal candidate with traditional indicator filtering
      */
     protected emitSignalCandidate(candidate: SignalCandidate): void {
         this.emit("signalCandidate", candidate);

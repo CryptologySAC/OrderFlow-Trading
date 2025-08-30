@@ -719,7 +719,6 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             zone: zoneData,
             actionType: signalType,
             confidence: calculatedConfidence,
-            urgency: "medium", // TODO: Implement quality flags for urgency
             expectedDirection: signalSide === "buy" ? "up" : "down",
             detectorId: this.getId(),
             timestamp: Date.now(),
@@ -736,7 +735,7 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
                 zoneId: zoneSignal.zone.id,
                 confidence: zoneSignal.confidence,
                 side: signalSide,
-                urgency: zoneSignal.urgency,
+                // urgency removed - use confidence for prioritization
                 expectedDirection: zoneSignal.expectedDirection,
             }
         );
@@ -1024,6 +1023,8 @@ export class AccumulationZoneDetectorEnhanced extends Detector {
             volumeConcentration,
         };
     }
+
+    // calculateUrgencyLevel method removed - use confidence directly for signal prioritization
 
     /**
      * Update enhancement mode at runtime (for A/B testing and gradual rollout)

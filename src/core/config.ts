@@ -115,43 +115,36 @@ export const StandardZoneConfigSchema = z.object({
 // EXHAUSTION detector - CLEANED UP - Only used settings remain (16 core parameters)
 export const ExhaustionDetectorSchema = z.object({
     // Core detection
-    minAggVolume: z.number().int().min(1).max(100000),
     timeWindowIndex: z.number().int().min(0).max(5),
     exhaustionThreshold: z.number().min(0.01).max(1.0),
     eventCooldownMs: z.number().int().min(1000).max(300000),
 
-    // Enhancement control
-    useStandardizedZones: z.boolean(),
-    enhancementMode: z.enum(["disabled", "monitoring", "production"]),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
-
-    // Enhanced depletion analysis
-    depletionVolumeThreshold: z.number().min(10).max(100000),
-    depletionRatioThreshold: z.number().min(-1.0).max(0),
-    enableDepletionAnalysis: z.boolean(),
-
     // Dynamic zone tracking for true exhaustion detection
-    enableDynamicZoneTracking: z.boolean(),
-    maxZonesPerSide: z.number().int().min(1).max(10),
-    zoneDepletionThreshold: z.number().min(0.5).max(0.95),
+    maxZonesPerSide: z.number().int().min(1).max(20),
+    zoneDepletionThreshold: z.number().min(0.1).max(0.95),
     gapDetectionTicks: z.number().int().min(1).max(10),
-
-    // Cross-timeframe calculations
-    varianceReductionFactor: z.number().min(0.5).max(3.0),
-    alignmentNormalizationFactor: z.number().min(0.2).max(3.0),
-    passiveVolumeExhaustionRatio: z.number().min(0.3).max(2.0),
-    aggressiveVolumeExhaustionThreshold: z.number().min(0.001).max(0.5),
-    aggressiveVolumeReductionFactor: z.number().min(0.3).max(0.8),
+    zoneHistoryWindowMs: z.number().int().min(5000).max(300000), // Zone lookback window
 
     // Additional configurable thresholds to replace magic numbers
-    passiveRatioBalanceThreshold: z.number().min(0.3).max(0.7), // Replace hardcoded 0.5
-    premiumConfidenceThreshold: z.number().min(0.6).max(0.9), // Replace hardcoded 0.7
-    variancePenaltyFactor: z.number().min(0.5).max(1.5), // Replace hardcoded variance calculation
-    ratioBalanceCenterPoint: z.number().min(0.4).max(0.6), // Replace hardcoded 0.5 center points
+    passiveRatioBalanceThreshold: z.number().min(0.3).max(0.99), // Replace hardcoded 0.5
+    passiveRatioAnomalyStdDev: z.number().min(1.0).max(10.0),
+    minPeakVolume: z.number().int().min(10).max(100000), // Optional: fallback to minAggVolume
+
+    // Consumption validation to prevent spoofing false signals
+    consumptionValidation: z.object({
+        maxReasonableVelocity: z.number().min(1).max(10000), // Max depletion velocity (units/sec)
+        minConsumptionConfidence: z.number().min(0.1).max(1.0), // Min confidence for exhaustion
+        confidenceDecayTimeMs: z.number().min(1000).max(300000), // Confidence decay time
+        minAggressiveVolume: z.number().min(1).max(1000), // Min aggressive volume
+    }),
 });
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain
 export const AbsorptionDetectorSchema = z.object({
+    // Feature enablement
+    enabled: z.boolean(),
+    abTestingEnabled: z.boolean(),
+
     // Core detection
     minAggVolume: z.number().int().min(1).max(100000),
     timeWindowIndex: z.number().int().min(0).max(5), // Index into preprocessor timeWindows array
@@ -159,39 +152,26 @@ export const AbsorptionDetectorSchema = z.object({
 
     // Absorption thresholds
     priceEfficiencyThreshold: z.number().min(0.0001).max(0.1),
-    maxAbsorptionRatio: z.number().min(0.1).max(1.0),
-    minPassiveMultiplier: z.number().min(0.5).max(50.0),
-    passiveAbsorptionThreshold: z.number().min(0.1).max(50),
+    maxPriceImpactRatio: z.number().min(0.0).max(1.0),
+    minPassiveMultiplier: z.number().min(0.5).max(250.0),
+    passiveAbsorptionThreshold: z.number().min(0.1).max(1.0),
+    passiveAbsorptionThresholdElite: z.number().min(0.98).max(1.0),
+    rollingWindowSize: z.number().int().min(10).max(5000),
 
     // Calculation parameters
     expectedMovementScalingFactor: z.number().int().min(1).max(100),
-    liquidityGradientRange: z.number().int().min(1).max(20),
-
-    // Institutional analysis
-    institutionalVolumeThreshold: z.number().min(100).max(100000),
-    institutionalVolumeRatioThreshold: z.number().min(1).max(50),
-    enableInstitutionalVolumeFilter: z.boolean(),
 
     // Confidence and scoring
-    minAbsorptionScore: z.number().min(0.3).max(0.99),
-    finalConfidenceRequired: z.number().min(0.1).max(3.0),
     maxZoneCountForScoring: z.number().int().min(1).max(10),
-    minEnhancedConfidenceThreshold: z.number().min(0.01).max(0.8),
-
-    // Enhancement control
-    useStandardizedZones: z.boolean(),
-    enhancementMode: z.enum(["disabled", "testing", "production"]),
 
     // Balance detection threshold
-    balanceThreshold: z.number().min(0.01).max(0.75),
+    balanceThreshold: z.number().min(0.0001).max(0.25),
 
-    // Zone confluence parameters (CLAUDE.md compliance - no magic numbers)
-    confluenceMinZones: z.number().int().min(1).max(10),
-    confluenceMaxDistance: z.number().int().min(1).max(20),
+    // Exhaustion detection threshold (volume/multiplier ratio)
+    maxVolumeMultiplierRatio: z.number().min(1.0).max(50.0),
 
     // Zone tracking configuration for dynamic absorption detection
-    enableDynamicZoneTracking: z.boolean(),
-    maxZonesPerSide: z.number().int().min(3).max(10),
+    maxZonesPerSide: z.number().int().min(3).max(20),
     zoneHistoryWindowMs: z.number().int().min(30000).max(300000),
     absorptionZoneThreshold: z.number().min(1.2).max(3.0), // Passive/aggressive ratio
     minPassiveVolumeForZone: z.number().min(10).max(10000),
@@ -202,25 +182,24 @@ export const AbsorptionDetectorSchema = z.object({
 // DELTACVD detector - CLEANED UP - Only used settings remain
 export const DeltaCVDDetectorSchema = z.object({
     // Core CVD analysis parameters (actually used by detector)
-    minTradesPerSec: z.number().min(0.001).max(5.0),
-    minVolPerSec: z.number().min(0.01).max(2000.0),
     signalThreshold: z.number().min(0.01).max(8.0),
     eventCooldownMs: z.number().int().min(1000).max(1800000),
 
     // Zone time window configuration
     timeWindowIndex: z.number().int().min(0).max(5),
 
-    // Zone enhancement control
-    enhancementMode: z.enum(["disabled", "monitoring", "production"]),
-
     // CVD divergence analysis parameters
-    cvdImbalanceThreshold: z.number().min(0.05).max(0.4), // CVD imbalance ratio for detection (lower than signalThreshold)
+    cvdImbalanceThreshold: z.number().min(0.5).max(1.0), // CVD imbalance ratio for detection (lower than signalThreshold)
 
     // Institutional trade threshold (replace hardcoded 17.8 LTC)
-    institutionalThreshold: z.number().min(0.001).max(5.0), // LTC threshold for institutional trade detection
+    institutionalThreshold: z.number().min(5).max(5000.0), // LTC threshold for institutional trade detection
 
     // Volume efficiency threshold for quality flag
-    volumeEfficiencyThreshold: z.number().min(0.1).max(0.5),
+    volumeEfficiencyThreshold: z.number().min(0.1).max(0.75),
+    // Zone search distance configuration (replace hardcoded 15)
+    zoneSearchDistance: z.number().int().min(5).max(50), // Number of ticks to search around price for relevant zones
+    tradeRateWindowSize: z.number().int().min(10).max(5000),
+    volumeRateWindowSize: z.number().int().min(10).max(5000),
 });
 
 // ACCUMULATION detector - CLEANED UP - Only used settings remain
@@ -305,6 +284,42 @@ export const SimpleIcebergDetectorSchema = z.object({
     // Performance parameters
     maxActivePatterns: z.number().int().min(5).max(10000), // Memory management
     maxRecentTrades: z.number().int().min(10).max(10000), // Recent trades buffer for order book analysis
+});
+
+// TRADITIONAL INDICATORS - MANDATORY for signal filtering
+export const TraditionalIndicatorsSchema = z.object({
+    enabled: z.boolean(),
+    timeframeMs: z.number().int().min(60000).max(3600000), // 1min to 1hour
+    vwap: z.object({
+        enabled: z.boolean(),
+        windowMs: z.number().int().min(60000).max(7200000), // 1min to 2hours
+        maxDeviationPercent: z.number().min(0.1).max(10.0), // Max deviation from VWAP
+        minDeviationPercent: z.number().min(0.01).max(5.0), // Min deviation to consider
+        weightDecay: z.number().min(0.8).max(0.99), // Volume weight decay
+    }),
+    rsi: z.object({
+        enabled: z.boolean(),
+        period: z.number().int().min(5).max(50), // RSI calculation periods
+        timeframeMs: z.number().int().min(60000).max(3600000), // Per period timeframe
+        overboughtThreshold: z.number().min(60).max(90), // RSI overbought level
+        oversoldThreshold: z.number().min(10).max(40), // RSI oversold level
+        extremeOverbought: z.number().min(75).max(95), // Extreme overbought
+        extremeOversold: z.number().min(5).max(25), // Extreme oversold
+    }),
+    oir: z.object({
+        enabled: z.boolean(),
+        windowMs: z.number().int().min(60000).max(1800000), // 1min to 30min
+        buyDominanceThreshold: z.number().min(0.5).max(0.9), // Buy pressure threshold
+        sellDominanceThreshold: z.number().min(0.1).max(0.5), // Sell pressure threshold
+        neutralZone: z.number().min(0.05).max(0.3), // Neutral zone width
+        minVolumeThreshold: z.number().min(1).max(1000), // Min volume for valid OIR
+    }),
+    filterStrength: z.object({
+        vwapWeight: z.number().min(0).max(3.0), // 0=disabled, 1=normal, 2=strict
+        rsiWeight: z.number().min(0).max(3.0),
+        oirWeight: z.number().min(0).max(3.0),
+        combinationMode: z.enum(["all", "majority", "any"]), // Filter combination logic
+    }),
 });
 
 // Old schemas removed - using simplified AccumulationDetectorSchema and DistributionDetectorSchema above
@@ -426,6 +441,12 @@ const BasicSymbolConfigSchema = z
             defaultPassiveVolumeAbsolute: z.number().positive(),
             defaultInstitutionalVolumeAbsolute: z.number().positive(),
             maxTradesPerZone: z.number().int().positive(),
+            phaseDetectionEnabled: z.boolean(),
+            phaseThresholdPercent: z.number().positive(),
+            minPhaseDurationMs: z.number().int().positive(),
+            sidewaysDetectionEnabled: z.boolean(),
+            minSidewaysDurationMs: z.number().int().positive(),
+            sidewaysBreakoutThreshold: z.number().positive(),
         }),
         signalManager: z.object({
             confidenceThreshold: z.number().positive(),
@@ -476,6 +497,13 @@ const BasicSymbolConfigSchema = z
             priorityQueueHighThreshold: z.number().min(5.0).max(10.0),
             backpressureYieldMs: z.number().int().min(1).max(100),
             marketVolatilityWeight: z.number().min(0.1).max(1.0),
+            // RSI Dashboard Integration parameters
+            rsiUpdateFrequency: z.number().int().min(1).max(100),
+            maxRsiBacklogSize: z.number().int().min(1000).max(100000),
+            maxSignalBacklogAgeMinutes: z.number().int().min(10).max(480),
+            // Detector priorities (to eliminate magic numbers)
+            accumulationDetectorPriority: z.number().int().min(1).max(100),
+            distributionDetectorPriority: z.number().int().min(1).max(100),
         }),
         signalCoordinator: z.object({
             maxConcurrentProcessing: z.number().int().positive(),
@@ -527,6 +555,7 @@ const BasicSymbolConfigSchema = z
         accumulation: AccumulationDetectorSchema,
         distribution: DistributionDetectorSchema,
         simpleIceberg: SimpleIcebergDetectorSchema,
+        traditionalIndicators: TraditionalIndicatorsSchema,
     })
     .passthrough();
 
@@ -766,6 +795,28 @@ function validateMandatoryConfig(): void {
             );
             process.exit(1);
         }
+
+        // CRITICAL: TraditionalIndicators validation for signal filtering
+        try {
+            TraditionalIndicatorsSchema.parse(
+                SYMBOL_CFG["traditionalIndicators"]
+            );
+        } catch (error) {
+            console.error(
+                "🚨 CRITICAL CONFIG ERROR - TraditionalIndicators (Signal Filtering)"
+            );
+            console.error(
+                "Missing mandatory traditional indicator configuration properties:"
+            );
+            console.error(error);
+            console.error(
+                "Per CLAUDE.md: NO DEFAULTS, NO FALLBACKS, NO BULLSHIT"
+            );
+            console.error(
+                "Traditional indicator configuration is REQUIRED for signal filtering"
+            );
+            process.exit(1);
+        }
     }
 
     // PANIC EXIT if any required configuration is missing
@@ -899,6 +950,17 @@ export class Config {
             defaultInstitutionalVolumeAbsolute:
                 SYMBOL_CFG!.preprocessor.defaultInstitutionalVolumeAbsolute,
             maxTradesPerZone: SYMBOL_CFG!.preprocessor.maxTradesPerZone,
+            phaseDetectionEnabled:
+                SYMBOL_CFG!.preprocessor.phaseDetectionEnabled,
+            phaseThresholdPercent:
+                SYMBOL_CFG!.preprocessor.phaseThresholdPercent,
+            minPhaseDurationMs: SYMBOL_CFG!.preprocessor.minPhaseDurationMs,
+            sidewaysDetectionEnabled:
+                SYMBOL_CFG!.preprocessor.sidewaysDetectionEnabled,
+            minSidewaysDurationMs:
+                SYMBOL_CFG!.preprocessor.minSidewaysDurationMs,
+            sidewaysBreakoutThreshold:
+                SYMBOL_CFG!.preprocessor.sidewaysBreakoutThreshold,
         };
     }
 
@@ -1008,6 +1070,19 @@ export class Config {
             ),
             backpressureYieldMs: Number(smConfig.backpressureYieldMs),
             marketVolatilityWeight: Number(smConfig.marketVolatilityWeight),
+            // RSI Dashboard Integration parameters
+            rsiUpdateFrequency: Number(smConfig.rsiUpdateFrequency),
+            maxRsiBacklogSize: Number(smConfig.maxRsiBacklogSize),
+            maxSignalBacklogAgeMinutes: Number(
+                smConfig.maxSignalBacklogAgeMinutes
+            ),
+            // Detector priorities
+            accumulationDetectorPriority: Number(
+                smConfig.accumulationDetectorPriority
+            ),
+            distributionDetectorPriority: Number(
+                smConfig.distributionDetectorPriority
+            ),
         };
     }
 
@@ -1078,6 +1153,11 @@ export class Config {
     }
     static get DISTRIBUTION_CONFIG() {
         return SYMBOL_CFG!.distribution;
+    }
+
+    // Traditional Indicators Configuration
+    static get TRADITIONAL_INDICATORS_CONFIG() {
+        return SYMBOL_CFG!["traditionalIndicators"];
     }
 
     // Distribution detector with schema validation

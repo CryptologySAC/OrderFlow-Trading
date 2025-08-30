@@ -1,39 +1,47 @@
 // src/utils/financialMath.ts
+import { Decimal } from "decimal.js";
+
+// Configure Decimal.js for financial calculations
+Decimal.set({
+    precision: 34, // Sufficient for most financial applications
+    rounding: Decimal.ROUND_HALF_EVEN, // Banker's rounding
+});
+
 export class FinancialMath {
     private static readonly PRICE_SCALE = 100000000; // 8 decimal places
-    private static readonly QUANTITY_SCALE = 100000000; // 8 decimal places
 
     /**
      * Convert floating point price to integer representation
      */
     static priceToInt(price: number): bigint {
-        if (!Number.isFinite(price) || price < 0) {
-            throw new Error(`Invalid price: ${price}`);
-        }
-        return BigInt(Math.round(price * this.PRICE_SCALE));
+        return BigInt(new Decimal(price).times(this.PRICE_SCALE).toFixed());
     }
 
     /**
      * Convert integer price back to floating point
      */
     static intToPrice(priceInt: bigint): number {
-        return Number(priceInt) / this.PRICE_SCALE;
+        return new Decimal(priceInt.toString())
+            .dividedBy(this.PRICE_SCALE)
+            .toNumber();
     }
 
     /**
-     * Normalize price to tick size using integer arithmetic
+     * Normalize price to tick size using Decimal.js
      */
     static normalizePriceToTick(price: number, tickSize: number): number {
-        const priceInt = this.priceToInt(price);
-        const tickInt = this.priceToInt(tickSize);
-        const normalizedInt = (priceInt / tickInt) * tickInt;
-        return this.intToPrice(normalizedInt);
+        const dPrice = new Decimal(price);
+        const dTickSize = new Decimal(tickSize);
+        if (dTickSize.isZero()) return price; // Avoid division by zero
+        const normalized = dPrice.dividedBy(dTickSize).floor().times(dTickSize);
+        return normalized.toNumber();
     }
 
     static priceToZone(price: number, tickSize: number): number {
-        const normalizedInt = this.normalizePriceToTick(price, tickSize);
-        const zone = Math.round(normalizedInt);
-        return zone;
+        const normalized = this.normalizePriceToTick(price, tickSize);
+        return new Decimal(normalized)
+            .toDP(0, Decimal.ROUND_HALF_UP)
+            .toNumber();
     }
 
     /**
@@ -44,14 +52,10 @@ export class FinancialMath {
         ask: number,
         precision: number
     ): number {
-        const bidInt = this.priceToInt(bid);
-        const askInt = this.priceToInt(ask);
-        const midInt = (bidInt + askInt) / BigInt(2);
-        const result = this.intToPrice(midInt);
-
-        // Apply precision rounding as final step
-        const scale = Math.pow(10, precision);
-        return Math.round(result * scale) / scale;
+        const dBid = new Decimal(bid);
+        const dAsk = new Decimal(ask);
+        const mid = dBid.plus(dAsk).dividedBy(2);
+        return mid.toDecimalPlaces(precision).toNumber();
     }
 
     /**
@@ -62,34 +66,20 @@ export class FinancialMath {
         bid: number,
         precision: number
     ): number {
-        const askInt = this.priceToInt(ask);
-        const bidInt = this.priceToInt(bid);
-        const spreadInt = askInt - bidInt;
-        const result = this.intToPrice(spreadInt);
-
-        // Apply precision rounding as final step
-        const scale = Math.pow(10, precision);
-        return Math.round(result * scale) / scale;
+        const dAsk = new Decimal(ask);
+        const dBid = new Decimal(bid);
+        const spread = dAsk.minus(dBid);
+        return spread.toDecimalPlaces(precision).toNumber();
     }
 
     /**
      * Safe quantity multiplication avoiding floating point errors
      */
     static multiplyQuantities(qty1: number, qty2: number): number {
-        // CRITICAL: Return NaN for invalid inputs to maintain calculation integrity
-        if (
-            isNaN(qty1) ||
-            isNaN(qty2) ||
-            qty1 === undefined ||
-            qty2 === undefined
-        ) {
-            return NaN;
-        }
-
-        const qty1Int = BigInt(Math.round(qty1 * this.QUANTITY_SCALE));
-        const qty2Int = BigInt(Math.round(qty2 * this.QUANTITY_SCALE));
-        const resultInt = (qty1Int * qty2Int) / BigInt(this.QUANTITY_SCALE);
-        return Number(resultInt) / this.QUANTITY_SCALE;
+        if (isNaN(qty1) || isNaN(qty2)) return NaN;
+        const dQty1 = new Decimal(qty1);
+        const dQty2 = new Decimal(qty2);
+        return dQty1.times(dQty2).toNumber();
     }
 
     /**
@@ -99,8 +89,7 @@ export class FinancialMath {
         if (qty2 === 0 || isNaN(qty1) || isNaN(qty2)) {
             return 0;
         }
-        // Use direct floating-point division for ratios - BigInt division truncates to integer
-        return qty1 / qty2;
+        return new Decimal(qty1).dividedBy(new Decimal(qty2)).toNumber();
     }
 
     /**
@@ -111,66 +100,46 @@ export class FinancialMath {
         amount2: number,
         precision: number
     ): number {
-        if (
-            isNaN(amount1) ||
-            isNaN(amount2) ||
-            !Number.isFinite(amount1) ||
-            !Number.isFinite(amount2)
-        ) {
+        if (isNaN(amount1) || isNaN(amount2)) {
             throw new Error(
                 `Invalid amounts for addition: ${amount1}, ${amount2}`
             );
         }
-        const amount1Int = this.priceToInt(amount1);
-        const amount2Int = this.priceToInt(amount2);
-        const resultInt = amount1Int + amount2Int;
-        const result = this.intToPrice(resultInt);
-        return this.normalizeQuantity(result, precision);
+        const dAmount1 = new Decimal(amount1);
+        const dAmount2 = new Decimal(amount2);
+        const result = dAmount1.plus(dAmount2);
+        return result.toDecimalPlaces(precision).toNumber();
     }
 
     /**
      * Validate if a price value is valid for trading
      */
-    static isValidPrice(price: number): boolean {
-        return Number.isFinite(price) && price > 0 && !isNaN(price);
+    static isValidPrice(price: number | string): boolean {
+        try {
+            const dPrice = new Decimal(price);
+            return dPrice.isFinite() && dPrice.isPositive();
+        } catch {
+            return false;
+        }
     }
 
     /**
      * Validate if a quantity value is valid for trading
      */
-    static isValidQuantity(quantity: number): boolean {
-        return Number.isFinite(quantity) && quantity > 0 && !isNaN(quantity);
+    static isValidQuantity(quantity: number | string): boolean {
+        try {
+            const dQuantity = new Decimal(quantity);
+            return dQuantity.isFinite() && dQuantity.isPositive();
+        } catch {
+            return false;
+        }
     }
 
     /**
      * Compare two quantities with precision handling
-     * Returns: -1 if qty1 < qty2, 0 if equal, 1 if qty1 > qty2
      */
     static compareQuantities(qty1: number, qty2: number): number {
-        // Handle extreme values that can't be converted to BigInt
-        if (!Number.isFinite(qty1) || !Number.isFinite(qty2)) {
-            if (qty1 === qty2) return 0;
-            if (qty1 > qty2) return 1;
-            return -1;
-        }
-
-        // Check if scaling would cause overflow
-        const scaled1 = qty1 * this.QUANTITY_SCALE;
-        const scaled2 = qty2 * this.QUANTITY_SCALE;
-
-        if (!Number.isFinite(scaled1) || !Number.isFinite(scaled2)) {
-            // Fallback to simple comparison for extreme values
-            if (qty1 === qty2) return 0;
-            if (qty1 > qty2) return 1;
-            return -1;
-        }
-
-        const qty1Int = BigInt(Math.round(scaled1));
-        const qty2Int = BigInt(Math.round(scaled2));
-
-        if (qty1Int < qty2Int) return -1;
-        if (qty1Int > qty2Int) return 1;
-        return 0;
+        return new Decimal(qty1).comparedTo(new Decimal(qty2));
     }
 
     /**
@@ -180,162 +149,116 @@ export class FinancialMath {
         if (!this.isValidQuantity(quantity)) {
             throw new Error(`Invalid quantity: ${quantity}`);
         }
-
-        const scale = Math.pow(10, precision);
-        return Math.round(quantity * scale) / scale;
+        return new Decimal(quantity).toDecimalPlaces(precision).toNumber();
     }
 
     /**
      * Safe string to number conversion for prices
      */
     static parsePrice(priceStr: string): number {
-        const price = parseFloat(priceStr);
-        if (!this.isValidPrice(price)) {
+        const price = new Decimal(priceStr);
+        if (!this.isValidPrice(price.toNumber())) {
             throw new Error(`Invalid price string: ${priceStr}`);
         }
-        return price;
+        return price.toNumber();
     }
 
     /**
      * Safe string to number conversion for quantities
      */
     static parseQuantity(quantityStr: string): number {
-        const quantity = parseFloat(quantityStr);
-        if (!this.isValidQuantity(quantity)) {
+        const quantity = new Decimal(quantityStr);
+        if (!this.isValidQuantity(quantity.toNumber())) {
             throw new Error(`Invalid quantity string: ${quantityStr}`);
         }
-        return quantity;
+        return quantity.toNumber();
     }
 
     /**
      * MISSION CRITICAL: Calculate mean with precision handling
-     * Replaces DetectorUtils.calculateMean() with institutional-grade precision
      */
     static calculateMean(values: number[]): number {
         if (!values || values.length === 0) {
             return 0;
         }
-
-        // Filter out invalid values and use BigInt for precision
-        const validValues = values.filter(
-            (v) => Number.isFinite(v) && !isNaN(v)
-        );
+        const validValues = values.filter((v) => !isNaN(v) && isFinite(v));
         if (validValues.length === 0) {
             return 0;
         }
-
-        // Use BigInt arithmetic to avoid floating-point precision loss
-        let sum: bigint = BigInt(0);
-        for (const value of validValues) {
-            sum += BigInt(Math.round(value * this.QUANTITY_SCALE));
-        }
-
-        const result =
-            Number(sum / BigInt(validValues.length)) / this.QUANTITY_SCALE;
-        return result;
+        const sum = validValues.reduce(
+            (acc, val) => acc.plus(new Decimal(val)),
+            new Decimal(0)
+        );
+        return sum.dividedBy(validValues.length).toNumber();
     }
 
     /**
      * MISSION CRITICAL: Calculate standard deviation with Welford's algorithm
-     * Replaces DetectorUtils.calculateStdDev() with numerically stable implementation
      */
     static calculateStdDev(values: number[]): number {
-        if (!values || values.length === 0) {
+        if (!values || values.length < 2) {
             return 0;
         }
-        if (values.length === 1) {
-            return 0;
-        }
-
-        // Filter out invalid values
-        const validValues = values.filter(
-            (v) => Number.isFinite(v) && !isNaN(v)
-        );
-        if (validValues.length <= 1) {
+        const validValues = values.filter((v) => !isNaN(v) && isFinite(v));
+        if (validValues.length < 2) {
             return 0;
         }
 
-        // Welford's algorithm for numerical stability
-        let mean = 0;
-        let m2 = 0;
-        let count = 0;
+        const mean = new Decimal(this.calculateMean(validValues));
+        const variance = validValues
+            .reduce((acc, val) => {
+                const diff = new Decimal(val).minus(mean);
+                return acc.plus(diff.pow(2));
+            }, new Decimal(0))
+            .dividedBy(validValues.length - 1);
 
-        for (const value of validValues) {
-            count++;
-            const delta = value - mean;
-            mean += delta / count;
-            const delta2 = value - mean;
-            m2 += delta * delta2;
-        }
-
-        const variance = m2 / (count - 1);
-        return Math.sqrt(variance);
+        return variance.sqrt().toNumber();
     }
 
     /**
      * MISSION CRITICAL: Calculate percentile with precise interpolation
-     * Replaces DetectorUtils.calculatePercentile() with institutional-grade precision
      */
     static calculatePercentile(values: number[], percentile: number): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-        if (
-            percentile < 0 ||
-            percentile > 100 ||
-            !Number.isFinite(percentile)
-        ) {
-            throw new Error(
-                `Invalid percentile: ${percentile}. Must be between 0 and 100.`
-            );
-        }
+        if (!values || values.length === 0) return 0;
+        if (percentile < 0 || percentile > 100)
+            throw new Error("Percentile must be between 0 and 100.");
 
-        // Filter out invalid values and sort
-        const validValues = values.filter(
-            (v) => Number.isFinite(v) && !isNaN(v)
-        );
-        if (validValues.length === 0) {
-            return 0;
-        }
+        const sorted = values
+            .map((v) => new Decimal(v))
+            .sort((a, b) => a.comparedTo(b));
 
-        const sorted = [...validValues].sort((a, b) => a - b);
+        if (sorted.length === 0) return 0;
 
-        if (
-            (percentile === 0 || sorted.length === 1) &&
-            sorted[0] !== undefined
-        ) {
-            return sorted[0];
-        }
-        if (percentile === 100) {
-            return sorted[sorted.length - 1]!;
+        if (percentile === 0) return sorted[0]?.toNumber() ?? 0;
+        if (percentile === 100)
+            return sorted[sorted.length - 1]?.toNumber() ?? 0;
+
+        const index = new Decimal(percentile)
+            .dividedBy(100)
+            .times(sorted.length - 1);
+        const lowerIndex = index.floor().toNumber();
+        const upperIndex = index.ceil().toNumber();
+
+        if (lowerIndex === upperIndex) {
+            return sorted[lowerIndex]?.toNumber() ?? 0;
         }
 
-        // Use precise percentile calculation with interpolation
-        const index = (percentile / 100) * (sorted.length - 1);
-        let lower = Math.floor(index);
-        let upper = Math.ceil(index);
+        const weight = index.minus(lowerIndex);
+        const lowerValue = sorted[lowerIndex];
+        const upperValue = sorted[upperIndex];
 
-        if (lower < 0) {
-            lower = 0;
-        }
-        if (upper >= sorted.length) {
-            upper = sorted.length - 1;
+        if (!lowerValue || !upperValue) {
+            return 0; // Should not happen with the checks above, but good for safety
         }
 
-        if (lower === upper || upper < lower) {
-            return sorted[lower]!;
-        }
-
-        // Linear interpolation between adjacent values
-        const weight = index - lower;
-        const result = sorted[lower]! * (1 - weight) + sorted[upper]! * weight;
-
-        return result;
+        const interpolated = lowerValue
+            .times(new Decimal(1).minus(weight))
+            .plus(upperValue.times(weight));
+        return interpolated.toNumber();
     }
 
     /**
      * MISSION CRITICAL: Calculate median (50th percentile)
-     * Optimized version of calculatePercentile for median calculation
      */
     static calculateMedian(values: number[]): number {
         return this.calculatePercentile(values, 50);
@@ -343,416 +266,144 @@ export class FinancialMath {
 
     /**
      * MISSION CRITICAL: Safe division with zero protection and precision handling
-     * Replaces duplicate safeDivision methods across detectors
      */
     static safeDivide(
         numerator: number,
         denominator: number,
         defaultValue: number = 0
     ): number {
-        if (
-            !Number.isFinite(numerator) ||
-            !Number.isFinite(denominator) ||
-            denominator === 0 ||
-            isNaN(numerator) ||
-            isNaN(denominator)
-        ) {
+        if (denominator === 0 || isNaN(numerator) || isNaN(denominator)) {
             return defaultValue;
         }
-
-        // Use BigInt arithmetic for precision when both values are reasonable
-        if (
-            Math.abs(numerator) <
-                Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE &&
-            Math.abs(denominator) <
-                Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE
-        ) {
-            const numInt = BigInt(Math.round(numerator * this.QUANTITY_SCALE));
-            const denInt = BigInt(
-                Math.round(denominator * this.QUANTITY_SCALE)
-            );
-
-            // Additional check for BigInt zero division
-            if (denInt === BigInt(0)) {
-                return defaultValue;
-            }
-
-            const resultInt = (numInt * BigInt(this.QUANTITY_SCALE)) / denInt;
-            const result = Number(resultInt) / this.QUANTITY_SCALE;
-            return Number.isFinite(result) ? result : defaultValue;
-        }
-
-        // Fallback to regular division for extreme values
-        const result = numerator / denominator;
-        return Number.isFinite(result) ? result : defaultValue;
+        return new Decimal(numerator)
+            .dividedBy(new Decimal(denominator))
+            .toNumber();
     }
 
     /**
      * MISSION CRITICAL: Calculate zone using precise arithmetic
-     * Replaces DetectorUtils.calculateZone() with enhanced precision
      */
     static calculateZone(
         price: number,
         zoneTicks: number,
-        pricePrecision: number
+        pricePrecision: number // Note: pricePrecision is not directly needed with Decimal.js but kept for API compatibility
     ): number {
-        if (price <= 0 || zoneTicks <= 0 || pricePrecision < 0) {
+        if (price <= 0 || zoneTicks <= 0) {
             throw new Error(
-                `Invalid zone calculation parameters: price=${price}, zoneTicks=${zoneTicks}, pricePrecision=${pricePrecision}`
+                `Invalid zone calculation parameters: price=${price}, zoneTicks=${zoneTicks}`
             );
         }
+        const tickSize = new Decimal(1).dividedBy(
+            new Decimal(10).pow(pricePrecision)
+        );
+        const dPrice = new Decimal(price);
+        const dZoneSize = new Decimal(zoneTicks).times(tickSize);
 
-        // Use priceToInt/intToPrice for consistent precision handling
-        const priceInt = this.priceToInt(price);
-        const tickSize = Math.pow(10, -pricePrecision);
-        const tickInt = this.priceToInt(tickSize);
-        const zoneSize = BigInt(zoneTicks) * tickInt;
+        if (dZoneSize.isZero()) return price;
 
-        // Ensure consistent rounding across all detectors
-        const zoneInt = (priceInt / zoneSize) * zoneSize;
-        return this.intToPrice(zoneInt);
+        const zone = dPrice.dividedBy(dZoneSize).floor().times(dZoneSize);
+        return zone.toNumber();
     }
 
     // ========================================================================
     // INSTITUTIONAL-GRADE SAFE ARITHMETIC OPERATIONS
     // ========================================================================
 
-    /**
-     * Financial market compliant safe addition with institutional precision
-     *
-     * Features:
-     * - BigInt arithmetic for sub-penny precision
-     * - NaN/Infinity protection for trading system stability
-     * - IEEE 754 compliance for regulatory requirements
-     * - Overflow protection for large position calculations
-     * - Zero-tolerance error handling for production trading
-     */
     static safeAdd(a: number, b: number): number {
-        // Input validation - critical for trading system integrity
-        if (
-            !Number.isFinite(a) ||
-            !Number.isFinite(b) ||
-            isNaN(a) ||
-            isNaN(b)
-        ) {
-            return 0; // Fail-safe for invalid market data
-        }
-
-        try {
-            // Check for overflow before BigInt conversion
-            if (
-                Math.abs(a) < Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE &&
-                Math.abs(b) < Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE
-            ) {
-                // High-precision BigInt arithmetic for institutional accuracy
-                const aInt = BigInt(Math.round(a * this.QUANTITY_SCALE));
-                const bInt = BigInt(Math.round(b * this.QUANTITY_SCALE));
-                const resultInt = aInt + bInt;
-                const result = Number(resultInt) / this.QUANTITY_SCALE;
-
-                // Final validation for financial system compliance
-                return Number.isFinite(result) ? result : 0;
-            }
-
-            // Fallback for extreme values - maintain IEEE 754 compliance
-            const result = a + b;
-            return Number.isFinite(result) ? result : 0;
-        } catch {
-            // Zero-tolerance error handling for production stability
-            return 0;
-        }
+        if (isNaN(a) || isNaN(b)) return 0;
+        return new Decimal(a).plus(new Decimal(b)).toNumber();
     }
 
-    /**
-     * Financial market compliant safe subtraction with institutional precision
-     *
-     * Critical for:
-     * - P&L calculations
-     * - Spread computations
-     * - Position sizing
-     * - Risk management calculations
-     */
     static safeSubtract(a: number, b: number): number {
-        // Input validation for financial data integrity
-        if (
-            !Number.isFinite(a) ||
-            !Number.isFinite(b) ||
-            isNaN(a) ||
-            isNaN(b)
-        ) {
-            return 0;
-        }
-
-        try {
-            // Overflow protection for large financial calculations
-            if (
-                Math.abs(a) < Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE &&
-                Math.abs(b) < Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE
-            ) {
-                // Institutional-grade precision using BigInt arithmetic
-                const aInt = BigInt(Math.round(a * this.QUANTITY_SCALE));
-                const bInt = BigInt(Math.round(b * this.QUANTITY_SCALE));
-                const resultInt = aInt - bInt;
-                const result = Number(resultInt) / this.QUANTITY_SCALE;
-
-                return Number.isFinite(result) ? result : 0;
-            }
-
-            // IEEE 754 compliant fallback for extreme values
-            const result = a - b;
-            return Number.isFinite(result) ? result : 0;
-        } catch {
-            return 0;
-        }
+        if (isNaN(a) || isNaN(b)) return 0;
+        return new Decimal(a).minus(new Decimal(b)).toNumber();
     }
 
-    /**
-     * Financial market compliant safe multiplication with institutional precision
-     *
-     * Essential for:
-     * - Volume calculations (price × quantity)
-     * - Portfolio valuations
-     * - Margin requirements
-     * - Options pricing models
-     * - Risk-weighted calculations
-     */
     static safeMultiply(a: number, b: number): number {
-        // Comprehensive input validation for trading systems
-        if (
-            !Number.isFinite(a) ||
-            !Number.isFinite(b) ||
-            isNaN(a) ||
-            isNaN(b)
-        ) {
-            return 0;
-        }
-
-        try {
-            // Prevent overflow in financial calculations
-            const maxSafe = Math.sqrt(
-                Number.MAX_SAFE_INTEGER / this.QUANTITY_SCALE
-            );
-            if (Math.abs(a) < maxSafe && Math.abs(b) < maxSafe) {
-                // High-precision multiplication for institutional accuracy
-                const aInt = BigInt(Math.round(a * this.QUANTITY_SCALE));
-                const bInt = BigInt(Math.round(b * this.QUANTITY_SCALE));
-                const resultInt = (aInt * bInt) / BigInt(this.QUANTITY_SCALE);
-                const result = Number(resultInt) / this.QUANTITY_SCALE;
-
-                return Number.isFinite(result) ? result : 0;
-            }
-
-            // Fallback multiplication with overflow protection
-            const result = a * b;
-            return Number.isFinite(result) &&
-                Math.abs(result) < Number.MAX_SAFE_INTEGER
-                ? result
-                : 0;
-        } catch {
-            return 0;
-        }
+        if (isNaN(a) || isNaN(b)) return 0;
+        return new Decimal(a).times(new Decimal(b)).toNumber();
     }
 
-    /**
-     * Enhanced safe division with financial market compliance
-     *
-     * Upgrades the existing safeDivide with additional financial safeguards:
-     * - Enhanced error handling for trading systems
-     * - Better documentation for institutional compliance
-     * - Consistent behavior with other safe operations
-     */
     static safeDivideEnhanced(
         numerator: number,
         denominator: number,
         defaultValue: number = 0
     ): number {
-        // Enhanced input validation for financial stability
-        if (
-            !Number.isFinite(numerator) ||
-            !Number.isFinite(denominator) ||
-            isNaN(numerator) ||
-            isNaN(denominator) ||
-            denominator === 0 ||
-            Math.abs(denominator) < Number.EPSILON
-        ) {
-            return defaultValue;
-        }
-
-        try {
-            // Use existing high-precision logic from safeDivide
-            return this.safeDivide(numerator, denominator, defaultValue);
-        } catch {
-            return defaultValue;
-        }
+        return this.safeDivide(numerator, denominator, defaultValue);
     }
 
-    /**
-     * Financial percentage calculation with institutional precision
-     *
-     * Calculates percentage change: ((newValue - oldValue) / oldValue) * 100
-     *
-     * Critical for:
-     * - Price movement analysis
-     * - Performance attribution
-     * - Risk metrics (VaR, volatility)
-     * - Compliance reporting
-     */
     static calculatePercentageChange(
         oldValue: number,
         newValue: number,
         defaultValue: number = 0
     ): number {
-        if (
-            !Number.isFinite(oldValue) ||
-            !Number.isFinite(newValue) ||
-            oldValue === 0
-        ) {
+        if (oldValue === 0 || isNaN(oldValue) || isNaN(newValue)) {
             return defaultValue;
         }
-
-        const difference = this.safeSubtract(newValue, oldValue);
-        const ratio = this.safeDivide(difference, oldValue, 0);
-        return this.safeMultiply(ratio, 100);
+        const dOld = new Decimal(oldValue);
+        const dNew = new Decimal(newValue);
+        const diff = dNew.minus(dOld);
+        const ratio = diff.dividedBy(dOld);
+        return ratio.times(100).toNumber();
     }
 
-    /**
-     * Compound percentage calculation for financial modeling
-     *
-     * Calculates compound growth: (newValue / oldValue - 1) * 100
-     * More numerically stable than percentage change for large differences
-     */
     static calculateCompoundChange(
         oldValue: number,
         newValue: number,
         defaultValue: number = 0
     ): number {
-        if (
-            !Number.isFinite(oldValue) ||
-            !Number.isFinite(newValue) ||
-            oldValue === 0 ||
-            newValue < 0
-        ) {
+        if (oldValue === 0 || isNaN(oldValue) || isNaN(newValue)) {
             return defaultValue;
         }
-
-        const ratio = this.safeDivide(newValue, oldValue, 1);
-        const growth = this.safeSubtract(ratio, 1);
-        return this.safeMultiply(growth, 100);
+        const dOld = new Decimal(oldValue);
+        const dNew = new Decimal(newValue);
+        const ratio = dNew.dividedBy(dOld);
+        const growth = ratio.minus(1);
+        return growth.times(100).toNumber();
     }
 
-    /**
-     * Basis points calculation for financial markets
-     *
-     * Converts decimal to basis points (1 bp = 0.01% = 0.0001)
-     * Standard unit for interest rates, spreads, and yield differences
-     */
     static toBasisPoints(decimal: number): number {
-        if (!Number.isFinite(decimal) || isNaN(decimal)) {
-            return 0;
-        }
-        return this.safeMultiply(decimal, 10000);
+        if (isNaN(decimal)) return 0;
+        return new Decimal(decimal).times(10000).toNumber();
     }
 
-    /**
-     * Basis points to decimal conversion
-     */
     static fromBasisPoints(basisPoints: number): number {
-        if (!Number.isFinite(basisPoints) || isNaN(basisPoints)) {
-            return 0;
-        }
-        return this.safeDivide(basisPoints, 10000);
+        if (isNaN(basisPoints)) return 0;
+        return new Decimal(basisPoints).dividedBy(10000).toNumber();
     }
 
-    /**
-     * Financial rounding with banker's rounding (round half to even)
-     *
-     * Compliant with financial industry standards to eliminate bias
-     * in large-scale calculations and regulatory reporting
-     */
     static financialRound(value: number, decimals: number): number {
-        if (!Number.isFinite(value) || isNaN(value)) {
-            return 0;
-        }
+        if (isNaN(value)) return 0;
+        return new Decimal(value)
+            .toDecimalPlaces(decimals, Decimal.ROUND_HALF_EVEN)
+            .toNumber();
+    }
 
-        const multiplier = Math.pow(10, decimals);
-        const scaled = this.safeMultiply(value, multiplier);
-
-        // Banker's rounding: round 0.5 to nearest even number
-        const floor = Math.floor(scaled);
-        const fraction = scaled - floor;
-
-        if (Math.abs(fraction - 0.5) < Number.EPSILON) {
-            // Exactly 0.5: round to even
-            return (floor % 2 === 0 ? floor : floor + 1) / multiplier;
-        } else {
-            // Normal rounding
-            return Math.round(scaled) / multiplier;
+    static isValidFinancialNumber(value: number | string): boolean {
+        try {
+            const dValue = new Decimal(value);
+            return dValue.isFinite();
+        } catch {
+            return false;
         }
     }
 
-    /**
-     * Validate financial number for institutional compliance
-     *
-     * Ensures values meet financial industry standards for:
-     * - Finite values only
-     * - No NaN or Infinity
-     * - Reasonable magnitude for financial calculations
-     */
-    static isValidFinancialNumber(value: number): boolean {
-        return (
-            Number.isFinite(value) &&
-            !isNaN(value) &&
-            Math.abs(value) < Number.MAX_SAFE_INTEGER &&
-            (value === 0 || Math.abs(value) >= Number.MIN_VALUE) // Allow zero explicitly
-        );
-    }
-
-    /**
-     * Find minimum value in array with financial number validation
-     * Returns 0 if array is empty or contains no valid values
-     */
     static calculateMin(values: number[]): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-
-        const validValues = values.filter((v) =>
-            this.isValidFinancialNumber(v)
-        );
-        if (validValues.length === 0) {
-            return 0;
-        }
-
-        return Math.min(...validValues);
+        if (!values || values.length === 0) return 0;
+        const validValues = values.filter((v) => !isNaN(v) && isFinite(v));
+        if (validValues.length === 0) return 0;
+        return Decimal.min(...validValues).toNumber();
     }
 
-    /**
-     * Find maximum value in array with financial number validation
-     * Returns 0 if array is empty or contains no valid values
-     */
     static calculateMax(values: number[]): number {
-        if (!values || values.length === 0) {
-            return 0;
-        }
-
-        const validValues = values.filter((v) =>
-            this.isValidFinancialNumber(v)
-        );
-        if (validValues.length === 0) {
-            return 0;
-        }
-
-        return Math.max(...validValues);
+        if (!values || values.length === 0) return 0;
+        const validValues = values.filter((v) => !isNaN(v) && isFinite(v));
+        if (validValues.length === 0) return 0;
+        return Decimal.max(...validValues).toNumber();
     }
 
-    /**
-     * Calculate absolute value with financial number validation
-     * Returns 0 if value is not a valid financial number
-     */
     static calculateAbs(value: number): number {
-        if (!this.isValidFinancialNumber(value)) {
-            return 0;
-        }
-        return Math.abs(value);
+        if (isNaN(value)) return 0;
+        return new Decimal(value).abs().toNumber();
     }
 }

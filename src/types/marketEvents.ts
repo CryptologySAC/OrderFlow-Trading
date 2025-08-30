@@ -64,6 +64,27 @@ export interface StandardZoneData {
     };
 }
 
+export interface PhaseContext {
+    currentPhase: {
+        direction: "UP" | "DOWN" | "SIDEWAYS" | null;
+        startPrice: number;
+        startTime: number;
+        currentSize: number; // % move from start
+        age: number; // ms since phase started
+        // For SIDEWAYS: consolidation range boundaries
+        consolidationHigh?: number; // Upper boundary of sideways range
+        consolidationLow?: number; // Lower boundary of sideways range
+    } | null;
+    previousPhase?:
+        | {
+              direction: "UP" | "DOWN" | "SIDEWAYS";
+              size: number; // total % move (or range size for SIDEWAYS)
+              duration: number; // ms
+          }
+        | undefined;
+    phaseConfirmed: boolean; // true when 0.35% threshold met
+}
+
 export interface EnrichedTradeEvent extends AggressiveTrade {
     passiveBidVolume: number;
     passiveAskVolume: number;
@@ -75,6 +96,9 @@ export interface EnrichedTradeEvent extends AggressiveTrade {
 
     // NEW: Standardized zone data for all detectors
     zoneData: StandardZoneData;
+
+    // NEW: Phase detection context
+    phaseContext: PhaseContext;
 }
 
 export interface IndividualTrade {

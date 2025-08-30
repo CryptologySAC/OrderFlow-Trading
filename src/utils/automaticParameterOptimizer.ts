@@ -614,47 +614,23 @@ export class AutomaticParameterOptimizer {
                 timeWindowIndex: config.timeWindowIndex,
                 eventCooldownMs: config.eventCooldownMs,
                 priceEfficiencyThreshold: config.priceEfficiencyThreshold,
-                maxAbsorptionRatio: config.maxAbsorptionRatio,
+                maxPriceImpactRatio: config.maxPriceImpactRatio,
                 minPassiveMultiplier: config.minPassiveMultiplier,
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
-                liquidityGradientRange: config.liquidityGradientRange,
-                institutionalVolumeThreshold:
-                    config.institutionalVolumeThreshold,
-                institutionalVolumeRatioThreshold:
-                    config.institutionalVolumeRatioThreshold,
-                minAbsorptionScore: config.minAbsorptionScore,
-                finalConfidenceRequired: config.finalConfidenceRequired,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
                 balanceThreshold: config.balanceThreshold,
-                confluenceMinZones: config.confluenceMinZones,
-                confluenceMaxDistance: config.confluenceMaxDistance,
             };
             return mapping[parameterName] || 0;
         } else if (success.detectorType === "exhaustion") {
             const config = Config.EXHAUSTION_DETECTOR;
             const mapping: Record<string, number> = {
-                minAggVolume: config.minAggVolume,
                 timeWindowIndex: config.timeWindowIndex,
                 exhaustionThreshold: config.exhaustionThreshold,
                 eventCooldownMs: config.eventCooldownMs,
-                depletionVolumeThreshold: config.depletionVolumeThreshold,
-                depletionRatioThreshold: config.depletionRatioThreshold,
-                passiveVolumeExhaustionRatio:
-                    config.passiveVolumeExhaustionRatio,
-                varianceReductionFactor: config.varianceReductionFactor,
-                alignmentNormalizationFactor:
-                    config.alignmentNormalizationFactor,
-                aggressiveVolumeExhaustionThreshold:
-                    config.aggressiveVolumeExhaustionThreshold,
-                aggressiveVolumeReductionFactor:
-                    config.aggressiveVolumeReductionFactor,
                 passiveRatioBalanceThreshold:
                     config.passiveRatioBalanceThreshold,
-                premiumConfidenceThreshold: config.premiumConfidenceThreshold,
-                variancePenaltyFactor: config.variancePenaltyFactor,
-                ratioBalanceCenterPoint: config.ratioBalanceCenterPoint,
             };
             return mapping[parameterName] || 0;
         }
@@ -675,47 +651,23 @@ export class AutomaticParameterOptimizer {
                 timeWindowIndex: config.timeWindowIndex,
                 eventCooldownMs: config.eventCooldownMs,
                 priceEfficiencyThreshold: config.priceEfficiencyThreshold,
-                maxAbsorptionRatio: config.maxAbsorptionRatio,
+                maxPriceImpactRatio: config.maxPriceImpactRatio,
                 minPassiveMultiplier: config.minPassiveMultiplier,
                 passiveAbsorptionThreshold: config.passiveAbsorptionThreshold,
                 expectedMovementScalingFactor:
                     config.expectedMovementScalingFactor,
-                liquidityGradientRange: config.liquidityGradientRange,
-                institutionalVolumeThreshold:
-                    config.institutionalVolumeThreshold,
-                institutionalVolumeRatioThreshold:
-                    config.institutionalVolumeRatioThreshold,
-                minAbsorptionScore: config.minAbsorptionScore,
-                finalConfidenceRequired: config.finalConfidenceRequired,
                 maxZoneCountForScoring: config.maxZoneCountForScoring,
                 balanceThreshold: config.balanceThreshold,
-                confluenceMinZones: config.confluenceMinZones,
-                confluenceMaxDistance: config.confluenceMaxDistance,
             };
             return mapping[parameterName] || 0;
         } else if (detectorType === "exhaustion") {
             const config = Config.EXHAUSTION_DETECTOR;
             const mapping: Record<string, number> = {
-                minAggVolume: config.minAggVolume,
                 timeWindowIndex: config.timeWindowIndex,
                 exhaustionThreshold: config.exhaustionThreshold,
                 eventCooldownMs: config.eventCooldownMs,
-                depletionVolumeThreshold: config.depletionVolumeThreshold,
-                depletionRatioThreshold: config.depletionRatioThreshold,
-                passiveVolumeExhaustionRatio:
-                    config.passiveVolumeExhaustionRatio,
-                varianceReductionFactor: config.varianceReductionFactor,
-                alignmentNormalizationFactor:
-                    config.alignmentNormalizationFactor,
-                aggressiveVolumeExhaustionThreshold:
-                    config.aggressiveVolumeExhaustionThreshold,
-                aggressiveVolumeReductionFactor:
-                    config.aggressiveVolumeReductionFactor,
                 passiveRatioBalanceThreshold:
                     config.passiveRatioBalanceThreshold,
-                premiumConfidenceThreshold: config.premiumConfidenceThreshold,
-                variancePenaltyFactor: config.variancePenaltyFactor,
-                ratioBalanceCenterPoint: config.ratioBalanceCenterPoint,
             };
             return mapping[parameterName] || 0;
         }
@@ -836,7 +788,9 @@ export class AutomaticParameterOptimizer {
         );
         let recommendedThreshold = currentThreshold;
         let optimizationReason = "Current threshold appears optimal";
+        // Determine urgency based on confidence score and missed opportunities
         let urgencyLevel: "high" | "medium" | "low" = "low";
+        const confidenceScore = analyses.length > 10 ? 0.9 : 0.7;
 
         if (missedTopBottom > 0) {
             // We're missing top/bottom signals - need to relax threshold
@@ -855,7 +809,15 @@ export class AutomaticParameterOptimizer {
             }
 
             optimizationReason = `Relax threshold to capture ${missedTopBottom} missed top/bottom signals`;
-            urgencyLevel = missedTopBottom > 2 ? "high" : "medium";
+
+            // Urgency based on confidence and number of missed signals
+            if (confidenceScore >= 0.85 && missedTopBottom > 2) {
+                urgencyLevel = "high";
+            } else if (confidenceScore >= 0.7 && missedTopBottom > 0) {
+                urgencyLevel = "medium";
+            } else {
+                urgencyLevel = "low";
+            }
         }
 
         const projectedPrecision = Math.min(1.0, currentPrecision + 0.1); // Estimated improvement
@@ -881,7 +843,7 @@ export class AutomaticParameterOptimizer {
             projectedPrecision,
             projectedRecall,
             optimizationReason,
-            confidenceScore: analyses.length > 10 ? 0.9 : 0.7,
+            confidenceScore,
             urgencyLevel,
         };
     }

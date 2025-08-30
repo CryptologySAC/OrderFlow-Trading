@@ -205,6 +205,31 @@ describe("SignalManager Backpressure & Circuit Breaker", () => {
             type: type as any,
             confidence,
             detectorId: `${type}_detector`,
+            originalCandidate: {
+                id: `${id}_candidate`,
+                type: type as any,
+                side: signalData.side as "buy" | "sell",
+                confidence,
+                timestamp: signalData.timestamp.getTime(),
+                data: signalData,
+                enrichedEvent: {
+                    phaseContext: {
+                        currentPhase: {
+                            direction: "UP" as const,
+                            startPrice: signalData.price - 0.5,
+                            startTime: signalData.timestamp.getTime() - 300000,
+                            currentSize: 0.005,
+                            age: 300000,
+                        },
+                        previousPhase: {
+                            direction: "DOWN" as const,
+                            size: 0.008,
+                            duration: 600000,
+                        },
+                        phaseConfirmed: true,
+                    },
+                },
+            },
             data: signalData,
             metadata: signalData, // Include metadata for direction detection
             timestamp: new Date(),

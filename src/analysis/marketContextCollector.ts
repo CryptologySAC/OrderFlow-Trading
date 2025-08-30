@@ -5,6 +5,13 @@ import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";
 import type { HybridTradeEvent } from "../types/marketEvents.js";
 import type { MarketContext } from "./signalTracker.js";
+import {
+    ONE_MINUTE_MS,
+    FIVE_MINUTES_MS,
+    FIFTEEN_MINUTES_MS,
+    ONE_HOUR_MS,
+    ONE_DAY_MS,
+} from "../core/constants.js";
 
 export interface MarketMetrics {
     // Price metrics
@@ -138,7 +145,9 @@ export class MarketContextCollector extends EventEmitter {
             volumeHistorySize: config.volumeHistorySize ?? 1000,
             supportResistanceLevels: config.supportResistanceLevels ?? 20,
             regimeDetectionPeriods: config.regimeDetectionPeriods ?? [
-                300000, 900000, 3600000,
+                FIVE_MINUTES_MS,
+                FIFTEEN_MINUTES_MS,
+                ONE_HOUR_MS,
             ], // 5min, 15min, 1hr
             ...config,
         };
@@ -294,19 +303,19 @@ export class MarketContextCollector extends EventEmitter {
         //todo const now = Date.now();
 
         // Calculate price changes over different periods
-        const priceChange24h = this.calculatePriceChange(86400000); // 24 hours
-        const priceChange1h = this.calculatePriceChange(3600000); // 1 hour
-        const priceChange15min = this.calculatePriceChange(900000); // 15 minutes
-        const priceChange5min = this.calculatePriceChange(300000); // 5 minutes
+        const priceChange24h = this.calculatePriceChange(ONE_DAY_MS); // 24 hours
+        const priceChange1h = this.calculatePriceChange(ONE_HOUR_MS); // 1 hour
+        const priceChange15min = this.calculatePriceChange(FIFTEEN_MINUTES_MS); // 15 minutes
+        const priceChange5min = this.calculatePriceChange(FIVE_MINUTES_MS); // 5 minutes
 
         // Calculate volume metrics
-        const volume24h = this.calculateVolumeInPeriod(86400000);
-        const volume1h = this.calculateVolumeInPeriod(3600000);
-        const volume15min = this.calculateVolumeInPeriod(900000);
-        const volume5min = this.calculateVolumeInPeriod(300000);
+        const volume24h = this.calculateVolumeInPeriod(ONE_DAY_MS);
+        const volume1h = this.calculateVolumeInPeriod(ONE_HOUR_MS);
+        const volume15min = this.calculateVolumeInPeriod(FIFTEEN_MINUTES_MS);
+        const volume5min = this.calculateVolumeInPeriod(FIVE_MINUTES_MS);
 
         // Current volume rate (per minute)
-        const recentVolume = this.calculateVolumeInPeriod(60000); // Last minute
+        const recentVolume = this.calculateVolumeInPeriod(ONE_MINUTE_MS); // Last minute
         const currentVolumeRate = recentVolume;
 
         // Calculate volatility metrics

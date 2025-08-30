@@ -340,10 +340,10 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         );
 
         try {
-            const deletedCount = (await this.threadManager.callStorage(
+            const deletedCount = await this.threadManager.callStorage(
                 "clearAllTradeData",
                 correlationId
-            )) as number;
+            );
 
             this.logger.info(
                 "[TradesProcessor] Startup trade cleanup completed successfully",
@@ -633,11 +633,11 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 return memoryTrades.slice(0, safeAmount); // Get oldest N trades in chronological order
             }
 
-            const storageTrades = (await this.threadManager.callStorage(
+            const storageTrades = await this.threadManager.callStorage(
                 "getLatestAggregatedTrades",
                 safeAmount,
                 this.symbol
-            )) as SpotWebsocketAPI.TradesAggregateResponseResultInner[];
+            );
 
             const plotTrades = storageTrades.map(
                 (
