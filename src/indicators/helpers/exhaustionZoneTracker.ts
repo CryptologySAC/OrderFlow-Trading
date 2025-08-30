@@ -180,8 +180,8 @@ export class ExhaustionZoneTracker {
                 maxPassiveAskVolume: zone.passiveAskVolume,
                 lastUpdate: timestamp,
                 depletionEvents: 0,
-                consumptionConfidence: 0.5, // Start with neutral confidence
-                lastConfirmedConsumption: 0,
+                consumptionConfidence: 0.6, // Start with higher confidence for new zones
+                lastConfirmedConsumption: timestamp, // Initialize with current time
             };
             trackedZones.set(zoneKey, tracked);
         }
@@ -430,13 +430,39 @@ export class ExhaustionZoneTracker {
         depletionRatio: number,
         velocity: number
     ): boolean {
+        // Relaxed validation: allow 2 entries for basic validation
+        if (zone.history.length < 2) {
+            return false; // Need at least 2 data points
+        }
+
+        // For high depletion ratios, be more lenient with validation
+        if (
+            depletionRatio >= this.config.depletionThreshold &&
+            zone.history.length >= 2
+        ) {
+            return true; // High depletion with sufficient history
+        }
+
+        // Relaxed validation: allow 2 entries for basic validation
+        if (zone.history.length < 2) {
+            return false; // Need at least 2 data points
+        }
+
+        // For high depletion ratios, be more lenient with validation
+        if (
+            depletionRatio >= this.config.depletionThreshold &&
+            zone.history.length >= 2
+        ) {
+            return true; // High depletion with sufficient history
+        }
+
         if (zone.history.length < 3) {
-            return false; // Need more data for validation
+            return false; // Need more data for full validation
         }
 
         // Heuristic 1: Check for suspicious velocity patterns (too fast = likely spoofing)
         const maxReasonableVelocity =
-            this.config.consumptionValidation?.maxReasonableVelocity ?? 1000;
+            this.config.consumptionValidation?.maxReasonableVelocity ?? 5000; // Increased from 1000
         if (velocity > maxReasonableVelocity) {
             return false; // Too fast, likely spoofing
         }
