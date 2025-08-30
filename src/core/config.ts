@@ -141,6 +141,10 @@ export const ExhaustionDetectorSchema = z.object({
 
 // ABSORPTION detector - CLEANED UP - Only used settings remain
 export const AbsorptionDetectorSchema = z.object({
+    // Feature enablement
+    enabled: z.boolean(),
+    abTestingEnabled: z.boolean(),
+
     // Core detection
     minAggVolume: z.number().int().min(1).max(100000),
     timeWindowIndex: z.number().int().min(0).max(5), // Index into preprocessor timeWindows array

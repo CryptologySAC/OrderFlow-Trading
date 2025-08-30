@@ -21,3 +21,4 @@ logs/
 !.yarn/versions
 .pnp.*
 analysis/reports/*
+*.log

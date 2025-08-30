@@ -81,7 +81,7 @@ export class DetectorFactory {
         );
 
         // Initialize A/B testing if enabled
-        if (process.env["ABSORPTION_AB_TESTING"] === "true") {
+        if (Config.ABSORPTION_CONFIG.abTestingEnabled) {
             const { AbsorptionABTestManager } = await import(
                 "../services/absorptionABTestManager.js"
             );

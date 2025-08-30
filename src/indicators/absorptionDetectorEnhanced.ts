@@ -115,7 +115,7 @@ export class AbsorptionDetectorEnhanced extends Detector {
         this.logger.info("AbsorptionDetectorEnhanced initialized", {
             detectorId: id,
             windowMs: this.windowMs,
-            abTestingEnabled: process.env["ABSORPTION_AB_TESTING"] === "true",
+            abTestingEnabled: Config.ABSORPTION_CONFIG.abTestingEnabled,
         });
     }
 

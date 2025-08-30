@@ -254,6 +254,8 @@
             },
 
             "absorption": {
+                "enabled": true,
+                "abTestingEnabled": true,
                 "minAggVolume": 174,
                 "passiveAbsorptionThreshold": 0.85,
                 "passiveAbsorptionThresholdElite": 0.98,
