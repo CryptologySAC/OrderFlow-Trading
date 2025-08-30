@@ -1538,21 +1538,42 @@ export class OrderFlowDashboard {
                 `Loading initial RSI backlog of size ${backlogSize}`
             );
 
-            // Clear RSI data on app restart to prevent timing mismatches
-            const clearedCount =
-                await this.threadManager.callStorage("clearAllRSIData");
+            // Load RSI data from database (may include historical data)
+            const rsiDataFromDb = (await this.threadManager.callStorage(
+                "getRSIData",
+                Config.SYMBOL,
+                backlogSize
+            )) as Array<{ timestamp: number; rsi_value: number }>;
 
-            if (clearedCount > 0) {
+            if (rsiDataFromDb && rsiDataFromDb.length > 0) {
+                // Data from DB is newest first, reverse it for chronological order
+                const chronologicalRsiData = rsiDataFromDb.reverse();
+
+                // Map to the format expected by the frontend
+                this.rsiBacklog = chronologicalRsiData.map((data) => ({
+                    time: data.timestamp,
+                    rsi: data.rsi_value,
+                }));
+
                 this.logger.info(
-                    `Cleared ${clearedCount} historical RSI data points on app restart to ensure fresh calculations.`
+                    `Successfully loaded ${this.rsiBacklog.length} RSI data points from database.`
                 );
-            }
 
-            // Start with empty RSI backlog for fresh calculations
-            this.rsiBacklog = [];
-            this.logger.info(
-                "Starting with fresh RSI calculations (no historical data loaded)."
-            );
+                // Clear historical RSI data AFTER loading it into memory
+                // This ensures fresh calculations will start clean while preserving the backlog
+                const clearedCount =
+                    await this.threadManager.callStorage("clearAllRSIData");
+                if (clearedCount > 0) {
+                    this.logger.info(
+                        `Cleared ${clearedCount} historical RSI data points from database after loading backlog.`
+                    );
+                }
+            } else {
+                this.logger.info(
+                    "No RSI data found in database, starting with empty backlog."
+                );
+                this.rsiBacklog = [];
+            }
         } catch (error) {
             this.logger.error("Failed to load initial RSI backlog", {
                 error: error instanceof Error ? error.message : String(error),
