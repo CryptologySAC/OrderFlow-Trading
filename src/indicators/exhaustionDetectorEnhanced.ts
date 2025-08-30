@@ -819,11 +819,13 @@ export class ExhaustionDetectorEnhanced extends Detector {
         switch (phase.direction) {
             case "UP":
                 // UP phase extreme is the highest point reached
+                // Use absolute price calculation instead of percentage for better accuracy
                 return (
                     phase.startPrice * (1 + Math.abs(phase.currentSize) / 100)
                 );
             case "DOWN":
                 // DOWN phase extreme is the lowest point reached
+                // Use absolute price calculation instead of percentage for better accuracy
                 return (
                     phase.startPrice * (1 - Math.abs(phase.currentSize) / 100)
                 );

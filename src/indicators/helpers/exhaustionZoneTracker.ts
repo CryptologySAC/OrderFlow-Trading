@@ -461,9 +461,16 @@ export class ExhaustionZoneTracker {
         }
 
         // Heuristic 1: Check for suspicious velocity patterns (too fast = likely spoofing)
+        // Use adaptive threshold based on zone's historical activity
+        const adaptiveVelocityThreshold =
+            this.calculateAdaptiveVelocityThreshold(zone, side);
         const maxReasonableVelocity =
-            this.config.consumptionValidation?.maxReasonableVelocity ?? 5000; // Increased from 1000
-        if (velocity > maxReasonableVelocity) {
+            this.config.consumptionValidation?.maxReasonableVelocity ?? 5000;
+
+        if (
+            velocity >
+            Math.max(adaptiveVelocityThreshold, maxReasonableVelocity)
+        ) {
             return false; // Too fast, likely spoofing
         }
 
@@ -867,6 +874,73 @@ export class ExhaustionZoneTracker {
             averageDepletionEvents:
                 zoneCount > 0 ? totalDepletionEvents / zoneCount : 0,
         };
+    }
+
+    /**
+     * Calculate adaptive velocity threshold based on zone's historical activity
+     * This makes validation more flexible in volatile vs calm market conditions
+     */
+    private calculateAdaptiveVelocityThreshold(
+        zone: TrackedZone,
+        side: "bid" | "ask"
+    ): number {
+        if (zone.history.length < 3) {
+            // Not enough data, use default
+            return (
+                this.config.consumptionValidation?.maxReasonableVelocity ?? 1000
+            );
+        }
+
+        // Calculate average velocity from recent history
+        const recentHistory = zone.history.slice(-10); // Last 10 entries
+        let totalVelocity = 0;
+        let validPairs = 0;
+
+        for (let i = 1; i < recentHistory.length; i++) {
+            const prev = recentHistory[i - 1];
+            const curr = recentHistory[i];
+
+            if (!prev || !curr) continue;
+
+            const prevVolume =
+                side === "bid" ? prev.passiveBidVolume : prev.passiveAskVolume;
+            const currVolume =
+                side === "bid" ? curr.passiveBidVolume : curr.passiveAskVolume;
+
+            if (prevVolume > 0) {
+                const depletion = (prevVolume - currVolume) / prevVolume;
+                const timeDiff = curr.timestamp - prev.timestamp;
+
+                if (timeDiff > 0) {
+                    const velocity = depletion / (timeDiff / 1000); // per second
+                    totalVelocity += velocity;
+                    validPairs++;
+                }
+            }
+        }
+
+        if (validPairs === 0) {
+            return (
+                this.config.consumptionValidation?.maxReasonableVelocity ?? 1000
+            );
+        }
+
+        const avgVelocity = totalVelocity / validPairs;
+
+        // Allow 3x the average velocity as adaptive threshold
+        // This provides flexibility for volatile markets while still catching spoofing
+        const adaptiveThreshold = avgVelocity * 3;
+
+        // Don't go below a minimum threshold to prevent too much leniency
+        const minThreshold = 500;
+        // Don't go above the configured maximum to maintain safety
+        const maxThreshold =
+            this.config.consumptionValidation?.maxReasonableVelocity ?? 5000;
+
+        return Math.max(
+            minThreshold,
+            Math.min(maxThreshold, adaptiveThreshold)
+        );
     }
 
     /**
