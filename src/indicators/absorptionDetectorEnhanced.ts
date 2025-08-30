@@ -17,7 +17,7 @@ import {
     type AbsorptionTrackerConfig,
 } from "./helpers/absorptionZoneTracker.js";
 import { AbsorptionDetectorSchema, Config } from "../core/config.js";
-import { AbsorptionABTestManager } from "../services/absorptionABTestManager.js";
+
 import type {
     EnrichedTradeEvent,
     ZoneSnapshot,
@@ -84,11 +84,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
     // Signal cooldown tracking (CLAUDE.md compliance - no magic cooldown values)
     private readonly lastSignal = new Map<string, number>();
 
-    // A/B testing properties
-    private abTestManager?: AbsorptionABTestManager;
-    private abTestVariant?: AbsorptionVariant;
-    private testId = "absorption-optimization";
-
     constructor(
         id: string,
         private readonly settings: AbsorptionEnhancedSettings,
@@ -117,51 +112,10 @@ export class AbsorptionDetectorEnhanced extends Detector {
             Config.TICK_SIZE
         );
 
-        // Initialize A/B testing if enabled
-        if (process.env["ABSORPTION_AB_TESTING"] === "true") {
-            this.abTestManager = new AbsorptionABTestManager(logger, metrics);
-            this.abTestVariant = this.abTestManager.assignVariant(
-                id,
-                this.testId
-            );
-
-            if (this.abTestVariant) {
-                // Apply variant-specific settings
-                (this.settings as any).passiveAbsorptionThreshold =
-                    this.abTestVariant.thresholds.passiveAbsorptionThreshold;
-                (this.settings as any).minPassiveMultiplier =
-                    this.abTestVariant.thresholds.minPassiveMultiplier;
-                (this.settings as any).priceEfficiencyThreshold =
-                    this.abTestVariant.thresholds.priceEfficiencyThreshold;
-                (this.settings as any).balanceThreshold =
-                    this.abTestVariant.thresholds.balanceThreshold;
-                (this.settings as any).priceStabilityTicks =
-                    this.abTestVariant.thresholds.priceStabilityTicks;
-                (this.settings as any).absorptionDirectionThreshold =
-                    this.abTestVariant.thresholds.absorptionDirectionThreshold;
-                (this.settings as any).minPassiveVolumeForDirection =
-                    this.abTestVariant.thresholds.minPassiveVolumeForDirection;
-                (this.settings as any).useZoneSpecificPassiveVolume =
-                    this.abTestVariant.phaseTiming.useZoneSpecificPassiveVolume;
-
-                this.logger.info("Applied A/B test variant", {
-                    detectorId: id,
-                    variantId: this.abTestVariant.variantId,
-                    variantName: this.abTestVariant.name,
-                    passiveAbsorptionThreshold:
-                        this.abTestVariant.thresholds
-                            .passiveAbsorptionThreshold,
-                    minPassiveMultiplier:
-                        this.abTestVariant.thresholds.minPassiveMultiplier,
-                });
-            }
-        }
-
         this.logger.info("AbsorptionDetectorEnhanced initialized", {
             detectorId: id,
             windowMs: this.windowMs,
             abTestingEnabled: process.env["ABSORPTION_AB_TESTING"] === "true",
-            variantApplied: !!this.abTestVariant,
         });
     }
 
@@ -294,28 +248,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
         this.canEmitSignal(eventKey, true);
         this.emit("signalCandidate", signalCandidate);
 
-        // Record A/B testing results if enabled
-        if (
-            process.env["ABSORPTION_AB_TESTING"] === "true" &&
-            this.abTestManager &&
-            this.abTestVariant
-        ) {
-            this.abTestManager.recordSignalResult(
-                this.getId(),
-                this.testId,
-                this.abTestVariant.variantId,
-                {
-                    signalId: signalCandidate.id,
-                    side: signalCandidate.side,
-                    price: event.price,
-                    reachedTP: false, // Will be updated when signal completes
-                    profit: 0,
-                    timeToTP: 0,
-                    maxDrawdown: 0,
-                }
-            );
-        }
-
         this.logger.info(
             "🎯 AbsorptionDetectorEnhanced: ENHANCED ABSORPTION SIGNAL GENERATED!",
             {
@@ -327,7 +259,6 @@ export class AbsorptionDetectorEnhanced extends Detector {
                 signalId: signalCandidate.id,
                 signalType: "absorption",
                 timestamp: new Date(signalCandidate.timestamp).toISOString(),
-                abTestVariant: this.abTestVariant?.name || "none",
             }
         );
     }
