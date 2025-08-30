@@ -384,7 +384,11 @@ export class ExhaustionDetectorEnhanced extends Detector {
 
         // Check special overrides:
         // Scenario 1: Extreme Depletion Override
-        if (hasDepletion && depletionResult.depletionRatio >= 0.985) {
+        if (
+            hasDepletion &&
+            depletionResult.depletionRatio >=
+                this.settings.extremeDepletionOverrideThreshold
+        ) {
             if (!passesThreshold_passiveRatioBalanceThreshold) {
                 this.logger.info(
                     `[Exhaustion Override] Extreme Depletion triggered for ${this.getId()}. Bypassing balance checks.`

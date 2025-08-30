@@ -245,6 +245,7 @@
                 "gapDetectionTicks": 3,
                 "zoneHistoryWindowMs": 300000,
                 "passiveRatioAnomalyStdDev": 2.5,
+                "extremeDepletionOverrideThreshold": 0.985,
                 "consumptionValidation": {
                     "maxReasonableVelocity": 1000,
                     "minConsumptionConfidence": 0.4,

@@ -129,6 +129,7 @@ export const ExhaustionDetectorSchema = z.object({
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.99), // Replace hardcoded 0.5
     passiveRatioAnomalyStdDev: z.number().min(1.0).max(10.0),
     minPeakVolume: z.number().int().min(10).max(100000), // Optional: fallback to minAggVolume
+    extremeDepletionOverrideThreshold: z.number().min(0.8).max(1.0), // Threshold for extreme depletion override
 
     // Consumption validation to prevent spoofing false signals
     consumptionValidation: z.object({
