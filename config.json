@@ -254,26 +254,30 @@
             },
 
             "absorption": {
-                "minAggVolume": 200,
-                "passiveAbsorptionThreshold": 0.9,
+                "minAggVolume": 174,
+                "passiveAbsorptionThreshold": 0.85,
                 "passiveAbsorptionThresholdElite": 0.98,
-                "priceEfficiencyThreshold": 0.00036,
+                "priceEfficiencyThreshold": 0.002,
                 "maxPriceImpactRatio": 0.00007,
-                "minPassiveMultiplier": 55,
+                "minPassiveMultiplier": 15,
                 "balanceThreshold": 0.1,
                 "priceStabilityTicks": 5,
-                "maxVolumeMultiplierRatio": 3.8,
-                "rollingWindowSize": 500,
+                "maxVolumeMultiplierRatio": 2.5,
+                "rollingWindowSize": 750,
 
-                "timeWindowIndex": 0,
-                "eventCooldownMs": 1000,
+                "timeWindowIndex": 1,
+                "eventCooldownMs": 5000,
                 "expectedMovementScalingFactor": 10,
                 "maxZoneCountForScoring": 5,
                 "maxZonesPerSide": 5,
                 "zoneHistoryWindowMs": 60000,
                 "absorptionZoneThreshold": 1.5,
                 "minPassiveVolumeForZone": 50,
-                "minAbsorptionEvents": 2
+                "minAbsorptionEvents": 2,
+
+                "absorptionDirectionThreshold": 0.6,
+                "minPassiveVolumeForDirection": 10,
+                "useZoneSpecificPassiveVolume": true
             },
 
             "spoofingDetector": {
@@ -336,7 +340,7 @@
                 "eventCooldownMs": 5000,
                 "cvdImbalanceThreshold": 1.0,
                 "timeWindowIndex": 1,
-                "institutionalThreshold":45.0,
+                "institutionalThreshold": 45.0,
                 "volumeEfficiencyThreshold": 0.425,
                 "zoneSearchDistance": 20,
                 "tradeRateWindowSize": 750,

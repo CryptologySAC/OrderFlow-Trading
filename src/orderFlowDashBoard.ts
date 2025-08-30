@@ -174,7 +174,7 @@ export class OrderFlowDashboard {
             );
 
             // 🚨 CRITICAL FIX: Initialize detectors AFTER orderBook is ready
-            this.initializeDetectors(dependencies);
+            await this.initializeDetectors(dependencies);
 
             // Initialize market data storage for backtesting
             this.initializeMarketDataStorage();
@@ -318,7 +318,9 @@ export class OrderFlowDashboard {
     /**
      * Initialize all detectors after orderBook is ready
      */
-    private initializeDetectors(dependencies: Dependencies): void {
+    private async initializeDetectors(
+        dependencies: Dependencies
+    ): Promise<void> {
         this.logger.info("[OrderFlowDashboard] Initializing detectors...");
 
         // Create DetectorDependencies with preprocessor for enhanced detectors
@@ -349,10 +351,11 @@ export class OrderFlowDashboard {
         DetectorFactory.initialize(detectorDependencies);
 
         // Absorption Detector - Standalone Enhanced
-        this.absorptionDetector = DetectorFactory.createAbsorptionDetector(
-            detectorDependencies,
-            { id: "ltcusdt-absorption-main" }
-        );
+        this.absorptionDetector =
+            await DetectorFactory.createAbsorptionDetector(
+                detectorDependencies,
+                { id: "ltcusdt-absorption-main" }
+            );
         this.signalCoordinator.registerDetector(
             this.absorptionDetector,
             ["absorption"],

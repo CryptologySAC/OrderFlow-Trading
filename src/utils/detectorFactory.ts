@@ -51,10 +51,10 @@ export class DetectorFactory {
     /**
      * Create production-ready absorption detector (standalone enhanced)
      */
-    public static createAbsorptionDetector(
+    public static async createAbsorptionDetector(
         dependencies: DetectorDependencies,
         options: DetectorFactoryOptions = {}
-    ): AbsorptionDetectorEnhanced {
+    ): Promise<AbsorptionDetectorEnhanced> {
         const id = options.id || `absorption-${Date.now()}`;
 
         this.validateCreationLimits();
@@ -79,6 +79,26 @@ export class DetectorFactory {
                 id,
             }
         );
+
+        // Initialize A/B testing if enabled
+        if (process.env["ABSORPTION_AB_TESTING"] === "true") {
+            const { AbsorptionABTestManager } = await import(
+                "../services/absorptionABTestManager.js"
+            );
+            const abTestManager = new AbsorptionABTestManager(
+                dependencies.logger,
+                dependencies.metricsCollector
+            );
+            const testConfig = abTestManager.createDefaultTest();
+            abTestManager.startTest(testConfig);
+
+            dependencies.logger.info("Absorption A/B testing enabled", {
+                testId: testConfig.testId,
+                variants: testConfig.variants.length,
+                duration: testConfig.durationHours + "h",
+                detectorId: id,
+            });
+        }
 
         this.registerDetector(id, detector, dependencies, options);
 
