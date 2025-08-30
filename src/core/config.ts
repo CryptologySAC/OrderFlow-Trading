@@ -500,7 +500,7 @@ const BasicSymbolConfigSchema = z
             marketVolatilityWeight: z.number().min(0.1).max(1.0),
             // RSI Dashboard Integration parameters
             rsiUpdateFrequency: z.number().int().min(1).max(100),
-            maxRsiBacklogSize: z.number().int().min(100).max(2000),
+            maxRsiBacklogSize: z.number().int().min(100).max(20000),
             maxSignalBacklogAgeMinutes: z.number().int().min(10).max(480),
             // Detector priorities (to eliminate magic numbers)
             accumulationDetectorPriority: z.number().int().min(1).max(100),
