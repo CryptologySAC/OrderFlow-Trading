@@ -221,7 +221,7 @@
                 "backpressureYieldMs": 1,
                 "marketVolatilityWeight": 0.7,
                 "rsiUpdateFrequency": 10,
-                "maxRsiBacklogSize": 50000,
+                "maxRsiBacklogSize": 100,
                 "maxSignalBacklogAgeMinutes": 90,
                 "accumulationDetectorPriority": 40,
                 "distributionDetectorPriority": 40
