@@ -60,6 +60,8 @@ import {
     restoreTheme,
     toggleTheme,
     updateThemeToggleButton,
+    toggleDepletionVisualization,
+    updateDepletionToggleButton,
 } from "./theme.js";
 import { TradeWebSocket } from "../websocket.js";
 
@@ -260,6 +262,16 @@ function initialize() {
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener("click", toggleTheme);
         updateThemeToggleButton();
+    }
+
+    // Setup depletion toggle button
+    const depletionToggleBtn = document.getElementById("depletionToggle");
+    if (depletionToggleBtn) {
+        depletionToggleBtn.addEventListener(
+            "click",
+            toggleDepletionVisualization
+        );
+        updateDepletionToggleButton();
     }
 
     // Listen for system theme changes
@@ -766,6 +778,46 @@ const tradeWebsocket = new TradeWebSocket({
                     }
 
                     orderBookData = message.data;
+
+                    // Debug: Log depletion data to verify it's being received (only first time)
+                    if (
+                        orderBookData.priceLevels &&
+                        orderBookData.priceLevels.length > 0 &&
+                        !window.depletionDataLogged
+                    ) {
+                        const sampleLevel = orderBookData.priceLevels.find(
+                            (level) => level.depletionRatio > 0
+                        );
+                        if (sampleLevel) {
+                            console.log(
+                                "📊 Depletion data received from backend:",
+                                {
+                                    price: sampleLevel.price,
+                                    depletionRatio: sampleLevel.depletionRatio,
+                                    depletionVelocity:
+                                        sampleLevel.depletionVelocity,
+                                    originalBidVolume:
+                                        sampleLevel.originalBidVolume,
+                                    originalAskVolume:
+                                        sampleLevel.originalAskVolume,
+                                    hasDepletionData: true,
+                                }
+                            );
+                            window.depletionDataLogged = true;
+                        } else {
+                            console.log(
+                                "📊 Orderbook data received (no depletion yet):",
+                                {
+                                    priceLevelsCount:
+                                        orderBookData.priceLevels.length,
+                                    samplePrice:
+                                        orderBookData.priceLevels[0]?.price,
+                                    hasDepletionData: false,
+                                }
+                            );
+                            window.depletionDataLogged = true;
+                        }
+                    }
 
                     // Display the data directly from backend (already 1-tick precision)
                     if (orderBookChart) {

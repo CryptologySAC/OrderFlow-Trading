@@ -1538,28 +1538,21 @@ export class OrderFlowDashboard {
                 `Loading initial RSI backlog of size ${backlogSize}`
             );
 
-            const rsiDataFromDb = (await this.threadManager.callStorage(
-                "getRSIData",
-                Config.SYMBOL,
-                backlogSize
-            )) as Array<{ timestamp: number; rsi_value: number }>;
+            // Clear RSI data on app restart to prevent timing mismatches
+            const clearedCount =
+                await this.threadManager.callStorage("clearAllRSIData");
 
-            if (rsiDataFromDb && rsiDataFromDb.length > 0) {
-                // Data from DB is newest first, reverse it for chronological order
-                const chronologicalRsiData = rsiDataFromDb.reverse();
-
-                // Map to the format expected by the frontend
-                this.rsiBacklog = chronologicalRsiData.map((data) => ({
-                    time: data.timestamp,
-                    rsi: data.rsi_value,
-                }));
-
+            if (clearedCount > 0) {
                 this.logger.info(
-                    `Successfully loaded ${this.rsiBacklog.length} RSI data points into the backlog.`
+                    `Cleared ${clearedCount} historical RSI data points on app restart to ensure fresh calculations.`
                 );
-            } else {
-                this.logger.info("No historical RSI data found in storage.");
             }
+
+            // Start with empty RSI backlog for fresh calculations
+            this.rsiBacklog = [];
+            this.logger.info(
+                "Starting with fresh RSI calculations (no historical data loaded)."
+            );
         } catch (error) {
             this.logger.error("Failed to load initial RSI backlog", {
                 error: error instanceof Error ? error.message : String(error),

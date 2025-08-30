@@ -16,7 +16,11 @@ import {
     setRsiChart,
 } from "./state.js";
 import { renderSignalsList } from "./render.js";
-import { getCurrentTheme, getSystemTheme } from "./theme.js";
+import {
+    getCurrentTheme,
+    getSystemTheme,
+    getDepletionVisualizationEnabled,
+} from "./theme.js";
 
 let isSyncing = false;
 let chartUpdateScheduled = false;
@@ -300,18 +304,18 @@ export function initializeTradesChart(ctx) {
             animation: false,
             layout: { padding: 0 },
             scales: {
-                    x: {
-                        type: "time",
-                        time: {
-                            unit: "minute",
-                            displayFormats: { minute: "HH:mm" },
-                        },
-                        min: initialMin,
-                        max: initialMax,
-                        grid: {
-                            display: true,
-                            color: "rgba(102, 102, 102, 0.1)",
-                            ticks: { source: "auto" },
+                x: {
+                    type: "time",
+                    time: {
+                        unit: "minute",
+                        displayFormats: { minute: "HH:mm" },
+                    },
+                    min: initialMin,
+                    max: initialMax,
+                    grid: {
+                        display: true,
+                        color: "rgba(102, 102, 102, 0.1)",
+                        ticks: { source: "auto" },
                     },
                 },
                 y: {
@@ -364,38 +368,42 @@ export function initializeTradesChart(ctx) {
                 zoom: {
                     pan: {
                         enabled: true,
-                        mode: 'x',
-                        onPanComplete: ({chart}) => {
+                        mode: "x",
+                        onPanComplete: ({ chart }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
-                                rsiChart.options.scales.x.min = chart.scales.x.min;
-                                rsiChart.options.scales.x.max = chart.scales.x.max;
-                                rsiChart.update('none');
+                                rsiChart.options.scales.x.min =
+                                    chart.scales.x.min;
+                                rsiChart.options.scales.x.max =
+                                    chart.scales.x.max;
+                                rsiChart.update("none");
                             }
                             isSyncing = false;
-                        }
+                        },
                     },
                     zoom: {
                         wheel: {
                             enabled: true,
                         },
                         pinch: {
-                            enabled: true
+                            enabled: true,
                         },
-                        mode: 'x',
-                        onZoomComplete: ({chart}) => {
+                        mode: "x",
+                        onZoomComplete: ({ chart }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
-                                rsiChart.options.scales.x.min = chart.scales.x.min;
-                                rsiChart.options.scales.x.max = chart.scales.x.max;
-                                rsiChart.update('none');
+                                rsiChart.options.scales.x.min =
+                                    chart.scales.x.min;
+                                rsiChart.options.scales.x.max =
+                                    chart.scales.x.max;
+                                rsiChart.update("none");
                             }
                             isSyncing = false;
-                        }
-                    }
-                }
+                        },
+                    },
+                },
             },
         },
     });
@@ -465,8 +473,8 @@ export function initializeRSIChart(ctx) {
                         fill: false,
                         pointRadius: 0,
                         hoverRadius: 4,
-                        tension: 0.1
-                    }
+                        tension: 0.1,
+                    },
                 ],
             },
             options: {
@@ -555,38 +563,42 @@ export function initializeRSIChart(ctx) {
                     zoom: {
                         pan: {
                             enabled: true,
-                            mode: 'x',
-                            onPanComplete: ({chart}) => {
+                            mode: "x",
+                            onPanComplete: ({ chart }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
-                                    tradesChart.options.scales.x.min = chart.scales.x.min;
-                                    tradesChart.options.scales.x.max = chart.scales.x.max;
-                                    tradesChart.update('none');
+                                    tradesChart.options.scales.x.min =
+                                        chart.scales.x.min;
+                                    tradesChart.options.scales.x.max =
+                                        chart.scales.x.max;
+                                    tradesChart.update("none");
                                 }
                                 isSyncing = false;
-                            }
+                            },
                         },
                         zoom: {
                             wheel: {
                                 enabled: true,
                             },
                             pinch: {
-                                enabled: true
+                                enabled: true,
                             },
-                            mode: 'x',
-                            onZoomComplete: ({chart}) => {
+                            mode: "x",
+                            onZoomComplete: ({ chart }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
-                                    tradesChart.options.scales.x.min = chart.scales.x.min;
-                                    tradesChart.options.scales.x.max = chart.scales.x.max;
-                                    tradesChart.update('none');
+                                    tradesChart.options.scales.x.min =
+                                        chart.scales.x.min;
+                                    tradesChart.options.scales.x.max =
+                                        chart.scales.x.max;
+                                    tradesChart.update("none");
                                 }
                                 isSyncing = false;
-                            }
-                        }
-                    }
+                            },
+                        },
+                    },
                 },
             },
         });
@@ -636,7 +648,7 @@ export function safeUpdateRSIChart(rsiData) {
         }
     }
 
-        if (
+    if (
         rsiChart &&
         rsiChart.data &&
         rsiChart.data.datasets &&
@@ -816,12 +828,39 @@ export function initializeOrderBookChart(ctx) {
 
                             if (!level) return "";
 
+                            let tooltipText = "";
                             if (isAsk && level.ask > 0) {
-                                return `Ask: ${level.ask} LTC at ${price.toFixed(2)}`;
+                                tooltipText = `Ask: ${level.ask} LTC at ${price.toFixed(2)}`;
                             } else if (isBid && level.bid > 0) {
-                                return `Bid: ${level.bid} LTC at ${price.toFixed(2)}`;
+                                tooltipText = `Bid: ${level.bid} LTC at ${price.toFixed(2)}`;
+                            } else {
+                                return "";
                             }
-                            return "";
+
+                            // Add depletion information if available
+                            if (
+                                level.depletionRatio &&
+                                level.depletionRatio > 0
+                            ) {
+                                const depletionPercent = (
+                                    level.depletionRatio * 100
+                                ).toFixed(1);
+                                const depletionVelocity =
+                                    level.depletionVelocity
+                                        ? level.depletionVelocity.toFixed(1)
+                                        : "0.0";
+
+                                tooltipText += `\nDepletion: ${depletionPercent}% (${depletionVelocity} LTC/sec)`;
+
+                                // Add depletion severity indicator
+                                if (level.depletionRatio >= 0.7) {
+                                    tooltipText += " 🔥 HIGH";
+                                } else if (level.depletionRatio >= 0.3) {
+                                    tooltipText += " ⚠️ MEDIUM";
+                                }
+                            }
+
+                            return tooltipText;
                         },
                         title: function (context) {
                             const label = context[0].label;
@@ -835,6 +874,71 @@ export function initializeOrderBookChart(ctx) {
     });
     setOrderBookChart(chart);
     return chart;
+}
+
+/**
+ * Get depletion-aware color for orderbook bars
+ */
+function getDepletionColor(volume, depletionRatio, side, theme) {
+    if (volume <= 0) return "rgba(0, 0, 0, 0)";
+
+    // Check if depletion visualization is enabled
+    const depletionEnabled =
+        typeof getDepletionVisualizationEnabled === "function"
+            ? getDepletionVisualizationEnabled()
+            : true;
+
+    // Base colors for ask/bid
+    const baseColors = {
+        ask: theme === "dark" ? [255, 80, 80] : [255, 0, 0], // Red
+        bid: theme === "dark" ? [80, 255, 80] : [0, 128, 0], // Green
+    };
+
+    const [r, g, b] = baseColors[side];
+
+    // Calculate opacity based on volume
+    let baseOpacity =
+        theme === "dark"
+            ? Math.min(volume / 1500, 0.9)
+            : Math.min(volume / 2000, 1);
+
+    // Apply depletion effect only if visualization is enabled
+    if (depletionEnabled && depletionRatio > 0) {
+        if (depletionRatio < 0.3) {
+            // Low depletion - slight color shift
+            baseOpacity = Math.max(baseOpacity, 0.4);
+        } else if (depletionRatio < 0.7) {
+            // Medium depletion - moderate intensification
+            baseOpacity = Math.max(baseOpacity, 0.6);
+        } else {
+            // High depletion - strong intensification
+            baseOpacity = Math.max(baseOpacity, 0.8);
+        }
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${Math.max(baseOpacity, 0.3)})`;
+}
+
+/**
+ * Update orderbook border colors for better visibility
+ */
+function updateOrderBookBorderColors(theme) {
+    if (!orderBookChart) return;
+
+    const datasets = orderBookChart.data.datasets;
+    if (!datasets || datasets.length < 2) return;
+
+    const borderOpacity = theme === "dark" ? 0.8 : 0.5;
+
+    // Enhanced border colors for depletion visualization
+    datasets[0].borderColor =
+        theme === "dark"
+            ? `rgba(255, 120, 120, ${borderOpacity})`
+            : `rgba(255, 0, 0, ${borderOpacity})`;
+    datasets[1].borderColor =
+        theme === "dark"
+            ? `rgba(120, 255, 120, ${borderOpacity})`
+            : `rgba(0, 128, 0, ${borderOpacity})`;
 }
 
 export function updateOrderBookBarColors(theme) {
@@ -886,15 +990,7 @@ export function updateOrderBookBarColors(theme) {
     datasets[1].backgroundColor = bidColors; // Bids
 
     // Update border colors for better definition in dark mode
-    const borderOpacity = theme === "dark" ? 0.8 : 0.5;
-    datasets[0].borderColor =
-        theme === "dark"
-            ? `rgba(255, 120, 120, ${borderOpacity})`
-            : `rgba(255, 0, 0, ${borderOpacity})`;
-    datasets[1].borderColor =
-        theme === "dark"
-            ? `rgba(120, 255, 120, ${borderOpacity})`
-            : `rgba(0, 128, 0, ${borderOpacity})`;
+    updateOrderBookBorderColors(theme);
 }
 
 export function updateOrderBookDisplay(data) {
@@ -906,7 +1002,7 @@ export function updateOrderBookDisplay(data) {
     const askData = [];
     const bidData = [];
 
-    // Backend sends data already configured with proper binSize (1-tick) 
+    // Backend sends data already configured with proper binSize (1-tick)
     // Just display it directly without any local processing
     const priceLevels = data.priceLevels || [];
 
@@ -934,30 +1030,70 @@ export function updateOrderBookDisplay(data) {
     const endIndex = Math.min(sortedLevels.length, startIndex + maxLevels);
     const displayLevels = sortedLevels.slice(startIndex, endIndex);
 
-    // Build chart data
+    // Get current theme for depletion colors
+    const currentTheme = getCurrentTheme();
+    const actualTheme =
+        currentTheme === "system" ? getSystemTheme() : currentTheme;
+
+    // Build chart data with depletion information
+    const askColors = [];
+    const bidColors = [];
+    const depletionLabels = [];
+
     displayLevels.forEach((level) => {
         const priceStr = level.price.toFixed(2);
+        const depletionRatio = level.depletionRatio || 0;
+        const depletionVelocity = level.depletionVelocity || 0;
+
+        // Create depletion-aware colors for ask bars
+        const askColor = getDepletionColor(
+            level.ask || 0,
+            depletionRatio,
+            "ask",
+            actualTheme
+        );
+        const bidColor = getDepletionColor(
+            level.bid || 0,
+            depletionRatio,
+            "bid",
+            actualTheme
+        );
 
         // Add ask position
         labels.push(`${priceStr}_ask`);
         askData.push(level.ask || 0);
         bidData.push(null);
+        askColors.push(askColor);
+        bidColors.push("rgba(0, 0, 0, 0)"); // Transparent for ask position
+
+        // Add depletion info to tooltip
+        const depletionInfo =
+            depletionRatio > 0
+                ? ` (${(depletionRatio * 100).toFixed(1)}% depleted, ${depletionVelocity.toFixed(1)} LTC/sec)`
+                : "";
+        depletionLabels.push(`${priceStr}_ask${depletionInfo}`);
 
         // Add bid position
         labels.push(`${priceStr}_bid`);
         askData.push(null);
         bidData.push(level.bid || 0);
+        askColors.push("rgba(0, 0, 0, 0)"); // Transparent for bid position
+        bidColors.push(bidColor);
+
+        // Add depletion info to tooltip
+        depletionLabels.push(`${priceStr}_bid${depletionInfo}`);
     });
 
-    orderBookChart.data.labels = labels;
+    orderBookChart.data.labels = depletionLabels; // Use labels with depletion info
     orderBookChart.data.datasets[0].data = askData;
     orderBookChart.data.datasets[1].data = bidData;
 
-    // Update colors based on theme
-    const currentTheme = getCurrentTheme();
-    const actualTheme =
-        currentTheme === "system" ? getSystemTheme() : currentTheme;
-    updateOrderBookBarColors(actualTheme);
+    // Apply depletion-aware colors
+    orderBookChart.data.datasets[0].backgroundColor = askColors;
+    orderBookChart.data.datasets[1].backgroundColor = bidColors;
+
+    // Update border colors for better visibility
+    updateOrderBookBorderColors(actualTheme);
 
     scheduleOrderBookUpdate();
 }
@@ -1121,8 +1257,7 @@ function removeSupportResistanceLevel(levelId) {
 function showSupportResistanceTooltip(level, event) {
     const tooltip = document.createElement("div");
     tooltip.className = "sr-tooltip";
-    tooltip.innerHTML =
-        `
+    tooltip.innerHTML = `
         <div><strong>${level.type.toUpperCase()}: ${level.price.toFixed(2)}</strong></div>
         <div>Strength: ${(level.strength * 100).toFixed(1)}%</div>
         <div>Touches: ${level.touchCount}</div>
@@ -1666,8 +1801,7 @@ function showZoneTooltip(zone, event) {
         tooltipContent += `<div>Center: ${zone.priceRange.center.toFixed(4)}</div>`;
     }
 
-    tooltipContent +=
-        `
+    tooltipContent += `
         <div>Strength: ${(zone.strength * 100).toFixed(1)}%</div>
         <div>Completion: ${(zone.completion * 100).toFixed(1)}%</div>`;
 
