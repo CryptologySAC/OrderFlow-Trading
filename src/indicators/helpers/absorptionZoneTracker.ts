@@ -826,8 +826,8 @@ export class AbsorptionZoneTracker {
     private isNearBid(priceLevel: number): boolean {
         if (!this.currentSpread) return false;
         const distance = this.currentSpread.bid - priceLevel;
-        const tickDistance = distance / this.tickSize;
-        return tickDistance >= 0 && tickDistance <= this.config.maxZonesPerSide;
+        const tickDistance = Math.abs(distance) / this.tickSize;
+        return tickDistance <= this.config.maxZonesPerSide;
     }
 
     /**
@@ -836,8 +836,8 @@ export class AbsorptionZoneTracker {
     private isNearAsk(priceLevel: number): boolean {
         if (!this.currentSpread) return false;
         const distance = priceLevel - this.currentSpread.ask;
-        const tickDistance = distance / this.tickSize;
-        return tickDistance >= 0 && tickDistance <= this.config.maxZonesPerSide;
+        const tickDistance = Math.abs(distance) / this.tickSize;
+        return tickDistance <= this.config.maxZonesPerSide;
     }
 
     /**
@@ -985,20 +985,38 @@ export class AbsorptionZoneTracker {
         const cutoffTime = currentTime - this.config.historyWindowMs;
 
         // Remove old events
+        const originalEventCount = zone.eventHistory.length;
         zone.eventHistory = zone.eventHistory.filter(
             (e) => e.timestamp >= cutoffTime
         );
+        const eventsRemoved = originalEventCount - zone.eventHistory.length;
 
         // Calculate maximum events per zone based on configuration
         const maxEvents = this.calculateMaxEventsPerZone();
 
-        if (zone.eventHistory.length > maxEvents) {
-            // Prioritize events before truncating
+        // Always perform optimization if we have events, not just when exceeding max
+        let optimizationPerformed = false;
+        if (zone.eventHistory.length > 0) {
+            // Prioritize events to keep most important ones
             this.prioritizeAbsorptionEvents(zone);
-            zone.eventHistory = zone.eventHistory.slice(-maxEvents);
+
+            // Apply memory optimization even if under maxEvents limit
+            // This ensures we maintain optimal memory usage
+            if (zone.eventHistory.length > maxEvents * 0.7) {
+                // 70% threshold for optimization
+                const optimizedCount = Math.max(1, Math.floor(maxEvents * 0.8)); // Keep 80% of max
+                zone.eventHistory = zone.eventHistory.slice(-optimizedCount);
+                optimizationPerformed = true;
+            }
+
+            // Update optimization timestamp
+            zone.lastOptimization = currentTime;
         }
 
-        zone.lastOptimization = currentTime;
+        // Track optimization performance
+        if (optimizationPerformed || eventsRemoved > 0) {
+            this.memoryStats.totalOptimizationsPerformed++;
+        }
 
         // Memory monitoring
         this.monitorAbsorptionMemoryUsage(zone);
@@ -1012,10 +1030,15 @@ export class AbsorptionZoneTracker {
         const maxExpectedEvents =
             AbsorptionZoneTracker.EXPECTED_TRADES_PER_SECOND *
             historyWindowSeconds;
-        return Math.floor(
+
+        // Ensure minimum of 5 events for meaningful optimization
+        // and maximum of 50 to prevent excessive memory usage
+        const calculatedMax = Math.floor(
             maxExpectedEvents *
                 AbsorptionZoneTracker.MEMORY_MONITORING_THRESHOLD_PERCENT
         );
+
+        return Math.max(5, Math.min(50, calculatedMax));
     }
 
     /**

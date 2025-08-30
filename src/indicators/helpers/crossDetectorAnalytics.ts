@@ -338,8 +338,23 @@ export class CrossDetectorAnalytics {
 
         for (const event of events) {
             if (event.detectorType === "absorption") {
-                totalAggressive += event.volume * (1 - event.ratio);
-                totalPassive += event.volume * event.ratio;
+                // Fix volume calculation bug: absorption ratio represents passive/aggressive
+                // When ratio > 1, passive volume > aggressive volume (normal absorption)
+                // When ratio < 1, aggressive volume > passive volume (weak absorption)
+                if (event.ratio >= 1) {
+                    // Normal absorption: passive absorbs aggressive
+                    totalAggressive += event.volume / event.ratio;
+                    totalPassive += event.volume;
+                } else {
+                    // Weak absorption: aggressive dominates
+                    totalAggressive += event.volume;
+                    totalPassive += event.volume * event.ratio;
+                }
+            } else if (event.detectorType === "exhaustion") {
+                // Exhaustion events (when implemented) have different volume distribution
+                // For now, treat as neutral
+                totalAggressive += event.volume * 0.5;
+                totalPassive += event.volume * 0.5;
             }
             totalEfficiency += event.efficiency;
         }
@@ -354,8 +369,8 @@ export class CrossDetectorAnalytics {
         );
 
         return {
-            aggressiveVolume: totalAggressive,
-            passiveVolume: totalPassive,
+            aggressiveVolume: Math.max(0, totalAggressive), // Ensure non-negative
+            passiveVolume: Math.max(0, totalPassive), // Ensure non-negative
             absorptionRatio,
             efficiency: avgEfficiency,
             institutionalRatio,
