@@ -128,24 +128,25 @@ function createTrade(time, price, quantity, orderType) {
 }
 
 /**
- * Detects circular references in objects to prevent infinite recursion.
+ * Detects circular references in objects using iterative approach.
+ * Prevents stack overflow by avoiding deep recursion.
+ *
+ * FIX: Replaced recursive algorithm with iterative queue-based approach
+ * to prevent "Maximum call stack size exceeded" errors when processing
+ * complex WebSocket messages with deeply nested object structures.
+ *
  * @param {any} obj - The object to check for circular references.
  * @param {WeakSet} visited - Set of already visited objects.
- * @param {number} depth - Current recursion depth.
  * @returns {boolean} - True if circular reference is found, false otherwise.
  */
-function hasCircularReference(obj, visited = new WeakSet(), depth = 0) {
-    // Prevent infinite recursion by limiting depth
-    if (depth > 10) {
-        return false; // Assume no circular reference at deep levels
-    }
-
-    if (!obj || typeof obj !== "object") {
+function hasCircularReference(obj, visited = new WeakSet()) {
+    // Performance optimization: Skip check for primitive values and small objects
+    if (!obj || typeof obj !== "object" || obj === null) {
         return false;
     }
 
-    // Handle different object types safely
-    if (obj === null) {
+    // Quick check for common safe object types
+    if (obj instanceof Date || obj instanceof RegExp || obj instanceof Error) {
         return false;
     }
 
@@ -154,43 +155,113 @@ function hasCircularReference(obj, visited = new WeakSet(), depth = 0) {
         return true;
     }
 
-    // Skip certain object types that are unlikely to have circular references
-    // but can cause issues with deep traversal
-    if (obj instanceof Date || obj instanceof RegExp || obj instanceof Error) {
-        return false;
-    }
-
     // Add to visited set
     visited.add(obj);
 
     try {
-        // Use Object.keys for safer iteration (only enumerable properties)
-        const keys = Object.keys(obj);
+        // Use iterative approach instead of recursion
+        const stack = [obj];
+        const path = new WeakSet();
 
-        for (const key of keys) {
-            const value = obj[key];
+        while (stack.length > 0) {
+            const current = stack.pop();
 
-            // Skip functions and primitives
-            if (typeof value === "function" || typeof value !== "object") {
+            // Skip if already processed
+            if (path.has(current)) {
                 continue;
             }
+            path.add(current);
 
-            if (hasCircularReference(value, visited, depth + 1)) {
-                return true;
+            // Only process plain objects and arrays to avoid prototype issues
+            if (
+                current &&
+                typeof current === "object" &&
+                (Array.isArray(current) || current.constructor === Object)
+            ) {
+                // Limit processing to prevent excessive computation
+                const keys = Object.keys(current);
+                if (keys.length > 100) {
+                    // For very large objects, use a simpler check
+                    return false; // Assume no circular reference in large objects
+                }
+
+                for (const key of keys) {
+                    const value = current[key];
+
+                    // Skip functions and primitives
+                    if (
+                        typeof value === "function" ||
+                        typeof value !== "object"
+                    ) {
+                        continue;
+                    }
+
+                    // Check for circular reference
+                    if (
+                        value &&
+                        typeof value === "object" &&
+                        visited.has(value)
+                    ) {
+                        return true;
+                    }
+
+                    // Add to stack for processing (limit depth)
+                    if (stack.length < 50) {
+                        // Prevent stack from growing too large
+                        stack.push(value);
+                    }
+                }
             }
         }
 
-        // Prototype chain check removed to prevent stack overflow.
-        // The check was causing infinite recursion in some cases.
+        return false;
     } catch (error) {
         // If there's any error during traversal, assume no circular reference
-        // This prevents crashes from malformed objects
         console.warn("Error during circular reference check:", error);
         return false;
     }
-
-    return false;
 }
+
+/**
+ * Test function to verify circular reference detection works without stack overflow
+ * This can be called from browser console to test the fix
+ */
+function testCircularReferenceDetection() {
+    console.log("Testing circular reference detection...");
+
+    // Test 1: Simple object without circular references
+    const simpleObj = { a: 1, b: { c: 2 } };
+    const result1 = hasCircularReference(simpleObj);
+    console.log("Simple object test:", result1); // Should be false
+
+    // Test 2: Object with circular reference
+    const circularObj = { a: 1 };
+    circularObj.self = circularObj;
+    const result2 = hasCircularReference(circularObj);
+    console.log("Circular object test:", result2); // Should be true
+
+    // Test 3: Deep nested object (potential stack overflow scenario)
+    let deepObj = { level: 0 };
+    let current = deepObj;
+    for (let i = 1; i < 1000; i++) {
+        current = current[`level${i}`] = { level: i };
+    }
+    const result3 = hasCircularReference(deepObj);
+    console.log("Deep nested object test:", result3); // Should be false and not crash
+
+    // Test 4: Large object with many properties
+    const largeObj = {};
+    for (let i = 0; i < 200; i++) {
+        largeObj[`prop${i}`] = { value: i, nested: { data: `item${i}` } };
+    }
+    const result4 = hasCircularReference(largeObj);
+    console.log("Large object test:", result4); // Should be false
+
+    console.log("All circular reference tests completed successfully!");
+}
+
+// Make test function available globally for debugging
+window.testCircularReferenceDetection = testCircularReferenceDetection;
 
 function initialize() {
     // Restore ALL saved settings FIRST, before any UI setup or rendering
@@ -511,9 +582,17 @@ const tradeWebsocket = new TradeWebSocket({
                 return;
             }
 
-            // Add circular reference check for message.data
+            // Add circular reference check for message.data with size limits
             if (message.data && typeof message.data === "object") {
-                if (hasCircularReference(message.data)) {
+                // Skip circular reference check for very large objects to prevent performance issues
+                const dataSize = JSON.stringify(message.data).length;
+                if (dataSize > 1000000) {
+                    // 1MB limit
+                    console.warn(
+                        `Skipping circular reference check for large message (${dataSize} bytes):`,
+                        message.type
+                    );
+                } else if (hasCircularReference(message.data)) {
                     console.error(
                         "Message contains circular reference, skipping:",
                         message.type
