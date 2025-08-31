@@ -273,9 +273,11 @@ export class SpoofingDetector extends EventEmitter {
         let history = this.orderPlacementHistory.get(normalizedPrice) || [];
         history.push({ time: now, side, quantity: validQuantity, placementId });
         const maxHistory = this.config.maxPlacementHistoryPerPrice ?? 20;
-        // PERFORMANCE OPTIMIZATION: Use slice instead of shift to avoid O(n) array copying
+        // PERFORMANCE OPTIMIZATION: Use filter to keep last N items efficiently
         if (history.length > maxHistory) {
-            history = history.slice(-maxHistory); // Keep last N items efficiently
+            history = history.filter(
+                (_, index) => index >= history.length - maxHistory
+            );
         }
         this.orderPlacementHistory.set(normalizedPrice, history);
     }
@@ -356,9 +358,11 @@ export class SpoofingDetector extends EventEmitter {
         let history = this.passiveChangeHistory.get(normalizedPrice) || [];
         history.push({ time: now, bid: validBid, ask: validAsk });
         const maxHistory = this.config.maxPassiveHistoryPerPrice ?? 10;
-        // PERFORMANCE OPTIMIZATION: Use slice instead of shift to avoid O(n) array copying
+        // PERFORMANCE OPTIMIZATION: Use filter to keep last N items efficiently
         if (history.length > maxHistory) {
-            history = history.slice(-maxHistory); // Keep last N items efficiently
+            history = history.filter(
+                (_, index) => index >= history.length - maxHistory
+            );
         }
         this.passiveChangeHistory.set(normalizedPrice, history);
     }

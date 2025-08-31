@@ -103,7 +103,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
     // Performance tracking
     private readonly processingTimes: CircularBuffer<number>;
-    private readonly errorWindow: number[] = [];
+    private errorWindow: number[] = [];
     private readonly maxErrorRate = 10; // per minute
 
     // Depletion tracking state
@@ -449,10 +449,9 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
         // Clean old errors
         const cutoff = Date.now() - 60000;
-        const firstRecent = this.errorWindow.findIndex((t) => t > cutoff);
-        if (firstRecent > 0) {
-            this.errorWindow.splice(0, firstRecent);
-        }
+        this.errorWindow = this.errorWindow.filter(
+            (timestamp) => timestamp > cutoff
+        );
 
         this.logger.error("[OrderBookProcessor] Processing error", {
             error: error.message,

@@ -502,7 +502,8 @@ export class SignalValidationLogger {
                 "signals"
             );
             if (signalsBuffer.length > 0) {
-                const signalsToFlush = signalsBuffer.splice(0);
+                const signalsToFlush = [...signalsBuffer];
+                signalsBuffer.length = 0; // Clear the buffer
                 void this.flushDetectorBuffer(
                     detectorType,
                     "signals",
@@ -516,7 +517,8 @@ export class SignalValidationLogger {
                 "rejections"
             );
             if (rejectionsBuffer.length > 0) {
-                const rejectionsToFlush = rejectionsBuffer.splice(0);
+                const rejectionsToFlush = [...rejectionsBuffer];
+                rejectionsBuffer.length = 0; // Clear the buffer
                 void this.flushDetectorBuffer(
                     detectorType,
                     "rejections",
@@ -530,7 +532,8 @@ export class SignalValidationLogger {
                 "successful"
             );
             if (successfulBuffer.length > 0) {
-                const successfulToFlush = successfulBuffer.splice(0);
+                const successfulToFlush = [...successfulBuffer];
+                successfulBuffer.length = 0; // Clear the buffer
                 void this.flushDetectorBuffer(
                     detectorType,
                     "successful",
@@ -548,8 +551,8 @@ export class SignalValidationLogger {
                     "rejected_missed"
                 );
                 if (rejectedMissedBuffer.length > 0) {
-                    const rejectedMissedToFlush =
-                        rejectedMissedBuffer.splice(0);
+                    const rejectedMissedToFlush = [...rejectedMissedBuffer];
+                    rejectedMissedBuffer.length = 0; // Clear the buffer
                     void this.flushDetectorBuffer(
                         detectorType,
                         "rejected_missed",

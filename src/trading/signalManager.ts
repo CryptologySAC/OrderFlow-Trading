@@ -161,7 +161,7 @@ export class SignalManager extends EventEmitter {
     private readonly priorityQueueHighThreshold: number;
 
     // Enhanced backpressure management for high-frequency signal processing
-    private readonly signalQueue: PrioritizedSignal[] = [];
+    private signalQueue: PrioritizedSignal[] = [];
     private readonly droppedSignalCounts = new Map<string, number>(); // type -> count
     private isProcessing = false;
     private backpressureActive = false;
@@ -1093,7 +1093,12 @@ export class SignalManager extends EventEmitter {
                 ? this.currentBatchSize
                 : this.config.processingBatchSize;
 
-            const batch = this.signalQueue.splice(0, batchSize);
+            const batch = this.signalQueue.filter(
+                (_, index) => index < batchSize
+            );
+            this.signalQueue = this.signalQueue.filter(
+                (_, index) => index >= batchSize
+            );
             let successCount = 0;
 
             for (const prioritizedSignal of batch) {

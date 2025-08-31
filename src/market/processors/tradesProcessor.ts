@@ -801,7 +801,12 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
 
                 this.isSaving = true;
                 const batchSize = Math.min(100, this.saveQueue.length);
-                const batch = this.saveQueue.splice(0, batchSize);
+                const batch = this.saveQueue.filter(
+                    (_, index) => index < batchSize
+                );
+                this.saveQueue = this.saveQueue.filter(
+                    (_, index) => index >= batchSize
+                );
 
                 try {
                     const trades = batch.map((item) => item.trade);

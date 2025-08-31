@@ -499,7 +499,7 @@ export class OrderBookState implements IOrderBookState {
             .sort((a, b) => b.distance - a.distance);
 
         // Remove furthest levels
-        const toRemove = levels.slice(this.maxLevels);
+        const toRemove = levels.filter((_, index) => index >= this.maxLevels);
         for (const { price } of toRemove) {
             this.book.delete(price);
         }

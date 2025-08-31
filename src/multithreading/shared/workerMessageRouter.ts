@@ -107,7 +107,9 @@ export class WorkerMessageRouter {
                 queueSize: this.maxQueueSize,
                 component: "WorkerMessageRouter",
             });
-            this.messageQueue.splice(0, Math.floor(this.maxQueueSize / 2)); // Drop half
+            this.messageQueue = this.messageQueue.filter(
+                (_, index) => index >= Math.floor(this.maxQueueSize / 2)
+            ); // Keep most recent half
         }
 
         this.messageQueue.push({

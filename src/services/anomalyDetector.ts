@@ -720,7 +720,9 @@ export class AnomalyDetector extends EventEmitter {
             // Remove oldest anomalies to maintain memory limit
             const excess =
                 this.recentAnomalies.length - this.maxStoredAnomalies;
-            this.recentAnomalies.splice(0, excess);
+            this.recentAnomalies = this.recentAnomalies.filter(
+                (_, index) => index >= excess
+            );
 
             this.logger?.warn?.(
                 "AnomalyDetector memory limit exceeded, cleaned up old anomalies",
