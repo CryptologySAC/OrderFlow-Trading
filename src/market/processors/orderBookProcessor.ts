@@ -140,6 +140,11 @@ export class OrderBookProcessor implements IOrderBookProcessor {
         );
         this.processingTimes = new CircularBuffer<number>(1000);
 
+        // Add cleanup interval for stale depletion data
+        setInterval(() => {
+            this.cleanupStaleDepletionData();
+        }, 300000); // 5-minute cleanup interval
+
         this.logger.info("[OrderBookProcessor] Initialized", {
             binSize: this.binSize,
             numLevels: this.numLevels,
@@ -222,10 +227,29 @@ export class OrderBookProcessor implements IOrderBookProcessor {
         const timestamp = snapshot.timestamp;
         this.updateDepletionCache(priceLevels, timestamp);
 
-        // Add depletion data to price levels
+        // Add depletion data to price levels with validation
         const priceLevelsWithDepletion = priceLevels.map((level) => {
             const bidDepletion = this.getDepletionData(level.price, false);
             const askDepletion = this.getDepletionData(level.price, true);
+
+            // Validate depletion data is current and relevant
+            const isValidDepletionData = this.validateDepletionData(
+                bidDepletion,
+                askDepletion,
+                level,
+                snapshot.midPrice
+            );
+
+            if (!isValidDepletionData) {
+                // Return level without depletion data if validation fails
+                return {
+                    ...level,
+                    depletionRatio: 0,
+                    depletionVelocity: 0,
+                    originalBidVolume: level.bid,
+                    originalAskVolume: level.ask,
+                };
+            }
 
             return {
                 ...level,
@@ -634,7 +658,7 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
             // Track ask volume changes
             if (level.ask > 0) {
-                const askPrice = level.price + 0.01; // Slight offset for ask prices
+                const askPrice = level.price + this.tickSize; // Use actual tick size for ask prices
                 this.trackVolumeChange(askPrice, level.ask, timestamp);
                 const askMetrics = this.calculateDepletionMetrics(
                     askPrice,
@@ -649,24 +673,95 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     }
 
     /**
-     * Get depletion data for a specific price level
+     * Get depletion data for a specific price level with proximity matching
+     * CLAUDE.md COMPLIANCE: Returns null when data cannot be retrieved
      */
     private getDepletionData(
         price: number,
         isAsk: boolean = false
     ): DepletionMetrics | null {
-        const lookupPrice = isAsk ? price + 0.01 : price;
-        return this.depletionCache.get(lookupPrice) || null;
+        const lookupPrice = isAsk ? price + this.tickSize : price;
+
+        // First try exact match
+        const exactMatch = this.depletionCache.get(lookupPrice);
+        if (exactMatch) {
+            return exactMatch;
+        }
+
+        // If no exact match, find closest active price level within tick range
+        // This handles cases where price levels shift slightly due to market movement
+        const maxDistance = this.tickSize * 2; // Within 2 ticks
+        let closestPrice: number | null = null;
+        let minDistance = Infinity;
+
+        for (const [cachedPrice] of this.depletionCache) {
+            const distance = Math.abs(cachedPrice - lookupPrice);
+            if (distance <= maxDistance && distance < minDistance) {
+                minDistance = distance;
+                closestPrice = cachedPrice;
+            }
+        }
+
+        return closestPrice
+            ? this.depletionCache.get(closestPrice) || null
+            : null;
+    }
+
+    /**
+     * Validate depletion data for current market conditions
+     * CLAUDE.md COMPLIANCE: Data validation and error handling
+     */
+    private validateDepletionData(
+        bidDepletion: DepletionMetrics | null,
+        askDepletion: DepletionMetrics | null,
+        level: PriceLevel,
+        midPrice: number
+    ): boolean {
+        // Check if we have any depletion data
+        if (!bidDepletion && !askDepletion) {
+            return false; // No depletion data available
+        }
+
+        // Check price proximity to current market (within 1% of mid price)
+        const priceDeviation = Math.abs(level.price - midPrice) / midPrice;
+        if (priceDeviation > 0.01) {
+            // More than 1% deviation
+            return false; // Price level too far from current market
+        }
+
+        // Check data freshness (within last 10 minutes)
+        const maxAge = 10 * 60 * 1000; // 10 minutes
+        const now = Date.now();
+
+        if (bidDepletion && now - bidDepletion.lastUpdate > maxAge) {
+            return false; // Bid data too old
+        }
+
+        if (askDepletion && now - askDepletion.lastUpdate > maxAge) {
+            return false; // Ask data too old
+        }
+
+        // Check data consistency (both sides should have reasonable volumes)
+        const hasBidData = bidDepletion && bidDepletion.originalVolume > 0;
+        const hasAskData = askDepletion && askDepletion.originalVolume > 0;
+
+        // At least one side should have valid data
+        if (!hasBidData && !hasAskData) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
      * Clean up old depletion data periodically
+     * CLAUDE.md COMPLIANCE: Memory management and performance optimization
      */
     private cleanupDepletionData(): void {
         const cutoffTime = Date.now() - 5 * 60 * 1000; // 5 minutes ago
         const pricesToRemove: number[] = [];
 
-        // Find expired entries
+        // Find expired entries based on time
         for (const [price, metrics] of this.depletionCache) {
             if (metrics.lastUpdate < cutoffTime) {
                 pricesToRemove.push(price);
@@ -679,9 +774,76 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             this.volumeHistory.delete(price);
         }
 
+        // Additional cleanup: Remove entries with very low volume (likely stale)
+        const lowVolumeThreshold = 1.0; // LTC units
+        const additionalRemovals: number[] = [];
+
+        for (const [price, metrics] of this.depletionCache) {
+            if (metrics.currentVolume < lowVolumeThreshold) {
+                additionalRemovals.push(price);
+            }
+        }
+
+        for (const price of additionalRemovals) {
+            this.depletionCache.delete(price);
+            this.volumeHistory.delete(price);
+            pricesToRemove.push(price);
+        }
+
         if (pricesToRemove.length > 0) {
             this.logger.debug(
-                `[OrderBookProcessor] Cleaned up ${pricesToRemove.length} expired depletion entries`
+                `[OrderBookProcessor] Cleaned up ${pricesToRemove.length} stale depletion entries`
+            );
+        }
+    }
+
+    /**
+     * Clean up stale depletion data - called by interval timer
+     * CLAUDE.md COMPLIANCE: Memory management and performance optimization
+     */
+    private cleanupStaleDepletionData(): void {
+        const cutoffTime = Date.now() - 10 * 60 * 1000; // 10 minutes ago (more aggressive cleanup)
+        const pricesToRemove: number[] = [];
+
+        // Find stale entries based on extended time window
+        for (const [price, metrics] of this.depletionCache) {
+            if (metrics.lastUpdate < cutoffTime) {
+                pricesToRemove.push(price);
+            }
+        }
+
+        // Also clean up volume history for stale entries
+        for (const [price, history] of this.volumeHistory) {
+            if (history.length > 0) {
+                const lastMeasurement = history.at(history.length - 1);
+                if (lastMeasurement && lastMeasurement.timestamp < cutoffTime) {
+                    pricesToRemove.push(price);
+                }
+            }
+        }
+
+        // Remove stale entries
+        for (const price of pricesToRemove) {
+            this.depletionCache.delete(price);
+            this.volumeHistory.delete(price);
+        }
+
+        // Clean up empty history buffers
+        const emptyHistories: number[] = [];
+        for (const [price, history] of this.volumeHistory) {
+            if (history.length === 0) {
+                emptyHistories.push(price);
+            }
+        }
+
+        for (const price of emptyHistories) {
+            this.volumeHistory.delete(price);
+        }
+
+        const totalCleaned = pricesToRemove.length + emptyHistories.length;
+        if (totalCleaned > 0) {
+            this.logger.info(
+                `[OrderBookProcessor] Aggressive cleanup: ${totalCleaned} stale entries removed (${pricesToRemove.length} cache, ${emptyHistories.length} empty histories)`
             );
         }
     }

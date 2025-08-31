@@ -779,43 +779,130 @@ const tradeWebsocket = new TradeWebSocket({
 
                     orderBookData = message.data;
 
-                    // Debug: Log depletion data to verify it's being received (only first time)
+                    // Enhanced debug: Log depletion data validation and statistics
                     if (
                         orderBookData.priceLevels &&
-                        orderBookData.priceLevels.length > 0 &&
-                        !window.depletionDataLogged
+                        orderBookData.priceLevels.length > 0
                     ) {
-                        const sampleLevel = orderBookData.priceLevels.find(
-                            (level) => level.depletionRatio > 0
-                        );
-                        if (sampleLevel) {
-                            console.log(
-                                "📊 Depletion data received from backend:",
-                                {
-                                    price: sampleLevel.price,
-                                    depletionRatio: sampleLevel.depletionRatio,
-                                    depletionVelocity:
-                                        sampleLevel.depletionVelocity,
-                                    originalBidVolume:
-                                        sampleLevel.originalBidVolume,
-                                    originalAskVolume:
-                                        sampleLevel.originalAskVolume,
-                                    hasDepletionData: true,
-                                }
-                            );
+                        // Only log detailed info once per session to avoid spam
+                        if (!window.depletionDataLogged) {
+                            const depletionLevels =
+                                orderBookData.priceLevels.filter(
+                                    (level) => level.depletionRatio > 0
+                                );
+
+                            if (depletionLevels.length > 0) {
+                                const sampleLevel = depletionLevels[0];
+                                console.log(
+                                    "📊 Depletion data received from backend:",
+                                    {
+                                        totalLevels:
+                                            orderBookData.priceLevels.length,
+                                        depletionLevels: depletionLevels.length,
+                                        samplePrice: sampleLevel.price,
+                                        depletionRatio:
+                                            sampleLevel.depletionRatio,
+                                        depletionVelocity:
+                                            sampleLevel.depletionVelocity,
+                                        originalBidVolume:
+                                            sampleLevel.originalBidVolume,
+                                        originalAskVolume:
+                                            sampleLevel.originalAskVolume,
+                                        midPrice: orderBookData.midPrice,
+                                        hasDepletionData: true,
+                                    }
+                                );
+
+                                // Log depletion statistics
+                                const avgDepletion =
+                                    depletionLevels.reduce(
+                                        (sum, level) =>
+                                            sum + level.depletionRatio,
+                                        0
+                                    ) / depletionLevels.length;
+
+                                const highDepletionLevels =
+                                    depletionLevels.filter(
+                                        (level) => level.depletionRatio > 0.5
+                                    );
+
+                                console.log("📈 Depletion statistics:", {
+                                    averageDepletionRatio:
+                                        (avgDepletion * 100).toFixed(1) + "%",
+                                    highDepletionCount:
+                                        highDepletionLevels.length,
+                                    totalBidVolume:
+                                        orderBookData.totalBidVolume,
+                                    totalAskVolume:
+                                        orderBookData.totalAskVolume,
+                                    timestamp: new Date(
+                                        orderBookData.timestamp
+                                    ).toLocaleTimeString(),
+                                });
+                            } else {
+                                console.log(
+                                    "📊 Orderbook data received (no depletion yet):",
+                                    {
+                                        priceLevelsCount:
+                                            orderBookData.priceLevels.length,
+                                        samplePrice:
+                                            orderBookData.priceLevels[0]?.price,
+                                        midPrice: orderBookData.midPrice,
+                                        totalBidVolume:
+                                            orderBookData.totalBidVolume,
+                                        totalAskVolume:
+                                            orderBookData.totalAskVolume,
+                                        hasDepletionData: false,
+                                        timestamp: new Date(
+                                            orderBookData.timestamp
+                                        ).toLocaleTimeString(),
+                                    }
+                                );
+                            }
                             window.depletionDataLogged = true;
-                        } else {
-                            console.log(
-                                "📊 Orderbook data received (no depletion yet):",
-                                {
-                                    priceLevelsCount:
-                                        orderBookData.priceLevels.length,
-                                    samplePrice:
-                                        orderBookData.priceLevels[0]?.price,
-                                    hasDepletionData: false,
-                                }
+                        }
+
+                        // Periodic validation logging (every 30 seconds)
+                        if (
+                            !window.lastDepletionValidation ||
+                            Date.now() - window.lastDepletionValidation > 30000
+                        ) {
+                            const currentLevels = orderBookData.priceLevels;
+                            const depletionLevels = currentLevels.filter(
+                                (level) => level.depletionRatio > 0
                             );
-                            window.depletionDataLogged = true;
+
+                            if (depletionLevels.length > 0) {
+                                const staleLevels = depletionLevels.filter(
+                                    (level) => {
+                                        if (!level.timestamp) return false;
+                                        return (
+                                            Date.now() - level.timestamp >
+                                            10 * 60 * 1000
+                                        ); // 10 minutes
+                                    }
+                                );
+
+                                if (staleLevels.length > 0) {
+                                    console.warn(
+                                        "⚠️ Stale depletion data detected:",
+                                        {
+                                            staleCount: staleLevels.length,
+                                            totalDepletionLevels:
+                                                depletionLevels.length,
+                                            sampleStalePrice:
+                                                staleLevels[0]?.price,
+                                            ageMinutes: Math.round(
+                                                (Date.now() -
+                                                    staleLevels[0]?.timestamp) /
+                                                    60000
+                                            ),
+                                        }
+                                    );
+                                }
+                            }
+
+                            window.lastDepletionValidation = Date.now();
                         }
                     }
 

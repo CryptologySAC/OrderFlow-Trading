@@ -993,6 +993,66 @@ export function updateOrderBookBarColors(theme) {
     updateOrderBookBorderColors(theme);
 }
 
+/**
+ * Validate depletion level data for current market conditions
+ * CLAUDE.md COMPLIANCE: Data validation and error handling
+ */
+function validateDepletionLevel(level, midPrice, currentTime) {
+    // Check if level has basic required properties
+    if (!level || typeof level.price !== "number") {
+        console.warn("⚠️ Depletion validation: Invalid level data", level);
+        return false;
+    }
+
+    // Check price proximity to current market (within 2% of mid price)
+    const priceDeviation = Math.abs(level.price - midPrice) / midPrice;
+    if (priceDeviation > 0.02) {
+        console.warn(
+            `⚠️ Depletion validation: Price ${level.price.toFixed(4)} too far from mid price ${midPrice.toFixed(4)} (${(priceDeviation * 100).toFixed(2)}% deviation)`
+        );
+        return false;
+    }
+
+    // Check if depletion data exists and is reasonable
+    if (level.depletionRatio !== undefined) {
+        if (level.depletionRatio < 0 || level.depletionRatio > 1) {
+            console.warn(
+                `⚠️ Depletion validation: Invalid depletion ratio ${level.depletionRatio} for price ${level.price.toFixed(4)}`
+            );
+            return false;
+        }
+    }
+
+    // Check volume data consistency
+    const hasBidVolume = level.bid && level.bid > 0;
+    const hasAskVolume = level.ask && level.ask > 0;
+    const hasOriginalBidVolume =
+        level.originalBidVolume && level.originalBidVolume > 0;
+    const hasOriginalAskVolume =
+        level.originalAskVolume && level.originalAskVolume > 0;
+
+    // If we have depletion data, we should have both current and original volumes
+    if (level.depletionRatio > 0) {
+        if (!hasOriginalBidVolume && !hasOriginalAskVolume) {
+            console.warn(
+                `⚠️ Depletion validation: Missing original volume data for depleted level at ${level.price.toFixed(4)}`
+            );
+            return false;
+        }
+    }
+
+    // Check for data freshness (if timestamp available)
+    if (level.timestamp && currentTime - level.timestamp > 10 * 60 * 1000) {
+        // 10 minutes
+        console.warn(
+            `⚠️ Depletion validation: Stale data for price ${level.price.toFixed(4)} (${Math.round((currentTime - level.timestamp) / 60000)} minutes old)`
+        );
+        return false;
+    }
+
+    return true;
+}
+
 export function updateOrderBookDisplay(data) {
     if (!orderBookChart) {
         return;
@@ -1005,13 +1065,33 @@ export function updateOrderBookDisplay(data) {
     // Backend sends data already configured with proper binSize (1-tick)
     // Just display it directly without any local processing
     const priceLevels = data.priceLevels || [];
+    const currentTime = Date.now();
+    const midPrice = data.midPrice || 0;
+
+    // Validate and filter depletion data
+    const validLevels = [];
+    const invalidLevels = [];
+
+    priceLevels.forEach((level) => {
+        if (validateDepletionLevel(level, midPrice, currentTime)) {
+            validLevels.push(level);
+        } else {
+            invalidLevels.push(level);
+        }
+    });
+
+    // Log validation summary
+    if (invalidLevels.length > 0) {
+        console.log(
+            `📊 Depletion validation: ${validLevels.length} valid, ${invalidLevels.length} invalid levels filtered`
+        );
+    }
 
     // Select levels symmetrically around mid price for balanced display
     const maxLevels = 50; // Show more levels since we have 1-tick precision
-    const midPrice = data.midPrice || 0;
 
     // Sort levels by price
-    const sortedLevels = priceLevels.sort((a, b) => a.price - b.price);
+    const sortedLevels = validLevels.sort((a, b) => a.price - b.price);
 
     // Find the index closest to midPrice
     let midIndex = 0;
