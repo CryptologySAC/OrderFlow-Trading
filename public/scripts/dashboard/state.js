@@ -79,7 +79,7 @@ if (
 }
 
 // Trades data
-export const trades = [];
+export let trades = [];
 
 // Active time range
 export let activeRange = 90 * 60000; // 90 minutes
