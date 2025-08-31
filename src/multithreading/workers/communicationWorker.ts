@@ -914,30 +914,33 @@ parentPort?.on(
                         const connectedClients =
                             CommunicationWorkerState.getInstance().getConnectedClients();
                         if (connectedClients.size > 0) {
+                            // OPTIMIZATION: Stringify the data once before the loop.
+                            const backlogMessage = JSON.stringify({
+                                type: "backlog",
+                                data: msg.data.backlog,
+                                now: Date.now(),
+                            });
+
+                            let signalBacklogMessage: string | null = null;
+                            if (
+                                msg.data.signals &&
+                                msg.data.signals.length > 0
+                            ) {
+                                signalBacklogMessage = JSON.stringify({
+                                    type: "signal_backlog",
+                                    data: msg.data.signals,
+                                    now: Date.now(),
+                                });
+                            }
+
                             connectedClients.forEach(
                                 (ws: IsolatedWebSocket) => {
                                     try {
-                                        // Send backlog
-                                        ws.send(
-                                            JSON.stringify({
-                                                type: "backlog",
-                                                data: msg.data.backlog,
-                                                now: Date.now(),
-                                            })
-                                        );
+                                        // Send the pre-stringified message.
+                                        ws.send(backlogMessage);
 
-                                        // Send signal backlog
-                                        if (
-                                            msg.data.signals &&
-                                            msg.data.signals.length > 0
-                                        ) {
-                                            ws.send(
-                                                JSON.stringify({
-                                                    type: "signal_backlog",
-                                                    data: msg.data.signals,
-                                                    now: Date.now(),
-                                                })
-                                            );
+                                        if (signalBacklogMessage) {
+                                            ws.send(signalBacklogMessage);
                                         }
                                     } catch (error) {
                                         logger.error(
