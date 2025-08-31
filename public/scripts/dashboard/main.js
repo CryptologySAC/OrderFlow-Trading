@@ -180,13 +180,8 @@ function hasCircularReference(obj, visited = new WeakSet(), depth = 0) {
             }
         }
 
-        // Also check prototype chain safely
-        const proto = Object.getPrototypeOf(obj);
-        if (proto && proto !== Object.prototype) {
-            if (hasCircularReference(proto, visited, depth + 1)) {
-                return true;
-            }
-        }
+        // Prototype chain check removed to prevent stack overflow.
+        // The check was causing infinite recursion in some cases.
     } catch (error) {
         // If there's any error during traversal, assume no circular reference
         // This prevents crashes from malformed objects
