@@ -220,8 +220,8 @@
                 "priorityQueueHighThreshold": 8.0,
                 "backpressureYieldMs": 1,
                 "marketVolatilityWeight": 0.7,
-                "rsiUpdateFrequency": 10,
-                "maxRsiBacklogSize": 50000,
+                "rsiUpdateFrequency": 50,
+                "maxRsiBacklogSize": 3000,
                 "maxSignalBacklogAgeMinutes": 90,
                 "accumulationDetectorPriority": 40,
                 "distributionDetectorPriority": 40
@@ -237,14 +237,15 @@
             "exhaustion": {
                 "passiveRatioBalanceThreshold": 0.9,
                 "exhaustionThreshold": 0.87,
-                "minPeakVolume": 1000,
-                "timeWindowIndex": 0,
+                "minPeakVolume": 5000,
+                "timeWindowIndex": 1,
                 "eventCooldownMs": 1000,
-                "maxZonesPerSide": 10,
+                "maxZonesPerSide": 15,
                 "zoneDepletionThreshold": 0.75,
                 "gapDetectionTicks": 3,
                 "zoneHistoryWindowMs": 300000,
                 "passiveRatioAnomalyStdDev": 2.5,
+                "extremeDepletionOverrideThreshold": 0.985,
                 "consumptionValidation": {
                     "maxReasonableVelocity": 1000,
                     "minConsumptionConfidence": 0.4,
@@ -279,7 +280,21 @@
 
                 "absorptionDirectionThreshold": 0.6,
                 "minPassiveVolumeForDirection": 10,
-                "useZoneSpecificPassiveVolume": true
+                "useZoneSpecificPassiveVolume": true,
+
+                "performanceOptimization": {
+                    "maxEventsPerZone": 25,
+                    "eventRetentionMs": 60000,
+                    "memoryMonitoringThreshold": 0.1,
+                    "prioritizationWeights": {
+                        "recency": 0.4,
+                        "confidence": 0.4,
+                        "significance": 0.2
+                    },
+                    "optimizationEnabled": true,
+                    "memoryCheckIntervalMs": 30000,
+                    "maxMemoryReductionPercent": 95
+                }
             },
 
             "spoofingDetector": {
@@ -436,7 +451,7 @@
                 "rsi": {
                     "enabled": true,
                     "period": 14,
-                    "timeframeMs": 120000,
+                    "timeframeMs": 30000,
                     "overboughtThreshold": 70,
                     "oversoldThreshold": 30,
                     "extremeOverbought": 80,

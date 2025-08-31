@@ -16,7 +16,11 @@ import {
     setRsiChart,
 } from "./state.js";
 import { renderSignalsList } from "./render.js";
-import { getCurrentTheme, getSystemTheme } from "./theme.js";
+import {
+    getCurrentTheme,
+    getSystemTheme,
+    getDepletionVisualizationEnabled,
+} from "./theme.js";
 
 let isSyncing = false;
 let chartUpdateScheduled = false;
@@ -47,7 +51,7 @@ export function scheduleOrderBookUpdate() {
 }
 
 /**
- * Updates Y-axis bounds based on visible trades
+ * Updates Y-axis bounds based on visible trades (optimized for performance)
  */
 export function updateYAxisBounds() {
     if (!tradesChart || trades.length === 0) return;
@@ -55,16 +59,31 @@ export function updateYAxisBounds() {
     const xMin = tradesChart.options.scales.x.min;
     const xMax = tradesChart.options.scales.x.max;
 
-    const visibleTrades = trades.filter((t) => t.x >= xMin && t.x <= xMax);
+    // PERFORMANCE OPTIMIZATION: Use single pass through trades array
+    // Instead of filter + map + spread, do everything in one loop
+    let yMin = Infinity;
+    let yMax = -Infinity;
+    let visibleCount = 0;
 
-    if (visibleTrades.length === 0) return;
+    // Single efficient loop through trades
+    for (let i = trades.length - 1; i >= 0; i--) {
+        const trade = trades[i];
+        if (trade.x >= xMin && trade.x <= xMax) {
+            const price = trade.y;
+            if (price < yMin) yMin = price;
+            if (price > yMax) yMax = price;
+            visibleCount++;
 
-    const prices = visibleTrades.map((t) => t.y);
-    const yMin = Math.min(...prices);
-    const yMax = Math.max(...prices);
+            // Early exit if we have enough samples for accurate bounds
+            if (visibleCount >= 1000) break;
+        }
+    }
 
-    tradesChart.options.scales.y.suggestedMin = yMin - (yMax - yMin) * 0.05;
-    tradesChart.options.scales.y.suggestedMax = yMax + (yMax - yMin) * 0.05;
+    if (visibleCount === 0) return;
+
+    const padding = (yMax - yMin) * 0.05;
+    tradesChart.options.scales.y.suggestedMin = yMin - padding;
+    tradesChart.options.scales.y.suggestedMax = yMax + padding;
     delete tradesChart.options.scales.y.min;
     delete tradesChart.options.scales.y.max;
 }
@@ -300,18 +319,18 @@ export function initializeTradesChart(ctx) {
             animation: false,
             layout: { padding: 0 },
             scales: {
-                    x: {
-                        type: "time",
-                        time: {
-                            unit: "minute",
-                            displayFormats: { minute: "HH:mm" },
-                        },
-                        min: initialMin,
-                        max: initialMax,
-                        grid: {
-                            display: true,
-                            color: "rgba(102, 102, 102, 0.1)",
-                            ticks: { source: "auto" },
+                x: {
+                    type: "time",
+                    time: {
+                        unit: "minute",
+                        displayFormats: { minute: "HH:mm" },
+                    },
+                    min: initialMin,
+                    max: initialMax,
+                    grid: {
+                        display: true,
+                        color: "rgba(102, 102, 102, 0.1)",
+                        ticks: { source: "auto" },
                     },
                 },
                 y: {
@@ -364,38 +383,42 @@ export function initializeTradesChart(ctx) {
                 zoom: {
                     pan: {
                         enabled: true,
-                        mode: 'x',
-                        onPanComplete: ({chart}) => {
+                        mode: "x",
+                        onPanComplete: ({ chart }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
-                                rsiChart.options.scales.x.min = chart.scales.x.min;
-                                rsiChart.options.scales.x.max = chart.scales.x.max;
-                                rsiChart.update('none');
+                                rsiChart.options.scales.x.min =
+                                    chart.scales.x.min;
+                                rsiChart.options.scales.x.max =
+                                    chart.scales.x.max;
+                                rsiChart.update("none");
                             }
                             isSyncing = false;
-                        }
+                        },
                     },
                     zoom: {
                         wheel: {
                             enabled: true,
                         },
                         pinch: {
-                            enabled: true
+                            enabled: true,
                         },
-                        mode: 'x',
-                        onZoomComplete: ({chart}) => {
+                        mode: "x",
+                        onZoomComplete: ({ chart }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
-                                rsiChart.options.scales.x.min = chart.scales.x.min;
-                                rsiChart.options.scales.x.max = chart.scales.x.max;
-                                rsiChart.update('none');
+                                rsiChart.options.scales.x.min =
+                                    chart.scales.x.min;
+                                rsiChart.options.scales.x.max =
+                                    chart.scales.x.max;
+                                rsiChart.update("none");
                             }
                             isSyncing = false;
-                        }
-                    }
-                }
+                        },
+                    },
+                },
             },
         },
     });
@@ -454,19 +477,15 @@ export function initializeRSIChart(ctx) {
                     {
                         label: "RSI",
                         parsing: { xAxisKey: "time", yAxisKey: "rsi" },
-                        data: [
-                            // Add placeholder points to ensure time axis displays correctly
-                            { time: initialMin, rsi: 50 },
-                            { time: initialMax, rsi: 50 },
-                        ],
+                        data: [], // Start with empty data - will be populated by real RSI data
                         borderColor: getRSIColor,
                         backgroundColor: getRSIBackgroundColor,
                         borderWidth: 2,
                         fill: false,
                         pointRadius: 0,
                         hoverRadius: 4,
-                        tension: 0.1
-                    }
+                        tension: 0.1,
+                    },
                 ],
             },
             options: {
@@ -555,38 +574,42 @@ export function initializeRSIChart(ctx) {
                     zoom: {
                         pan: {
                             enabled: true,
-                            mode: 'x',
-                            onPanComplete: ({chart}) => {
+                            mode: "x",
+                            onPanComplete: ({ chart }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
-                                    tradesChart.options.scales.x.min = chart.scales.x.min;
-                                    tradesChart.options.scales.x.max = chart.scales.x.max;
-                                    tradesChart.update('none');
+                                    tradesChart.options.scales.x.min =
+                                        chart.scales.x.min;
+                                    tradesChart.options.scales.x.max =
+                                        chart.scales.x.max;
+                                    tradesChart.update("none");
                                 }
                                 isSyncing = false;
-                            }
+                            },
                         },
                         zoom: {
                             wheel: {
                                 enabled: true,
                             },
                             pinch: {
-                                enabled: true
+                                enabled: true,
                             },
-                            mode: 'x',
-                            onZoomComplete: ({chart}) => {
+                            mode: "x",
+                            onZoomComplete: ({ chart }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
-                                    tradesChart.options.scales.x.min = chart.scales.x.min;
-                                    tradesChart.options.scales.x.max = chart.scales.x.max;
-                                    tradesChart.update('none');
+                                    tradesChart.options.scales.x.min =
+                                        chart.scales.x.min;
+                                    tradesChart.options.scales.x.max =
+                                        chart.scales.x.max;
+                                    tradesChart.update("none");
                                 }
                                 isSyncing = false;
-                            }
-                        }
-                    }
+                            },
+                        },
+                    },
                 },
             },
         });
@@ -636,26 +659,17 @@ export function safeUpdateRSIChart(rsiData) {
         }
     }
 
-        if (
+    if (
         rsiChart &&
         rsiChart.data &&
         rsiChart.data.datasets &&
         rsiChart.data.datasets[0]
     ) {
-        // Preserve current time range before updating data
-        const currentMin = rsiChart.options.scales.x.min;
-        const currentMax = rsiChart.options.scales.x.max;
-
+        // Update data directly (backlog loading handles data replacement)
         rsiChart.data.datasets[0].data = rsiData;
+
+        // Update chart
         rsiChart.update("none");
-
-        // Restore time range to prevent auto-scaling
-        if (currentMin !== undefined && currentMax !== undefined) {
-            rsiChart.options.scales.x.min = currentMin;
-            rsiChart.options.scales.x.max = currentMax;
-            rsiChart.update("none");
-        }
-
         return true;
     }
 
@@ -816,12 +830,39 @@ export function initializeOrderBookChart(ctx) {
 
                             if (!level) return "";
 
+                            let tooltipText = "";
                             if (isAsk && level.ask > 0) {
-                                return `Ask: ${level.ask} LTC at ${price.toFixed(2)}`;
+                                tooltipText = `Ask: ${level.ask} LTC at ${price.toFixed(2)}`;
                             } else if (isBid && level.bid > 0) {
-                                return `Bid: ${level.bid} LTC at ${price.toFixed(2)}`;
+                                tooltipText = `Bid: ${level.bid} LTC at ${price.toFixed(2)}`;
+                            } else {
+                                return "";
                             }
-                            return "";
+
+                            // Add depletion information if available
+                            if (
+                                level.depletionRatio &&
+                                level.depletionRatio > 0
+                            ) {
+                                const depletionPercent = (
+                                    level.depletionRatio * 100
+                                ).toFixed(1);
+                                const depletionVelocity =
+                                    level.depletionVelocity
+                                        ? level.depletionVelocity.toFixed(1)
+                                        : "0.0";
+
+                                tooltipText += `\nDepletion: ${depletionPercent}% (${depletionVelocity} LTC/sec)`;
+
+                                // Add depletion severity indicator
+                                if (level.depletionRatio >= 0.7) {
+                                    tooltipText += " 🔥 HIGH";
+                                } else if (level.depletionRatio >= 0.3) {
+                                    tooltipText += " ⚠️ MEDIUM";
+                                }
+                            }
+
+                            return tooltipText;
                         },
                         title: function (context) {
                             const label = context[0].label;
@@ -835,6 +876,71 @@ export function initializeOrderBookChart(ctx) {
     });
     setOrderBookChart(chart);
     return chart;
+}
+
+/**
+ * Get depletion-aware color for orderbook bars
+ */
+function getDepletionColor(volume, depletionRatio, side, theme) {
+    if (volume <= 0) return "rgba(0, 0, 0, 0)";
+
+    // Check if depletion visualization is enabled
+    const depletionEnabled =
+        typeof getDepletionVisualizationEnabled === "function"
+            ? getDepletionVisualizationEnabled()
+            : true;
+
+    // Base colors for ask/bid
+    const baseColors = {
+        ask: theme === "dark" ? [255, 80, 80] : [255, 0, 0], // Red
+        bid: theme === "dark" ? [80, 255, 80] : [0, 128, 0], // Green
+    };
+
+    const [r, g, b] = baseColors[side];
+
+    // Calculate opacity based on volume
+    let baseOpacity =
+        theme === "dark"
+            ? Math.min(volume / 1500, 0.9)
+            : Math.min(volume / 2000, 1);
+
+    // Apply depletion effect only if visualization is enabled
+    if (depletionEnabled && depletionRatio > 0) {
+        if (depletionRatio < 0.3) {
+            // Low depletion - slight color shift
+            baseOpacity = Math.max(baseOpacity, 0.4);
+        } else if (depletionRatio < 0.7) {
+            // Medium depletion - moderate intensification
+            baseOpacity = Math.max(baseOpacity, 0.6);
+        } else {
+            // High depletion - strong intensification
+            baseOpacity = Math.max(baseOpacity, 0.8);
+        }
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${Math.max(baseOpacity, 0.3)})`;
+}
+
+/**
+ * Update orderbook border colors for better visibility
+ */
+function updateOrderBookBorderColors(theme) {
+    if (!orderBookChart) return;
+
+    const datasets = orderBookChart.data.datasets;
+    if (!datasets || datasets.length < 2) return;
+
+    const borderOpacity = theme === "dark" ? 0.8 : 0.5;
+
+    // Enhanced border colors for depletion visualization
+    datasets[0].borderColor =
+        theme === "dark"
+            ? `rgba(255, 120, 120, ${borderOpacity})`
+            : `rgba(255, 0, 0, ${borderOpacity})`;
+    datasets[1].borderColor =
+        theme === "dark"
+            ? `rgba(120, 255, 120, ${borderOpacity})`
+            : `rgba(0, 128, 0, ${borderOpacity})`;
 }
 
 export function updateOrderBookBarColors(theme) {
@@ -886,15 +992,67 @@ export function updateOrderBookBarColors(theme) {
     datasets[1].backgroundColor = bidColors; // Bids
 
     // Update border colors for better definition in dark mode
-    const borderOpacity = theme === "dark" ? 0.8 : 0.5;
-    datasets[0].borderColor =
-        theme === "dark"
-            ? `rgba(255, 120, 120, ${borderOpacity})`
-            : `rgba(255, 0, 0, ${borderOpacity})`;
-    datasets[1].borderColor =
-        theme === "dark"
-            ? `rgba(120, 255, 120, ${borderOpacity})`
-            : `rgba(0, 128, 0, ${borderOpacity})`;
+    updateOrderBookBorderColors(theme);
+}
+
+/**
+ * Validate depletion level data for current market conditions
+ * CLAUDE.md COMPLIANCE: Data validation and error handling
+ */
+function validateDepletionLevel(level, midPrice, currentTime) {
+    // Check if level has basic required properties
+    if (!level || typeof level.price !== "number") {
+        console.warn("⚠️ Depletion validation: Invalid level data", level);
+        return false;
+    }
+
+    // Check price proximity to current market (within 2% of mid price)
+    const priceDeviation = Math.abs(level.price - midPrice) / midPrice;
+    if (priceDeviation > 0.02) {
+        console.warn(
+            `⚠️ Depletion validation: Price ${level.price.toFixed(4)} too far from mid price ${midPrice.toFixed(4)} (${(priceDeviation * 100).toFixed(2)}% deviation)`
+        );
+        return false;
+    }
+
+    // Check if depletion data exists and is reasonable
+    if (level.depletionRatio !== undefined) {
+        if (level.depletionRatio < 0 || level.depletionRatio > 1) {
+            console.warn(
+                `⚠️ Depletion validation: Invalid depletion ratio ${level.depletionRatio} for price ${level.price.toFixed(4)}`
+            );
+            return false;
+        }
+    }
+
+    // Check volume data consistency
+    const hasBidVolume = level.bid && level.bid > 0;
+    const hasAskVolume = level.ask && level.ask > 0;
+    const hasOriginalBidVolume =
+        level.originalBidVolume && level.originalBidVolume > 0;
+    const hasOriginalAskVolume =
+        level.originalAskVolume && level.originalAskVolume > 0;
+
+    // If we have depletion data, we should have both current and original volumes
+    if (level.depletionRatio > 0) {
+        if (!hasOriginalBidVolume && !hasOriginalAskVolume) {
+            console.warn(
+                `⚠️ Depletion validation: Missing original volume data for depleted level at ${level.price.toFixed(4)}`
+            );
+            return false;
+        }
+    }
+
+    // Check for data freshness (if timestamp available)
+    if (level.timestamp && currentTime - level.timestamp > 10 * 60 * 1000) {
+        // 10 minutes
+        console.warn(
+            `⚠️ Depletion validation: Stale data for price ${level.price.toFixed(4)} (${Math.round((currentTime - level.timestamp) / 60000)} minutes old)`
+        );
+        return false;
+    }
+
+    return true;
 }
 
 export function updateOrderBookDisplay(data) {
@@ -906,16 +1064,36 @@ export function updateOrderBookDisplay(data) {
     const askData = [];
     const bidData = [];
 
-    // Backend sends data already configured with proper binSize (1-tick) 
+    // Backend sends data already configured with proper binSize (1-tick)
     // Just display it directly without any local processing
     const priceLevels = data.priceLevels || [];
+    const currentTime = Date.now();
+    const midPrice = data.midPrice || 0;
+
+    // Validate and filter depletion data
+    const validLevels = [];
+    const invalidLevels = [];
+
+    priceLevels.forEach((level) => {
+        if (validateDepletionLevel(level, midPrice, currentTime)) {
+            validLevels.push(level);
+        } else {
+            invalidLevels.push(level);
+        }
+    });
+
+    // Log validation summary
+    if (invalidLevels.length > 0) {
+        console.log(
+            `📊 Depletion validation: ${validLevels.length} valid, ${invalidLevels.length} invalid levels filtered`
+        );
+    }
 
     // Select levels symmetrically around mid price for balanced display
     const maxLevels = 50; // Show more levels since we have 1-tick precision
-    const midPrice = data.midPrice || 0;
 
     // Sort levels by price
-    const sortedLevels = priceLevels.sort((a, b) => a.price - b.price);
+    const sortedLevels = validLevels.sort((a, b) => a.price - b.price);
 
     // Find the index closest to midPrice
     let midIndex = 0;
@@ -934,30 +1112,70 @@ export function updateOrderBookDisplay(data) {
     const endIndex = Math.min(sortedLevels.length, startIndex + maxLevels);
     const displayLevels = sortedLevels.slice(startIndex, endIndex);
 
-    // Build chart data
+    // Get current theme for depletion colors
+    const currentTheme = getCurrentTheme();
+    const actualTheme =
+        currentTheme === "system" ? getSystemTheme() : currentTheme;
+
+    // Build chart data with depletion information
+    const askColors = [];
+    const bidColors = [];
+    const depletionLabels = [];
+
     displayLevels.forEach((level) => {
         const priceStr = level.price.toFixed(2);
+        const depletionRatio = level.depletionRatio || 0;
+        const depletionVelocity = level.depletionVelocity || 0;
+
+        // Create depletion-aware colors for ask bars
+        const askColor = getDepletionColor(
+            level.ask || 0,
+            depletionRatio,
+            "ask",
+            actualTheme
+        );
+        const bidColor = getDepletionColor(
+            level.bid || 0,
+            depletionRatio,
+            "bid",
+            actualTheme
+        );
 
         // Add ask position
         labels.push(`${priceStr}_ask`);
         askData.push(level.ask || 0);
         bidData.push(null);
+        askColors.push(askColor);
+        bidColors.push("rgba(0, 0, 0, 0)"); // Transparent for ask position
+
+        // Add depletion info to tooltip
+        const depletionInfo =
+            depletionRatio > 0
+                ? ` (${(depletionRatio * 100).toFixed(1)}% depleted, ${depletionVelocity.toFixed(1)} LTC/sec)`
+                : "";
+        depletionLabels.push(`${priceStr}_ask${depletionInfo}`);
 
         // Add bid position
         labels.push(`${priceStr}_bid`);
         askData.push(null);
         bidData.push(level.bid || 0);
+        askColors.push("rgba(0, 0, 0, 0)"); // Transparent for bid position
+        bidColors.push(bidColor);
+
+        // Add depletion info to tooltip
+        depletionLabels.push(`${priceStr}_bid${depletionInfo}`);
     });
 
-    orderBookChart.data.labels = labels;
+    orderBookChart.data.labels = depletionLabels; // Use labels with depletion info
     orderBookChart.data.datasets[0].data = askData;
     orderBookChart.data.datasets[1].data = bidData;
 
-    // Update colors based on theme
-    const currentTheme = getCurrentTheme();
-    const actualTheme =
-        currentTheme === "system" ? getSystemTheme() : currentTheme;
-    updateOrderBookBarColors(actualTheme);
+    // Apply depletion-aware colors
+    orderBookChart.data.datasets[0].backgroundColor = askColors;
+    orderBookChart.data.datasets[1].backgroundColor = bidColors;
+
+    // Update border colors for better visibility
+    updateOrderBookBorderColors(actualTheme);
 
     scheduleOrderBookUpdate();
 }
@@ -1121,8 +1339,7 @@ function removeSupportResistanceLevel(levelId) {
 function showSupportResistanceTooltip(level, event) {
     const tooltip = document.createElement("div");
     tooltip.className = "sr-tooltip";
-    tooltip.innerHTML =
-        `
+    tooltip.innerHTML = `
         <div><strong>${level.type.toUpperCase()}: ${level.price.toFixed(2)}</strong></div>
         <div>Strength: ${(level.strength * 100).toFixed(1)}%</div>
         <div>Touches: ${level.touchCount}</div>
@@ -1666,8 +1883,7 @@ function showZoneTooltip(zone, event) {
         tooltipContent += `<div>Center: ${zone.priceRange.center.toFixed(4)}</div>`;
     }
 
-    tooltipContent +=
-        `
+    tooltipContent += `
         <div>Strength: ${(zone.strength * 100).toFixed(1)}%</div>
         <div>Completion: ${(zone.completion * 100).toFixed(1)}%</div>`;
 

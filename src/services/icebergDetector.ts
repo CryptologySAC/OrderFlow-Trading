@@ -713,10 +713,11 @@ export class SimpleIcebergDetector extends Detector {
 
         return relevantPatterns.map((pattern) => {
             const prices = pattern.trades.map((t) => t.price);
+            const firstPrice = prices.length > 0 ? prices[0] : 0;
             return {
                 id: pattern.id,
                 side: pattern.side,
-                price: prices.length > 0 ? prices[0]! : 0, // Use first trade price for all pattern types
+                price: firstPrice ?? 0, // Use first trade price for all pattern types
                 pieces: pattern.trades.map((t) => ({
                     size: t.size,
                     timestamp: t.timestamp,

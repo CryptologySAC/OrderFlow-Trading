@@ -35,13 +35,15 @@ export class TradeWebSocket {
         this.ws.onopen = () => {
             console.log("WebSocket connected:", this.url);
             this.reconnectAttempts = 0;
-            this.ws.send(
-                JSON.stringify({
+
+            // Small delay to ensure connection is stable, then send backlog request
+            setTimeout(() => {
+                this.sendMessage({
                     type: "backlog",
                     data: { amount: this.maxTrades },
-                })
-            );
-            this.startPing();
+                });
+                this.startPing();
+            }, 50);
         };
 
         this.ws.onmessage = (event) => {
@@ -67,6 +69,7 @@ export class TradeWebSocket {
 
         this.ws.onerror = (error) => {
             console.error("WebSocket error:", error);
+            this.stopPing();
         };
 
         this.ws.onclose = () => {
@@ -91,8 +94,7 @@ export class TradeWebSocket {
 
     startPing() {
         this.pingInterval = setInterval(() => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ type: "ping" }));
+            if (this.sendMessage({ type: "ping" })) {
                 this.startPongTimeout();
             }
         }, this.pingIntervalTime);
@@ -120,5 +122,24 @@ export class TradeWebSocket {
     disconnect() {
         this.stopPing();
         if (this.ws) this.ws.close();
+    }
+
+    // Safe send method that checks connection state
+    sendMessage(message) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            try {
+                this.ws.send(JSON.stringify(message));
+                return true;
+            } catch (error) {
+                console.error("Error sending WebSocket message:", error);
+                return false;
+            }
+        } else {
+            console.warn(
+                "WebSocket not ready for sending:",
+                this.ws ? this.ws.readyState : "no connection"
+            );
+            return false;
+        }
     }
 }

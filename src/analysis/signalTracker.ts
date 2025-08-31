@@ -176,7 +176,7 @@ export interface SignalTrackerConfig {
 export class SignalTracker extends EventEmitter {
     private readonly config: Required<SignalTrackerConfig>;
     private readonly activeSignals = new Map<string, SignalOutcome>();
-    private readonly completedSignals: SignalOutcome[] = [];
+    private completedSignals: SignalOutcome[] = [];
     private readonly maxCompletedSignals = 10000; // Keep last 10k completed signals in memory
 
     private readonly priceUpdateInterval?: NodeJS.Timeout;
@@ -791,12 +791,11 @@ export class SignalTracker extends EventEmitter {
         let removedCount = 0;
 
         // Remove old completed signals
-        for (let i = this.completedSignals.length - 1; i >= 0; i--) {
-            if (this.completedSignals[i]!.entryTime < cutoffTime) {
-                this.completedSignals.splice(i, 1);
-                removedCount++;
-            }
-        }
+        const originalLength = this.completedSignals.length;
+        this.completedSignals = this.completedSignals.filter(
+            (signal) => signal.entryTime >= cutoffTime
+        );
+        removedCount = originalLength - this.completedSignals.length;
 
         if (removedCount > 0) {
             this.logger.debug("Cleaned up old signal outcomes", {

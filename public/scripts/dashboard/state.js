@@ -1,5 +1,5 @@
 // Constants
-export const TRADE_WEBSOCKET_URL = "ws://localhost:3001";
+export const TRADE_WEBSOCKET_URL = "wss://api.cryptology.pe/ltcusdt_trades";
 export const MAX_TRADES = 50000;
 export const MAX_RECONNECT_ATTEMPTS = 10;
 export const RECONNECT_DELAY_MS = 1000;

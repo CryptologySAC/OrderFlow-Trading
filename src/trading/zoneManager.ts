@@ -14,7 +14,7 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 
 export class ZoneManager extends EventEmitter {
     private readonly activeZones = new Map<string, TradingZone>();
-    private readonly completedZones: TradingZone[] = [];
+    private completedZones: TradingZone[] = [];
     private readonly zoneHistory = new Map<string, TradingZone[]>();
 
     // Zone configuration - uses universal zone config
@@ -667,7 +667,9 @@ export class ZoneManager extends EventEmitter {
         if (this.completedZones.length > maxCompletedZones) {
             // Keep only the most recent zones
             const toRemove = this.completedZones.length - maxCompletedZones;
-            this.completedZones.splice(0, toRemove);
+            this.completedZones = this.completedZones.filter(
+                (_, index) => index >= toRemove
+            );
 
             this.logger.info(
                 "ZoneManager cleanup: removed old completed zones",

@@ -184,10 +184,10 @@ export class MarketDataStorageService {
             const depthSnapshot: DepthSnapshot = {
                 timestamp: timestamp || Date.now(),
                 bids: bids
-                    .slice(0, this.config.depthLevels)
+                    .filter((_, index) => index < this.config.depthLevels)
                     .map((level) => [+level.price, +level.quantity]),
                 asks: asks
-                    .slice(0, this.config.depthLevels)
+                    .filter((_, index) => index < this.config.depthLevels)
                     .map((level) => [+level.price, +level.quantity]),
             };
 

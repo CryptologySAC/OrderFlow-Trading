@@ -1018,13 +1018,13 @@ export class Storage implements IStorage {
                 typeof info.changes === "number" ? info.changes : 0;
 
             this.logger.info("RSI data purged", {
-                cutOffTime: validatedCutOff,
                 deletedCount,
+                cutOffTime: validatedCutOff,
             });
 
             return deletedCount;
         } catch (error) {
-            this.logger.error("Error purging RSI data", {
+            this.logger.error("Error purging old RSI data", {
                 error,
                 cutOffTime,
             });
@@ -1033,7 +1033,7 @@ export class Storage implements IStorage {
     }
 
     /**
-     * Clear all RSI data
+     * Clear all RSI data (used on app restart)
      */
     public clearAllRSIData(): number {
         try {
@@ -1041,7 +1041,7 @@ export class Storage implements IStorage {
             const deletedCount =
                 typeof info.changes === "number" ? info.changes : 0;
 
-            this.logger.info("All RSI data cleared", {
+            this.logger.info("All RSI data cleared on app restart", {
                 deletedCount,
             });
 

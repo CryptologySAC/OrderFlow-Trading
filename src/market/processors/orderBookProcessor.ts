@@ -32,6 +32,11 @@ interface PriceLevel {
     ask: number;
     bidCount?: number; // Number of orders in this bin
     askCount?: number; // Number of orders in this bin
+    // Depletion tracking fields
+    depletionRatio?: number; // 0-1, how much of original volume is depleted
+    depletionVelocity?: number; // LTC/sec depletion rate
+    originalBidVolume?: number; // Original bid volume before depletion
+    originalAskVolume?: number; // Original ask volume before depletion
 }
 
 interface BinConfig {
@@ -39,6 +44,19 @@ interface BinConfig {
     maxPrice: number;
     binSize: number;
     numLevels: number;
+}
+
+interface DepletionMeasurement {
+    volume: number;
+    timestamp: number;
+}
+
+interface DepletionMetrics {
+    depletionRatio: number; // 0-1
+    depletionVelocity: number; // units/sec
+    originalVolume: number;
+    currentVolume: number;
+    lastUpdate: number;
 }
 
 export interface ProcessorHealth {
@@ -85,8 +103,17 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
     // Performance tracking
     private readonly processingTimes: CircularBuffer<number>;
-    private readonly errorWindow: number[] = [];
+    private errorWindow: number[] = [];
     private readonly maxErrorRate = 10; // per minute
+
+    // Depletion tracking state
+    private readonly volumeHistory = new Map<
+        number,
+        CircularBuffer<DepletionMeasurement>
+    >();
+    private readonly depletionCache = new Map<number, DepletionMetrics>();
+    private readonly maxHistorySize = 50; // Keep last 50 measurements per price level
+    private readonly depletionThreshold = 0.05; // Minimum volume change to track
 
     constructor(
         config: OrderBookProcessorOptions = {},
@@ -112,6 +139,11 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             }
         );
         this.processingTimes = new CircularBuffer<number>(1000);
+
+        // Add cleanup interval for stale depletion data
+        setInterval(() => {
+            this.cleanupStaleDepletionData();
+        }, 300000); // 5-minute cleanup interval
 
         this.logger.info("[OrderBookProcessor] Initialized", {
             binSize: this.binSize,
@@ -186,10 +218,62 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             binConfig
         );
 
+        // Convert to array and sort
+        const priceLevels = Array.from(binnedLevels.values()).sort(
+            (a, b) => a.price - b.price
+        );
+
+        // Track depletion for each price level
+        const timestamp = snapshot.timestamp;
+        this.updateDepletionCache(priceLevels, timestamp);
+
+        // Add depletion data to price levels with validation
+        const priceLevelsWithDepletion = priceLevels.map((level) => {
+            const bidDepletion = this.getDepletionData(level.price, false);
+            const askDepletion = this.getDepletionData(level.price, true);
+
+            // Validate depletion data is current and relevant
+            const isValidDepletionData = this.validateDepletionData(
+                bidDepletion,
+                askDepletion,
+                level,
+                snapshot.midPrice
+            );
+
+            if (!isValidDepletionData) {
+                // Return level without depletion data if validation fails
+                return {
+                    ...level,
+                    depletionRatio: 0,
+                    depletionVelocity: 0,
+                    originalBidVolume: level.bid,
+                    originalAskVolume: level.ask,
+                };
+            }
+
+            return {
+                ...level,
+                depletionRatio:
+                    bidDepletion?.depletionRatio ||
+                    askDepletion?.depletionRatio ||
+                    0,
+                depletionVelocity:
+                    bidDepletion?.depletionVelocity ||
+                    askDepletion?.depletionVelocity ||
+                    0,
+                originalBidVolume: bidDepletion?.originalVolume || level.bid,
+                originalAskVolume: askDepletion?.originalVolume || level.ask,
+            };
+        });
+
+        // Periodic cleanup of old depletion data
+        if (this.processedCount % 1000n === 0n) {
+            // Every 1000 updates
+            this.cleanupDepletionData();
+        }
+
         return {
-            priceLevels: Array.from(binnedLevels.values()).sort(
-                (a, b) => a.price - b.price
-            ),
+            priceLevels: priceLevelsWithDepletion,
             bestBid: snapshot.bestBid,
             bestAsk: snapshot.bestAsk,
             spread: snapshot.spread,
@@ -365,10 +449,9 @@ export class OrderBookProcessor implements IOrderBookProcessor {
 
         // Clean old errors
         const cutoff = Date.now() - 60000;
-        const firstRecent = this.errorWindow.findIndex((t) => t > cutoff);
-        if (firstRecent > 0) {
-            this.errorWindow.splice(0, firstRecent);
-        }
+        this.errorWindow = this.errorWindow.filter(
+            (timestamp) => timestamp > cutoff
+        );
 
         this.logger.error("[OrderBookProcessor] Processing error", {
             error: error.message,
@@ -446,6 +529,43 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     }
 
     /**
+     * Track volume changes for depletion calculation
+     */
+    private trackVolumeChange(
+        price: number,
+        currentVolume: number,
+        timestamp: number
+    ): void {
+        // Get or create history buffer for this price level
+        let history = this.volumeHistory.get(price);
+        if (!history) {
+            history = new CircularBuffer<DepletionMeasurement>(
+                this.maxHistorySize
+            );
+            this.volumeHistory.set(price, history);
+        }
+
+        // Only track significant volume changes
+        const lastMeasurement = history.at(history.length - 1);
+        if (lastMeasurement) {
+            const volumeChange = Math.abs(
+                currentVolume - lastMeasurement.volume
+            );
+            const changeRatio = volumeChange / lastMeasurement.volume;
+
+            if (changeRatio < this.depletionThreshold) {
+                return; // Change too small to track
+            }
+        }
+
+        // Add new measurement
+        history.add({
+            volume: currentVolume,
+            timestamp: timestamp,
+        });
+    }
+
+    /**
      * Get binning configuration (for monitoring/debugging)
      */
     public getBinConfig(): {
@@ -462,5 +582,268 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             precision: this.precision,
             binIncrement: this.tickSize * this.binSize,
         };
+    }
+
+    /**
+     * Calculate depletion metrics for a price level
+     */
+    private calculateDepletionMetrics(
+        price: number,
+        currentVolume: number,
+        timestamp: number
+    ): DepletionMetrics | null {
+        const history = this.volumeHistory.get(price);
+        if (!history || history.length < 2) {
+            // Not enough history to calculate depletion
+            return null;
+        }
+
+        const measurements = history.getAll();
+        if (measurements.length === 0) {
+            return null;
+        }
+
+        const firstMeasurement = measurements[0];
+        if (!firstMeasurement) {
+            return null;
+        }
+
+        const originalVolume = firstMeasurement.volume;
+        const timeSpan = timestamp - firstMeasurement.timestamp;
+
+        if (timeSpan === 0 || originalVolume === 0) {
+            return null;
+        }
+
+        // Calculate depletion ratio (0-1, where 1 = fully depleted)
+        const depletionRatio = Math.max(
+            0,
+            Math.min(1, 1 - currentVolume / originalVolume)
+        );
+
+        // Calculate depletion velocity (units per second)
+        const depletionVelocity =
+            (originalVolume - currentVolume) / (timeSpan / 1000);
+
+        return {
+            depletionRatio,
+            depletionVelocity,
+            originalVolume,
+            currentVolume,
+            lastUpdate: timestamp,
+        };
+    }
+
+    /**
+     * Update depletion cache for all price levels
+     */
+    private updateDepletionCache(
+        priceLevels: PriceLevel[],
+        timestamp: number
+    ): void {
+        for (const level of priceLevels) {
+            // Track bid volume changes
+            if (level.bid > 0) {
+                this.trackVolumeChange(level.price, level.bid, timestamp);
+                const bidMetrics = this.calculateDepletionMetrics(
+                    level.price,
+                    level.bid,
+                    timestamp
+                );
+                if (bidMetrics) {
+                    this.depletionCache.set(level.price, bidMetrics);
+                }
+            }
+
+            // Track ask volume changes
+            if (level.ask > 0) {
+                const askPrice = level.price + this.tickSize; // Use actual tick size for ask prices
+                this.trackVolumeChange(askPrice, level.ask, timestamp);
+                const askMetrics = this.calculateDepletionMetrics(
+                    askPrice,
+                    level.ask,
+                    timestamp
+                );
+                if (askMetrics) {
+                    this.depletionCache.set(askPrice, askMetrics);
+                }
+            }
+        }
+    }
+
+    /**
+     * Get depletion data for a specific price level with proximity matching
+     * CLAUDE.md COMPLIANCE: Returns null when data cannot be retrieved
+     */
+    private getDepletionData(
+        price: number,
+        isAsk: boolean = false
+    ): DepletionMetrics | null {
+        const lookupPrice = isAsk ? price + this.tickSize : price;
+
+        // First try exact match
+        const exactMatch = this.depletionCache.get(lookupPrice);
+        if (exactMatch) {
+            return exactMatch;
+        }
+
+        // If no exact match, find closest active price level within tick range
+        // This handles cases where price levels shift slightly due to market movement
+        const maxDistance = this.tickSize * 2; // Within 2 ticks
+        let closestPrice: number | null = null;
+        let minDistance = Infinity;
+
+        for (const [cachedPrice] of this.depletionCache) {
+            const distance = Math.abs(cachedPrice - lookupPrice);
+            if (distance <= maxDistance && distance < minDistance) {
+                minDistance = distance;
+                closestPrice = cachedPrice;
+            }
+        }
+
+        return closestPrice
+            ? this.depletionCache.get(closestPrice) || null
+            : null;
+    }
+
+    /**
+     * Validate depletion data for current market conditions
+     * CLAUDE.md COMPLIANCE: Data validation and error handling
+     */
+    private validateDepletionData(
+        bidDepletion: DepletionMetrics | null,
+        askDepletion: DepletionMetrics | null,
+        level: PriceLevel,
+        midPrice: number
+    ): boolean {
+        // Check if we have any depletion data
+        if (!bidDepletion && !askDepletion) {
+            return false; // No depletion data available
+        }
+
+        // Check price proximity to current market (within 1% of mid price)
+        const priceDeviation = Math.abs(level.price - midPrice) / midPrice;
+        if (priceDeviation > 0.01) {
+            // More than 1% deviation
+            return false; // Price level too far from current market
+        }
+
+        // Check data freshness (within last 10 minutes)
+        const maxAge = 10 * 60 * 1000; // 10 minutes
+        const now = Date.now();
+
+        if (bidDepletion && now - bidDepletion.lastUpdate > maxAge) {
+            return false; // Bid data too old
+        }
+
+        if (askDepletion && now - askDepletion.lastUpdate > maxAge) {
+            return false; // Ask data too old
+        }
+
+        // Check data consistency (both sides should have reasonable volumes)
+        const hasBidData = bidDepletion && bidDepletion.originalVolume > 0;
+        const hasAskData = askDepletion && askDepletion.originalVolume > 0;
+
+        // At least one side should have valid data
+        if (!hasBidData && !hasAskData) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Clean up old depletion data periodically
+     * CLAUDE.md COMPLIANCE: Memory management and performance optimization
+     */
+    private cleanupDepletionData(): void {
+        const cutoffTime = Date.now() - 5 * 60 * 1000; // 5 minutes ago
+        const pricesToRemove: number[] = [];
+
+        // Find expired entries based on time
+        for (const [price, metrics] of this.depletionCache) {
+            if (metrics.lastUpdate < cutoffTime) {
+                pricesToRemove.push(price);
+            }
+        }
+
+        // Remove expired entries
+        for (const price of pricesToRemove) {
+            this.depletionCache.delete(price);
+            this.volumeHistory.delete(price);
+        }
+
+        // Additional cleanup: Remove entries with very low volume (likely stale)
+        const lowVolumeThreshold = 1.0; // LTC units
+        const additionalRemovals: number[] = [];
+
+        for (const [price, metrics] of this.depletionCache) {
+            if (metrics.currentVolume < lowVolumeThreshold) {
+                additionalRemovals.push(price);
+            }
+        }
+
+        for (const price of additionalRemovals) {
+            this.depletionCache.delete(price);
+            this.volumeHistory.delete(price);
+            pricesToRemove.push(price);
+        }
+
+        if (pricesToRemove.length > 0) {
+            this.logger.debug(
+                `[OrderBookProcessor] Cleaned up ${pricesToRemove.length} stale depletion entries`
+            );
+        }
+    }
+
+    /**
+     * Clean up stale depletion data - called by interval timer
+     * CLAUDE.md COMPLIANCE: Memory management and performance optimization
+     */
+    private cleanupStaleDepletionData(): void {
+        const cutoffTime = Date.now() - 10 * 60 * 1000; // 10 minutes ago (more aggressive cleanup)
+        const pricesToRemove: number[] = [];
+
+        // Find stale entries based on extended time window
+        for (const [price, metrics] of this.depletionCache) {
+            if (metrics.lastUpdate < cutoffTime) {
+                pricesToRemove.push(price);
+            }
+        }
+
+        // Also clean up volume history for stale entries
+        for (const [price, history] of this.volumeHistory) {
+            if (history.length > 0) {
+                const lastMeasurement = history.at(history.length - 1);
+                if (lastMeasurement && lastMeasurement.timestamp < cutoffTime) {
+                    pricesToRemove.push(price);
+                }
+            }
+        }
+
+        // Remove stale entries
+        for (const price of pricesToRemove) {
+            this.depletionCache.delete(price);
+            this.volumeHistory.delete(price);
+        }
+
+        // Clean up empty history buffers
+        const emptyHistories: number[] = [];
+        for (const [price, history] of this.volumeHistory) {
+            if (history.length === 0) {
+                emptyHistories.push(price);
+            }
+        }
+
+        for (const price of emptyHistories) {
+            this.volumeHistory.delete(price);
+        }
+
+        const totalCleaned = pricesToRemove.length + emptyHistories.length;
+        if (totalCleaned > 0) {
+            this.logger.info(
+                `[OrderBookProcessor] Aggressive cleanup: ${totalCleaned} stale entries removed (${pricesToRemove.length} cache, ${emptyHistories.length} empty histories)`
+            );
+        }
     }
 }

@@ -103,7 +103,7 @@ export class CircularBuffer<T> implements Iterable<T> {
                 }
             }
         }
-        this.buffer.splice(0, this.buffer.length);
+        this.buffer.length = 0; // Clear the buffer efficiently
         this.size = 0;
         this.head = 0;
         this.tail = 0;

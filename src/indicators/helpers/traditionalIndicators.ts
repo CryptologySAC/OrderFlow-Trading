@@ -92,6 +92,10 @@ export class TraditionalIndicators {
     private lastRSIUpdate = 0;
     private lastOIRUpdate = 0;
 
+    // RSI calculation state for Wilder's smoothing
+    private rsiAvgGain: number | null = null;
+    private rsiAvgLoss: number | null = null;
+
     constructor(
         private readonly config: TraditionalIndicatorsConfig,
         private readonly logger: ILogger
@@ -480,17 +484,20 @@ export class TraditionalIndicators {
 
     private calculateRSI(): number | null {
         const data = this.rsiWindow.toArray();
-        if (data.length < this.config.rsi.period) return null;
+        if (data.length < this.config.rsi.period) {
+            // Reset running averages when we don't have enough data
+            this.rsiAvgGain = null;
+            this.rsiAvgLoss = null;
+            return null;
+        }
 
-        // Use Wilder's smoothing (exponential moving average)
         const period = this.config.rsi.period;
-        const smoothingFactor = 1 / period;
+        const currentGain = data[data.length - 1]!.gain;
+        const currentLoss = data[data.length - 1]!.loss;
 
-        let avgGain: number;
-        let avgLoss: number;
-
-        // Initial calculation using simple average for the first period
-        if (data.length === period) {
+        // Use Wilder's smoothing with running averages
+        if (this.rsiAvgGain === null || this.rsiAvgLoss === null) {
+            // First calculation - use simple average
             let totalGains = 0;
             let totalLosses = 0;
 
@@ -499,50 +506,42 @@ export class TraditionalIndicators {
                 totalLosses = FinancialMath.safeAdd(totalLosses, item.loss);
             }
 
-            avgGain = FinancialMath.divideQuantities(totalGains, period);
-            avgLoss = FinancialMath.divideQuantities(totalLosses, period);
+            this.rsiAvgGain = FinancialMath.divideQuantities(
+                totalGains,
+                period
+            );
+            this.rsiAvgLoss = FinancialMath.divideQuantities(
+                totalLosses,
+                period
+            );
         } else {
-            // Use previous averages for EMA calculation
-            const prevData = data.slice(0, -1);
-            const prevAvgGain = this.calculateSimpleAverage(
-                prevData.map((item) => item.gain)
+            // Update running averages using Wilder's smoothing
+            this.rsiAvgGain = FinancialMath.safeAdd(
+                FinancialMath.multiplyQuantities(this.rsiAvgGain, period - 1),
+                currentGain
             );
-            const prevAvgLoss = this.calculateSimpleAverage(
-                prevData.map((item) => item.loss)
+            this.rsiAvgGain = FinancialMath.divideQuantities(
+                this.rsiAvgGain,
+                period
             );
 
-            const currentGain = data[data.length - 1]!.gain;
-            const currentLoss = data[data.length - 1]!.loss;
-
-            avgGain = FinancialMath.safeAdd(
-                FinancialMath.multiplyQuantities(
-                    prevAvgGain,
-                    1 - smoothingFactor
-                ),
-                FinancialMath.multiplyQuantities(currentGain, smoothingFactor)
+            this.rsiAvgLoss = FinancialMath.safeAdd(
+                FinancialMath.multiplyQuantities(this.rsiAvgLoss, period - 1),
+                currentLoss
             );
-            avgLoss = FinancialMath.safeAdd(
-                FinancialMath.multiplyQuantities(
-                    prevAvgLoss,
-                    1 - smoothingFactor
-                ),
-                FinancialMath.multiplyQuantities(currentLoss, smoothingFactor)
+            this.rsiAvgLoss = FinancialMath.divideQuantities(
+                this.rsiAvgLoss,
+                period
             );
         }
 
-        if (avgLoss === 0) return avgGain > 0 ? 100 : 50;
+        if (this.rsiAvgLoss === 0) return this.rsiAvgGain > 0 ? 100 : 50;
 
-        const rs = FinancialMath.divideQuantities(avgGain, avgLoss);
+        const rs = FinancialMath.divideQuantities(
+            this.rsiAvgGain,
+            this.rsiAvgLoss
+        );
         return 100 - 100 / (1 + rs);
-    }
-
-    private calculateSimpleAverage(values: number[]): number {
-        if (values.length === 0) return 0;
-        let sum = 0;
-        for (const value of values) {
-            sum = FinancialMath.safeAdd(sum, value);
-        }
-        return FinancialMath.divideQuantities(sum, values.length);
     }
 
     private validateRSI(
@@ -1034,6 +1033,10 @@ export class TraditionalIndicators {
         this.lastVWAPUpdate = 0;
         this.lastRSIUpdate = 0;
         this.lastOIRUpdate = 0;
+
+        // Reset RSI running averages
+        this.rsiAvgGain = null;
+        this.rsiAvgLoss = null;
 
         this.logger.info("Traditional indicators reset");
     }

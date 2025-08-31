@@ -20,6 +20,15 @@ export abstract class Detector extends EventEmitter {
     protected readonly id: string;
     protected readonly traditionalIndicators?: TraditionalIndicators;
 
+    // Performance monitoring
+    protected readonly performanceMetrics = {
+        lastProcessingTime: 0,
+        averageProcessingTime: 0,
+        totalProcessed: 0,
+        maxProcessingTime: 0,
+        slowOperationsCount: 0,
+    };
+
     constructor(
         id: string,
         logger: ILogger,
@@ -57,6 +66,62 @@ export abstract class Detector extends EventEmitter {
         zone: number,
         side: "buy" | "sell"
     ): void;
+
+    /**
+     * Performance monitoring helper for detector operations
+     */
+    protected measurePerformance<T>(
+        operation: () => T,
+        operationName?: string
+    ): T {
+        const start = process.hrtime.bigint();
+        try {
+            return operation();
+        } finally {
+            const end = process.hrtime.bigint();
+            const duration = Number(end - start) / 1_000_000; // Convert to milliseconds (1e6)
+
+            this.performanceMetrics.lastProcessingTime = duration;
+            this.performanceMetrics.totalProcessed++;
+            this.performanceMetrics.averageProcessingTime =
+                (this.performanceMetrics.averageProcessingTime *
+                    (this.performanceMetrics.totalProcessed - 1) +
+                    duration) /
+                this.performanceMetrics.totalProcessed;
+            this.performanceMetrics.maxProcessingTime = Math.max(
+                this.performanceMetrics.maxProcessingTime,
+                duration
+            );
+
+            // Alert on performance degradation
+            if (duration > 100) {
+                // 100ms threshold
+                this.performanceMetrics.slowOperationsCount++;
+                this.logger?.warn?.("Slow detector operation detected", {
+                    component: this.constructor.name,
+                    operation: operationName || "unknown",
+                    duration,
+                    averageTime: this.performanceMetrics.averageProcessingTime,
+                    maxTime: this.performanceMetrics.maxProcessingTime,
+                    slowOperationsCount:
+                        this.performanceMetrics.slowOperationsCount,
+                });
+            }
+        }
+    }
+
+    /**
+     * Get performance metrics for monitoring
+     */
+    public getPerformanceMetrics(): {
+        lastProcessingTime: number;
+        averageProcessingTime: number;
+        totalProcessed: number;
+        maxProcessingTime: number;
+        slowOperationsCount: number;
+    } {
+        return { ...this.performanceMetrics };
+    }
 
     protected handleError(
         error: Error,

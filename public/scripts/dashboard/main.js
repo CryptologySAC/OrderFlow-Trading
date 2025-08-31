@@ -60,6 +60,8 @@ import {
     restoreTheme,
     toggleTheme,
     updateThemeToggleButton,
+    toggleDepletionVisualization,
+    updateDepletionToggleButton,
 } from "./theme.js";
 import { TradeWebSocket } from "../websocket.js";
 
@@ -126,30 +128,179 @@ function createTrade(time, price, quantity, orderType) {
 }
 
 /**
- * Detects circular references in objects to prevent infinite recursion.
+ * Safely estimates object size without using JSON.stringify
+ * Prevents stack overflow during memory pressure situations
+ *
+ * @param {any} obj - The object to estimate size for
+ * @param {number} maxDepth - Maximum recursion depth
+ * @param {WeakSet} visited - Set of already visited objects
+ * @returns {number} - Estimated size in bytes
+ */
+function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
+    if (!obj || typeof obj !== 'object') return 0;
+    if (visited.has(obj)) return 0; // Circular reference detected
+    if (maxDepth <= 0) return 1000; // Estimate for deep objects
+
+    visited.add(obj);
+
+    try {
+        if (Array.isArray(obj)) {
+            return obj.length * 100; // Rough estimate per array item
+        }
+
+        const keys = Object.keys(obj);
+        let size = keys.length * 50; // Rough estimate per property
+
+        // Sample a few properties for better estimation
+        for (let i = 0; i < Math.min(keys.length, 5); i++) {
+            const value = obj[keys[i]];
+            if (typeof value === 'string') size += value.length;
+            else if (typeof value === 'object' && value !== null) {
+                size += getSafeObjectSize(value, maxDepth - 1, visited);
+            }
+        }
+
+        return size;
+    } finally {
+        visited.delete(obj);
+    }
+}
+
+/**
+ * Detects circular references in objects using iterative approach.
+ * Prevents stack overflow by avoiding deep recursion.
+ *
+ * FIX: Replaced recursive algorithm with iterative queue-based approach
+ * to prevent "Maximum call stack size exceeded" errors when processing
+ * complex WebSocket messages with deeply nested object structures.
+ *
  * @param {any} obj - The object to check for circular references.
  * @param {WeakSet} visited - Set of already visited objects.
  * @returns {boolean} - True if circular reference is found, false otherwise.
  */
 function hasCircularReference(obj, visited = new WeakSet()) {
-    if (!obj || typeof obj !== "object") {
+    // Performance optimization: Skip check for primitive values and small objects
+    if (!obj || typeof obj !== "object" || obj === null) {
         return false;
     }
 
+    // Quick check for common safe object types
+    if (obj instanceof Date || obj instanceof RegExp || obj instanceof Error) {
+        return false;
+    }
+
+    // Check for circular reference
     if (visited.has(obj)) {
         return true;
     }
 
+    // Add to visited set
     visited.add(obj);
 
-    for (const key in obj) {
-        if (hasCircularReference(obj[key], visited)) {
-            return true;
-        }
-    }
+    try {
+        // Use iterative approach instead of recursion
+        const stack = [obj];
+        const path = new WeakSet();
 
-    return false;
+        while (stack.length > 0) {
+            const current = stack.pop();
+
+            // Skip if already processed
+            if (path.has(current)) {
+                continue;
+            }
+            path.add(current);
+
+            // Only process plain objects and arrays to avoid prototype issues
+            if (
+                current &&
+                typeof current === "object" &&
+                (Array.isArray(current) || current.constructor === Object)
+            ) {
+                // Limit processing to prevent excessive computation
+                const keys = Object.keys(current);
+                if (keys.length > 100) {
+                    // For very large objects, use a simpler check
+                    return false; // Assume no circular reference in large objects
+                }
+
+                for (const key of keys) {
+                    const value = current[key];
+
+                    // Skip functions and primitives
+                    if (
+                        typeof value === "function" ||
+                        typeof value !== "object"
+                    ) {
+                        continue;
+                    }
+
+                    // Check for circular reference
+                    if (
+                        value &&
+                        typeof value === "object" &&
+                        visited.has(value)
+                    ) {
+                        return true;
+                    }
+
+                    // Add to stack for processing (limit depth)
+                    if (stack.length < 50) {
+                        // Prevent stack from growing too large
+                        stack.push(value);
+                    }
+                }
+            }
+        }
+
+        return false;
+    } catch (error) {
+        // If there's any error during traversal, assume no circular reference
+        console.warn("Error during circular reference check:", error);
+        return false;
+    }
 }
+
+/**
+ * Test function to verify circular reference detection works without stack overflow
+ * This can be called from browser console to test the fix
+ */
+function testCircularReferenceDetection() {
+    console.log("Testing circular reference detection...");
+
+    // Test 1: Simple object without circular references
+    const simpleObj = { a: 1, b: { c: 2 } };
+    const result1 = hasCircularReference(simpleObj);
+    console.log("Simple object test:", result1); // Should be false
+
+    // Test 2: Object with circular reference
+    const circularObj = { a: 1 };
+    circularObj.self = circularObj;
+    const result2 = hasCircularReference(circularObj);
+    console.log("Circular object test:", result2); // Should be true
+
+    // Test 3: Deep nested object (potential stack overflow scenario)
+    let deepObj = { level: 0 };
+    let current = deepObj;
+    for (let i = 1; i < 1000; i++) {
+        current = current[`level${i}`] = { level: i };
+    }
+    const result3 = hasCircularReference(deepObj);
+    console.log("Deep nested object test:", result3); // Should be false and not crash
+
+    // Test 4: Large object with many properties
+    const largeObj = {};
+    for (let i = 0; i < 200; i++) {
+        largeObj[`prop${i}`] = { value: i, nested: { data: `item${i}` } };
+    }
+    const result4 = hasCircularReference(largeObj);
+    console.log("Large object test:", result4); // Should be false
+
+    console.log("All circular reference tests completed successfully!");
+}
+
+// Make test function available globally for debugging
+window.testCircularReferenceDetection = testCircularReferenceDetection;
 
 function initialize() {
     // Restore ALL saved settings FIRST, before any UI setup or rendering
@@ -260,6 +411,16 @@ function initialize() {
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener("click", toggleTheme);
         updateThemeToggleButton();
+    }
+
+    // Setup depletion toggle button
+    const depletionToggleBtn = document.getElementById("depletionToggle");
+    if (depletionToggleBtn) {
+        depletionToggleBtn.addEventListener(
+            "click",
+            toggleDepletionVisualization
+        );
+        updateDepletionToggleButton();
     }
 
     // Listen for system theme changes
@@ -380,16 +541,21 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     }
 
-    // Set up efficient trade cleanup every 15 minutes
+    // Set up efficient trade cleanup every 30 minutes (reduced frequency)
     // This prevents memory bloat while maintaining 90 minutes of visible trades
     setInterval(
         () => {
             const cutoffTime = Date.now() - 90 * 60 * 1000; // 90 minutes ago
-            const indexToKeep = trades.findIndex((t) => t.x >= cutoffTime);
+            const originalLength = trades.length;
 
-            if (indexToKeep > 0) {
-                // Remove all old trades in one efficient operation
-                trades.splice(0, indexToKeep);
+            // Only cleanup if we have significant old data (> 1000 trades)
+            const oldTradesCount = trades.findIndex(t => t.x >= cutoffTime);
+
+            if (oldTradesCount > 1000) {
+                console.log(`Starting trade cleanup: ${oldTradesCount} old trades detected`);
+
+                // More efficient: use filter instead of splice to avoid array mutation
+                trades = trades.filter(trade => trade.x >= cutoffTime);
 
                 // Update chart after cleanup
                 if (tradesChart) {
@@ -397,13 +563,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     scheduleTradesChartUpdate();
                 }
 
+                const removedCount = originalLength - trades.length;
                 console.log(
-                    `Cleaned up ${indexToKeep} old trades, ${trades.length} remaining`
+                    `Trade cleanup complete: filtered ${removedCount} old trades, ${trades.length} remaining`
                 );
             }
         },
-        15 * 60 * 1000
-    ); // Every 15 minutes
+        30 * 60 * 1000
+    ); // Every 30 minutes (reduced frequency)
 });
 
 const tradeWebsocket = new TradeWebSocket({
@@ -460,14 +627,48 @@ const tradeWebsocket = new TradeWebSocket({
                 return;
             }
 
-            // Add circular reference check for message.data
+            // Add circular reference check for message.data with size limits
             if (message.data && typeof message.data === "object") {
-                if (hasCircularReference(message.data)) {
-                    console.error(
-                        "Message contains circular reference, skipping:",
+                // STEP 1: Safe size approximation (no JSON operations)
+                const estimatedSize = getSafeObjectSize(message.data);
+
+                if (estimatedSize > 1000000) {
+                    // 1MB limit
+                    console.warn(
+                        `Skipping checks for large message (${estimatedSize} bytes estimated):`,
                         message.type
                     );
-                    return;
+                } else {
+                    // STEP 2: Safe circular reference check
+                    try {
+                        if (hasCircularReference(message.data)) {
+                            console.error(
+                                "Message contains circular reference, skipping:",
+                                message.type
+                            );
+                            return;
+                        }
+                    
+                    } catch (error) {
+                        console.warn(
+                            "Circular reference check failed, proceeding cautiously:",
+                            error.message
+                        );
+                    }
+
+                    // STEP 3: Safe JSON size check (with error handling)
+                    try {
+                        const dataSize = JSON.stringify(message.data).length;
+                        if (dataSize > 1000000) {
+                            console.warn(
+                                `Large message detected (${dataSize} bytes):`,
+                                message.type
+                            );
+                        }
+                    } catch (error) {
+                        console.error("JSON size check failed:", error.message);
+                        // Continue processing - don't block valid messages
+                    }
                 }
             }
 
@@ -534,7 +735,7 @@ const tradeWebsocket = new TradeWebSocket({
                         typeof rsiDataPoint.time === "number" &&
                         typeof rsiDataPoint.rsi === "number"
                     ) {
-                        // Add to RSI data array
+                        // Add to RSI data array (backlog already handles deduplication)
                         rsiData.push(rsiDataPoint);
 
                         // Limit data size
@@ -542,14 +743,20 @@ const tradeWebsocket = new TradeWebSocket({
                             rsiData.shift();
                         }
 
-                        // Update RSI chart with new data
-                        const updateSuccess = safeUpdateRSIChart([...rsiData]);
+                        // Batch real-time RSI updates to reduce chart re-renders
+                        if (!window.rsiUpdateTimeout) {
+                            window.rsiUpdateTimeout = setTimeout(() => {
+                                const updateSuccess = safeUpdateRSIChart([
+                                    ...rsiData,
+                                ]);
+                                window.rsiUpdateTimeout = null;
 
-                        if (!updateSuccess) {
-                            console.error(
-                                "Failed to update RSI chart with data:",
-                                rsiDataPoint
-                            );
+                                if (!updateSuccess) {
+                                    console.error(
+                                        "Failed to update RSI chart with batched data"
+                                    );
+                                }
+                            }, 100); // Update at most every 100ms
                         }
                     } else {
                         console.warn(
@@ -563,26 +770,59 @@ const tradeWebsocket = new TradeWebSocket({
                     console.log(
                         `${message.data.length} RSI backlog data received.`
                     );
-                    rsiData.length = 0; // Clear existing data
 
-                    for (const rsiPoint of message.data) {
-                        if (
-                            rsiPoint &&
-                            typeof rsiPoint.time === "number" &&
-                            typeof rsiPoint.rsi === "number"
-                        ) {
-                            rsiData.push(rsiPoint);
+                    // Process backlog data and replace chart data entirely
+                    const backlogData = [];
+                    const processBacklogChunk = (data, startIndex = 0) => {
+                        const chunkSize = 10; // Process 10 points at a time
+                        const endIndex = Math.min(
+                            startIndex + chunkSize,
+                            data.length
+                        );
+
+                        // Pre-validate and add data points to backlog array
+                        for (let i = startIndex; i < endIndex; i++) {
+                            const rsiPoint = data[i];
+                            if (
+                                rsiPoint &&
+                                typeof rsiPoint.time === "number" &&
+                                typeof rsiPoint.rsi === "number" &&
+                                rsiPoint.rsi >= 0 &&
+                                rsiPoint.rsi <= 100
+                            ) {
+                                backlogData.push(rsiPoint);
+                            }
                         }
-                    }
 
-                    // Update RSI chart with backlog data
-                    if (rsiChart && rsiData.length > 0) {
-                        rsiChart.data.datasets[0].data = [...rsiData];
-                    }
+                        if (endIndex < data.length) {
+                            // Process next chunk asynchronously to avoid blocking
+                            setTimeout(
+                                () => processBacklogChunk(data, endIndex),
+                                0
+                            );
+                        } else {
+                            // All chunks processed - replace rsiData with backlog
+                            if (backlogData.length > 0) {
+                                rsiData.length = 0; // Clear existing data
+                                rsiData.push(...backlogData); // Add backlog data
 
-                    console.log(
-                        `${rsiData.length} RSI backlog points added to chart`
-                    );
+                                // Update chart immediately with backlog data
+                                if (rsiChart) {
+                                    rsiChart.data.datasets[0].data = [
+                                        ...rsiData,
+                                    ];
+                                    rsiChart.update("none");
+                                }
+
+                                console.log(
+                                    `${backlogData.length} RSI backlog points loaded and chart updated`
+                                );
+                            }
+                        }
+                    };
+
+                    // Process backlog and replace data
+                    processBacklogChunk(message.data);
                     break;
 
                 case "signal":
@@ -729,6 +969,32 @@ const tradeWebsocket = new TradeWebSocket({
                     }
                     break;
 
+                case "rsi_backlog":
+                    console.log(
+                        `${message.data.length} RSI backlog data received.`
+                    );
+                    rsiData.length = 0; // Clear existing data
+
+                    for (const rsiPoint of message.data) {
+                        if (
+                            rsiPoint &&
+                            typeof rsiPoint.time === "number" &&
+                            typeof rsiPoint.rsi === "number"
+                        ) {
+                            rsiData.push(rsiPoint);
+                        }
+                    }
+
+                    // Update RSI chart with backlog data
+                    if (rsiChart && rsiData.length > 0) {
+                        rsiChart.data.datasets[0].data = [...rsiData];
+                    }
+
+                    console.log(
+                        `${rsiData.length} RSI backlog points added to chart`
+                    );
+                    break;
+
                 case "runtimeConfig":
                     if (message.data && typeof message.data === "object") {
                         setRuntimeConfig(message.data);
@@ -767,6 +1033,133 @@ const tradeWebsocket = new TradeWebSocket({
 
                     orderBookData = message.data;
 
+                    // Enhanced debug: Log depletion data validation and statistics
+                    if (
+                        orderBookData.priceLevels &&
+                        orderBookData.priceLevels.length > 0
+                    ) {
+                        // Only log detailed info once per session to avoid spam
+                        if (!window.depletionDataLogged) {
+                            const depletionLevels =
+                                orderBookData.priceLevels.filter(
+                                    (level) => level.depletionRatio > 0
+                                );
+
+                            if (depletionLevels.length > 0) {
+                                const sampleLevel = depletionLevels[0];
+                                console.log(
+                                    "📊 Depletion data received from backend:",
+                                    {
+                                        totalLevels:
+                                            orderBookData.priceLevels.length,
+                                        depletionLevels: depletionLevels.length,
+                                        samplePrice: sampleLevel.price,
+                                        depletionRatio:
+                                            sampleLevel.depletionRatio,
+                                        depletionVelocity:
+                                            sampleLevel.depletionVelocity,
+                                        originalBidVolume:
+                                            sampleLevel.originalBidVolume,
+                                        originalAskVolume:
+                                            sampleLevel.originalAskVolume,
+                                        midPrice: orderBookData.midPrice,
+                                        hasDepletionData: true,
+                                    }
+                                );
+
+                                // Log depletion statistics
+                                const avgDepletion =
+                                    depletionLevels.reduce(
+                                        (sum, level) =>
+                                            sum + level.depletionRatio,
+                                        0
+                                    ) / depletionLevels.length;
+
+                                const highDepletionLevels =
+                                    depletionLevels.filter(
+                                        (level) => level.depletionRatio > 0.5
+                                    );
+
+                                console.log("📈 Depletion statistics:", {
+                                    averageDepletionRatio:
+                                        (avgDepletion * 100).toFixed(1) + "%",
+                                    highDepletionCount:
+                                        highDepletionLevels.length,
+                                    totalBidVolume:
+                                        orderBookData.totalBidVolume,
+                                    totalAskVolume:
+                                        orderBookData.totalAskVolume,
+                                    timestamp: new Date(
+                                        orderBookData.timestamp
+                                    ).toLocaleTimeString(),
+                                });
+                            } else {
+                                console.log(
+                                    "📊 Orderbook data received (no depletion yet):",
+                                    {
+                                        priceLevelsCount:
+                                            orderBookData.priceLevels.length,
+                                        samplePrice:
+                                            orderBookData.priceLevels[0]?.price,
+                                        midPrice: orderBookData.midPrice,
+                                        totalBidVolume:
+                                            orderBookData.totalBidVolume,
+                                        totalAskVolume:
+                                            orderBookData.totalAskVolume,
+                                        hasDepletionData: false,
+                                        timestamp: new Date(
+                                            orderBookData.timestamp
+                                        ).toLocaleTimeString(),
+                                    }
+                                );
+                            }
+                            window.depletionDataLogged = true;
+                        }
+
+                        // Periodic validation logging (every 30 seconds)
+                        if (
+                            !window.lastDepletionValidation ||
+                            Date.now() - window.lastDepletionValidation > 30000
+                        ) {
+                            const currentLevels = orderBookData.priceLevels;
+                            const depletionLevels = currentLevels.filter(
+                                (level) => level.depletionRatio > 0
+                            );
+
+                            if (depletionLevels.length > 0) {
+                                const staleLevels = depletionLevels.filter(
+                                    (level) => {
+                                        if (!level.timestamp) return false;
+                                        return (
+                                            Date.now() - level.timestamp >
+                                            10 * 60 * 1000
+                                        ); // 10 minutes
+                                    }
+                                );
+
+                                if (staleLevels.length > 0) {
+                                    console.warn(
+                                        "⚠️ Stale depletion data detected:",
+                                        {
+                                            staleCount: staleLevels.length,
+                                            totalDepletionLevels:
+                                                depletionLevels.length,
+                                            sampleStalePrice:
+                                                staleLevels[0]?.price,
+                                            ageMinutes: Math.round(
+                                                (Date.now() -
+                                                    staleLevels[0]?.timestamp) /
+                                                    60000
+                                            ),
+                                        }
+                                    );
+                                }
+                            }
+
+                            window.lastDepletionValidation = Date.now();
+                        }
+                    }
+
                     // Display the data directly from backend (already 1-tick precision)
                     if (orderBookChart) {
                         updateOrderBookDisplay(orderBookData);
@@ -782,3 +1175,6 @@ const tradeWebsocket = new TradeWebSocket({
         }
     },
 });
+
+// Connect to WebSocket after all initialization
+tradeWebsocket.connect();

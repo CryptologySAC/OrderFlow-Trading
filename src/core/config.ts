@@ -129,6 +129,7 @@ export const ExhaustionDetectorSchema = z.object({
     passiveRatioBalanceThreshold: z.number().min(0.3).max(0.99), // Replace hardcoded 0.5
     passiveRatioAnomalyStdDev: z.number().min(1.0).max(10.0),
     minPeakVolume: z.number().int().min(10).max(100000), // Optional: fallback to minAggVolume
+    extremeDepletionOverrideThreshold: z.number().min(0.8).max(1.0), // Threshold for extreme depletion override
 
     // Consumption validation to prevent spoofing false signals
     consumptionValidation: z.object({
@@ -300,7 +301,7 @@ export const TraditionalIndicatorsSchema = z.object({
     rsi: z.object({
         enabled: z.boolean(),
         period: z.number().int().min(5).max(50), // RSI calculation periods
-        timeframeMs: z.number().int().min(60000).max(3600000), // Per period timeframe
+        timeframeMs: z.number().int().min(30000).max(3600000), // Per period timeframe
         overboughtThreshold: z.number().min(60).max(90), // RSI overbought level
         oversoldThreshold: z.number().min(10).max(40), // RSI oversold level
         extremeOverbought: z.number().min(75).max(95), // Extreme overbought
@@ -499,7 +500,7 @@ const BasicSymbolConfigSchema = z
             marketVolatilityWeight: z.number().min(0.1).max(1.0),
             // RSI Dashboard Integration parameters
             rsiUpdateFrequency: z.number().int().min(1).max(100),
-            maxRsiBacklogSize: z.number().int().min(1000).max(100000),
+            maxRsiBacklogSize: z.number().int().min(100).max(20000),
             maxSignalBacklogAgeMinutes: z.number().int().min(10).max(480),
             // Detector priorities (to eliminate magic numbers)
             accumulationDetectorPriority: z.number().int().min(1).max(100),
