@@ -1037,16 +1037,266 @@ export class SpoofingDetector extends EventEmitter {
     }
 
     /**
-     * Example dynamic band width calculation.
-     * For now, just returns config.wallTicks; can use volatility, liquidity, etc.
+     * Dynamic wall width calculation based on recent market conditions.
+     * ✅ COMPLETED: Analyzes liquidity volatility, order book depth, cancellation intensity,
+     * and market activity to determine optimal wall detection sensitivity.
+     *
+     * Factors considered:
+     * - Liquidity volatility (higher = narrower walls)
+     * - Order book depth (deeper = wider walls)
+     * - Cancellation intensity (higher = narrower walls)
+     * - Market activity level (higher = slightly wider walls)
      */
-
     private getDynamicWallTicks(price: number, side: "buy" | "sell"): number {
-        // TODO: Use recent liquidity, volatility, or order book stats for adaptive width
-        void side;
-        void price;
-        // For now: just return wallTicks from config
-        return this.config.wallTicks;
+        const baseTicks = this.config.wallTicks;
+        let dynamicMultiplier = 1.0;
+
+        try {
+            // Factor 1: Liquidity Volatility Analysis
+            const liquidityVolatility = this.calculateLiquidityVolatility(
+                price,
+                side
+            );
+            if (liquidityVolatility > 0) {
+                // Higher volatility = narrower walls (more sensitive detection)
+                dynamicMultiplier *= Math.max(
+                    0.5,
+                    1.0 - liquidityVolatility * 0.5
+                );
+            }
+
+            // Factor 2: Order Book Depth Analysis
+            const depthRatio = this.calculateOrderBookDepth(price, side);
+            if (depthRatio > 0) {
+                // Deeper order book = wider walls (less sensitive to small changes)
+                dynamicMultiplier *= Math.min(2.0, 1.0 + depthRatio * 0.5);
+            }
+
+            // Factor 3: Recent Cancellation Activity
+            const cancellationIntensity = this.calculateCancellationIntensity(
+                price,
+                side
+            );
+            if (cancellationIntensity > 0) {
+                // Higher cancellation activity = narrower walls (more alert to spoofing)
+                dynamicMultiplier *= Math.max(
+                    0.3,
+                    1.0 - cancellationIntensity * 0.7
+                );
+            }
+
+            // Factor 4: Market Activity Level
+            const activityLevel = this.calculateMarketActivity(price);
+            if (activityLevel > 0) {
+                // Higher activity = slightly wider walls (account for normal fluctuations)
+                dynamicMultiplier *= Math.min(1.5, 1.0 + activityLevel * 0.3);
+            }
+
+            // Apply bounds to prevent extreme values
+            dynamicMultiplier = Math.max(0.2, Math.min(3.0, dynamicMultiplier));
+
+            const dynamicTicks = Math.round(baseTicks * dynamicMultiplier);
+
+            // Log significant changes for monitoring
+            if (Math.abs(dynamicTicks - baseTicks) > baseTicks * 0.3) {
+                this.logger?.info?.("Dynamic wall width adjustment", {
+                    component: "SpoofingDetector",
+                    price: price.toFixed(2),
+                    side,
+                    baseTicks,
+                    dynamicTicks,
+                    multiplier: dynamicMultiplier.toFixed(2),
+                    factors: {
+                        liquidityVolatility: liquidityVolatility.toFixed(3),
+                        depthRatio: depthRatio.toFixed(3),
+                        cancellationIntensity: cancellationIntensity.toFixed(3),
+                        activityLevel: activityLevel.toFixed(3),
+                    },
+                });
+            }
+
+            return dynamicTicks;
+        } catch (error) {
+            // Fallback to base configuration on any error
+            this.logger?.warn?.(
+                "Error calculating dynamic wall width, using base config",
+                {
+                    component: "SpoofingDetector",
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                    price: price.toFixed(2),
+                    side,
+                    baseTicks,
+                }
+            );
+            return baseTicks;
+        }
+    }
+
+    /**
+     * Calculate liquidity volatility based on recent bid/ask changes
+     */
+    private calculateLiquidityVolatility(
+        price: number,
+        side: "buy" | "sell"
+    ): number {
+        try {
+            const normalizedPrice = this.normalizePrice(price);
+            const history = this.passiveChangeHistory.get(normalizedPrice);
+
+            if (!history || history.length < 3) {
+                return 0; // Insufficient data
+            }
+
+            // Calculate volatility as coefficient of variation of liquidity changes
+            const recentHistory = history.slice(-10); // Last 10 entries
+            const changes: number[] = [];
+
+            for (let i = 1; i < recentHistory.length; i++) {
+                const current = recentHistory[i]!;
+                const previous = recentHistory[i - 1]!;
+
+                const currentLiquidity =
+                    side === "buy" ? current.bid : current.ask;
+                const previousLiquidity =
+                    side === "buy" ? previous.bid : previous.ask;
+
+                if (previousLiquidity > 0) {
+                    const change =
+                        Math.abs(currentLiquidity - previousLiquidity) /
+                        previousLiquidity;
+                    changes.push(change);
+                }
+            }
+
+            if (changes.length === 0) return 0;
+
+            // Calculate coefficient of variation (std dev / mean)
+            const mean =
+                changes.reduce((sum, val) => sum + val, 0) / changes.length;
+            const variance =
+                changes.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+                changes.length;
+            const stdDev = Math.sqrt(variance);
+
+            return mean > 0 ? stdDev / mean : 0;
+        } catch (error) {
+            return 0; // Safe fallback
+        }
+    }
+
+    /**
+     * Calculate order book depth ratio relative to typical levels
+     */
+    private calculateOrderBookDepth(
+        price: number,
+        side: "buy" | "sell"
+    ): number {
+        try {
+            const normalizedPrice = this.normalizePrice(price);
+            const history = this.passiveChangeHistory.get(normalizedPrice);
+
+            if (!history || history.length < 5) {
+                return 0; // Insufficient data
+            }
+
+            // Get current liquidity
+            const current = history[history.length - 1];
+            if (!current) return 0;
+
+            const currentLiquidity = side === "buy" ? current.bid : current.ask;
+
+            // Calculate average liquidity over recent history
+            const recentHistory = history.slice(-20); // Last 20 entries
+            const avgLiquidity =
+                recentHistory.reduce((sum, entry) => {
+                    return sum + (side === "buy" ? entry.bid : entry.ask);
+                }, 0) / recentHistory.length;
+
+            if (avgLiquidity === 0) return 0;
+
+            // Return ratio (current / average) - values > 1 mean deeper than average
+            return currentLiquidity / avgLiquidity;
+        } catch (error) {
+            return 0; // Safe fallback
+        }
+    }
+
+    /**
+     * Calculate recent cancellation activity intensity
+     */
+    private calculateCancellationIntensity(
+        price: number,
+        side: "buy" | "sell"
+    ): number {
+        try {
+            const now = Date.now();
+            const timeWindow = 30000; // 30 seconds
+            let cancellationCount = 0;
+            let totalVolume = 0;
+
+            // Count recent cancellations in the price area
+            for (const [patternId, pattern] of this.cancellationPatterns) {
+                if (
+                    pattern &&
+                    Math.abs(pattern.price - price) < price * 0.001 && // Within 0.1% of price
+                    pattern.side === (side === "buy" ? "bid" : "ask") &&
+                    now - pattern.cancellationTime < timeWindow
+                ) {
+                    cancellationCount++;
+                    totalVolume += pattern.quantity;
+                }
+            }
+
+            if (cancellationCount === 0) return 0;
+
+            // Normalize by expected activity level (rough heuristic)
+            const expectedCancellations = 5; // Baseline expectation
+            const intensity = cancellationCount / expectedCancellations;
+
+            return Math.min(2.0, intensity); // Cap at 2.0
+        } catch (error) {
+            return 0; // Safe fallback
+        }
+    }
+
+    /**
+     * Calculate overall market activity level
+     */
+    private calculateMarketActivity(price: number): number {
+        try {
+            const now = Date.now();
+            const timeWindow = 60000; // 1 minute
+            let activityCount = 0;
+
+            // Count recent order placements and cancellations
+            for (const [priceKey, placements] of this.orderPlacementHistory) {
+                if (Math.abs(priceKey - price) < price * 0.005) {
+                    // Within 0.5% of price
+                    activityCount += placements.filter(
+                        (p) => now - p.time < timeWindow
+                    ).length;
+                }
+            }
+
+            for (const [patternId, pattern] of this.cancellationPatterns) {
+                if (
+                    pattern &&
+                    Math.abs(pattern.price - price) < price * 0.005 &&
+                    now - pattern.cancellationTime < timeWindow
+                ) {
+                    activityCount++;
+                }
+            }
+
+            // Normalize activity level (rough heuristic)
+            const expectedActivity = 20; // Baseline expectation per minute
+            const activityRatio = activityCount / expectedActivity;
+
+            return Math.min(3.0, activityRatio); // Cap at 3.0
+        } catch (error) {
+            return 0; // Safe fallback
+        }
     }
 
     /**
