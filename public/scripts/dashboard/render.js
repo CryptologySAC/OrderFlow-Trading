@@ -1,4 +1,3 @@
-
 import {
     anomalyList,
     anomalyFilters,
@@ -164,21 +163,60 @@ function formatAgo(ts) {
 export function renderAnomalyList() {
     const listElem = document.getElementById("anomalyList");
     if (!listElem) return;
-    // Filter
+
+    // PERFORMANCE OPTIMIZATION: Use efficient DOM manipulation instead of innerHTML
     const filtered = anomalyList.filter((a) => anomalyFilters.has(a.severity));
-    listElem.innerHTML = filtered
-        .map(
-            (a) => `
-            <div class="anomaly-row ${a.severity}" title="${getAnomalySummary(a)}">
-                <span class="anomaly-icon">${getAnomalyIcon(a.type)}</span>
-                <span class="anomaly-label">${getAnomalyLabel(a.type)}</span>
-                <span class="anomaly-price">${a.affectedPriceRange ? `${a.affectedPriceRange.min.toFixed(2)}-${a.affectedPriceRange.max.toFixed(2)}` : `${a.price?.toFixed(2) || "N/A"}`}</span>
-                <span class="anomaly-action">${getReadableAction(a.recommendedAction)}</span>
-                <span class="anomaly-time">${formatAgo(a.detectedAt || a.time || Date.now())}</span>
-            </div>
-        `
-        )
-        .join("");
+
+    // Clear existing content efficiently
+    while (listElem.firstChild) {
+        listElem.removeChild(listElem.firstChild);
+    }
+
+    // Create document fragment for batch DOM insertion
+    const fragment = document.createDocumentFragment();
+
+    for (const anomaly of filtered) {
+        const row = document.createElement("div");
+        row.className = `anomaly-row ${anomaly.severity}`;
+        row.title = getAnomalySummary(anomaly);
+
+        // Create spans efficiently
+        const iconSpan = document.createElement("span");
+        iconSpan.className = "anomaly-icon";
+        iconSpan.textContent = getAnomalyIcon(anomaly.type);
+
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "anomaly-label";
+        labelSpan.textContent = getAnomalyLabel(anomaly.type);
+
+        const priceSpan = document.createElement("span");
+        priceSpan.className = "anomaly-price";
+        priceSpan.textContent = anomaly.affectedPriceRange
+            ? `${anomaly.affectedPriceRange.min.toFixed(2)}-${anomaly.affectedPriceRange.max.toFixed(2)}`
+            : `${anomaly.price?.toFixed(2) || "N/A"}`;
+
+        const actionSpan = document.createElement("span");
+        actionSpan.className = "anomaly-action";
+        actionSpan.textContent = getReadableAction(anomaly.recommendedAction);
+
+        const timeSpan = document.createElement("span");
+        timeSpan.className = "anomaly-time";
+        timeSpan.textContent = formatAgo(
+            anomaly.detectedAt || anomaly.time || Date.now()
+        );
+
+        // Append all spans to row
+        row.appendChild(iconSpan);
+        row.appendChild(labelSpan);
+        row.appendChild(priceSpan);
+        row.appendChild(actionSpan);
+        row.appendChild(timeSpan);
+
+        fragment.appendChild(row);
+    }
+
+    // Single DOM insertion
+    listElem.appendChild(fragment);
 }
 export function showAnomalyBadge(anomaly) {
     // Remove previous badge
@@ -258,59 +296,115 @@ export function renderSignalsList() {
     const listElem = document.getElementById("signalsList");
     if (!listElem) return;
 
-    // Filter signals based on selected filters
+    // PERFORMANCE OPTIMIZATION: Use efficient DOM manipulation instead of innerHTML
     const filtered = signalsList.filter((signal) =>
         signalFilters.has(signal.side)
     );
 
-    listElem.innerHTML = filtered
-        .map((signal) => {
-            const confidence = (
-                (signal.signalData?.confidence || 0) * 100
-            ).toFixed(0);
-            const timeAgo = formatSignalTime(signal.time);
+    // Clear existing content efficiently
+    while (listElem.firstChild) {
+        listElem.removeChild(listElem.firstChild);
+    }
 
-            // Determine classification display
-            const classification =
-                signal.signal_classification ||
-                signal.signalClassification ||
-                "";
-            const classificationBadge =
-                classification === "reversal"
-                    ? '<span class="signal-classification reversal">⚡ REVERSAL</span>'
-                    : classification === "trend_following"
-                      ? '<span class="signal-classification trend">📈 TREND</span>'
-                      : "";
+    // Create document fragment for batch DOM insertion
+    const fragment = document.createDocumentFragment();
 
-            const signalClass =
-                classification === "reversal"
-                    ? "signal-reversal"
-                    : classification === "trend_following"
-                      ? "signal-trend"
-                      : "";
+    for (const signal of filtered) {
+        const confidence = ((signal.signalData?.confidence || 0) * 100).toFixed(
+            0
+        );
+        const timeAgo = formatSignalTime(signal.time);
 
-            return `
-                <div class="signal-row signal-${signal.side} ${signalClass}" 
-                     data-signal-id="${signal.id}"
-                     title="${getSignalSummary(signal)}">
-                    <div class="signal-row-header">
-                        <span class="signal-type">${signal.type.replace("_confirmed", "").replace("_", " ")}</span>
-                        ${classificationBadge}
-                        <span class="signal-side ${signal.side}">${signal.side.toUpperCase()}</span>
-                        <span class="signal-time">${timeAgo}</span>
-                    </div>
-                    <div class="signal-details">
-                        <span class="signal-price">$${signal.price.toFixed(2)}</span>
-                        <span class="signal-confidence">${confidence}%</span>
-                    </div>
-                    <div class="signal-targets">
-                        <span>TP: $${signal.takeProfit?.toFixed(2) || "N/A"}</span>
-                        <span>SL: $${signal.stopLoss?.toFixed(2) || "N/A"}</span>
-                    </div>
-                </div>
-            `;
-        })
-        .join("");
+        // Determine classification display
+        const classification =
+            signal.signal_classification || signal.signalClassification || "";
+        const classificationBadge =
+            classification === "reversal"
+                ? "⚡ REVERSAL"
+                : classification === "trend_following"
+                  ? "📈 TREND"
+                  : "";
+
+        const signalClass =
+            classification === "reversal"
+                ? "signal-reversal"
+                : classification === "trend_following"
+                  ? "signal-trend"
+                  : "";
+
+        // Create signal row
+        const row = document.createElement("div");
+        row.className = `signal-row signal-${signal.side} ${signalClass}`;
+        row.setAttribute("data-signal-id", signal.id);
+        row.title = getSignalSummary(signal);
+
+        // Create header
+        const header = document.createElement("div");
+        header.className = "signal-row-header";
+
+        const typeSpan = document.createElement("span");
+        typeSpan.className = "signal-type";
+        typeSpan.textContent = signal.type
+            .replace("_confirmed", "")
+            .replace("_", " ");
+
+        const classBadge = document.createElement("span");
+        if (classificationBadge) {
+            classBadge.className = `signal-classification ${classification.toLowerCase()}`;
+            classBadge.textContent = classificationBadge;
+        }
+
+        const sideSpan = document.createElement("span");
+        sideSpan.className = `signal-side ${signal.side}`;
+        sideSpan.textContent = signal.side.toUpperCase();
+
+        const timeSpan = document.createElement("span");
+        timeSpan.className = "signal-time";
+        timeSpan.textContent = timeAgo;
+
+        header.appendChild(typeSpan);
+        if (classificationBadge) header.appendChild(classBadge);
+        header.appendChild(sideSpan);
+        header.appendChild(timeSpan);
+
+        // Create details
+        const details = document.createElement("div");
+        details.className = "signal-details";
+
+        const priceSpan = document.createElement("span");
+        priceSpan.className = "signal-price";
+        priceSpan.textContent = `$${signal.price.toFixed(2)}`;
+
+        const confSpan = document.createElement("span");
+        confSpan.className = "signal-confidence";
+        confSpan.textContent = `${confidence}%`;
+
+        details.appendChild(priceSpan);
+        details.appendChild(confSpan);
+
+        // Create targets
+        const targets = document.createElement("div");
+        targets.className = "signal-targets";
+
+        const tpSpan = document.createElement("span");
+        tpSpan.textContent = `TP: $${signal.takeProfit?.toFixed(2) || "N/A"}`;
+
+        const slSpan = document.createElement("span");
+        slSpan.textContent = `SL: $${signal.stopLoss?.toFixed(2) || "N/A"}`;
+
+        targets.appendChild(tpSpan);
+        targets.appendChild(slSpan);
+
+        // Assemble row
+        row.appendChild(header);
+        row.appendChild(details);
+        row.appendChild(targets);
+
+        fragment.appendChild(row);
+    }
+
+    // Single DOM insertion
+    listElem.appendChild(fragment);
 }
 
 export function updateTradeDelayIndicator(delay) {

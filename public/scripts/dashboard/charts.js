@@ -51,7 +51,7 @@ export function scheduleOrderBookUpdate() {
 }
 
 /**
- * Updates Y-axis bounds based on visible trades
+ * Updates Y-axis bounds based on visible trades (optimized for performance)
  */
 export function updateYAxisBounds() {
     if (!tradesChart || trades.length === 0) return;
@@ -59,16 +59,31 @@ export function updateYAxisBounds() {
     const xMin = tradesChart.options.scales.x.min;
     const xMax = tradesChart.options.scales.x.max;
 
-    const visibleTrades = trades.filter((t) => t.x >= xMin && t.x <= xMax);
+    // PERFORMANCE OPTIMIZATION: Use single pass through trades array
+    // Instead of filter + map + spread, do everything in one loop
+    let yMin = Infinity;
+    let yMax = -Infinity;
+    let visibleCount = 0;
 
-    if (visibleTrades.length === 0) return;
+    // Single efficient loop through trades
+    for (let i = trades.length - 1; i >= 0; i--) {
+        const trade = trades[i];
+        if (trade.x >= xMin && trade.x <= xMax) {
+            const price = trade.y;
+            if (price < yMin) yMin = price;
+            if (price > yMax) yMax = price;
+            visibleCount++;
 
-    const prices = visibleTrades.map((t) => t.y);
-    const yMin = Math.min(...prices);
-    const yMax = Math.max(...prices);
+            // Early exit if we have enough samples for accurate bounds
+            if (visibleCount >= 1000) break;
+        }
+    }
 
-    tradesChart.options.scales.y.suggestedMin = yMin - (yMax - yMin) * 0.05;
-    tradesChart.options.scales.y.suggestedMax = yMax + (yMax - yMin) * 0.05;
+    if (visibleCount === 0) return;
+
+    const padding = (yMax - yMin) * 0.05;
+    tradesChart.options.scales.y.suggestedMin = yMin - padding;
+    tradesChart.options.scales.y.suggestedMax = yMax + padding;
     delete tradesChart.options.scales.y.min;
     delete tradesChart.options.scales.y.max;
 }

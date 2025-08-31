@@ -128,6 +128,45 @@ function createTrade(time, price, quantity, orderType) {
 }
 
 /**
+ * Safely estimates object size without using JSON.stringify
+ * Prevents stack overflow during memory pressure situations
+ *
+ * @param {any} obj - The object to estimate size for
+ * @param {number} maxDepth - Maximum recursion depth
+ * @param {WeakSet} visited - Set of already visited objects
+ * @returns {number} - Estimated size in bytes
+ */
+function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
+    if (!obj || typeof obj !== 'object') return 0;
+    if (visited.has(obj)) return 0; // Circular reference detected
+    if (maxDepth <= 0) return 1000; // Estimate for deep objects
+
+    visited.add(obj);
+
+    try {
+        if (Array.isArray(obj)) {
+            return obj.length * 100; // Rough estimate per array item
+        }
+
+        const keys = Object.keys(obj);
+        let size = keys.length * 50; // Rough estimate per property
+
+        // Sample a few properties for better estimation
+        for (let i = 0; i < Math.min(keys.length, 5); i++) {
+            const value = obj[keys[i]];
+            if (typeof value === 'string') size += value.length;
+            else if (typeof value === 'object' && value !== null) {
+                size += getSafeObjectSize(value, maxDepth - 1, visited);
+            }
+        }
+
+        return size;
+    } finally {
+        visited.delete(obj);
+    }
+}
+
+/**
  * Detects circular references in objects using iterative approach.
  * Prevents stack overflow by avoiding deep recursion.
  *
@@ -502,16 +541,21 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     }
 
-    // Set up efficient trade cleanup every 15 minutes
+    // Set up efficient trade cleanup every 30 minutes (reduced frequency)
     // This prevents memory bloat while maintaining 90 minutes of visible trades
     setInterval(
         () => {
             const cutoffTime = Date.now() - 90 * 60 * 1000; // 90 minutes ago
-            const indexToKeep = trades.findIndex((t) => t.x >= cutoffTime);
+            const originalLength = trades.length;
 
-            if (indexToKeep > 0) {
-                // Remove all old trades in one efficient operation
-                trades.splice(0, indexToKeep);
+            // Only cleanup if we have significant old data (> 1000 trades)
+            const oldTradesCount = trades.findIndex(t => t.x >= cutoffTime);
+
+            if (oldTradesCount > 1000) {
+                console.log(`Starting trade cleanup: ${oldTradesCount} old trades detected`);
+
+                // More efficient: use filter instead of splice to avoid array mutation
+                trades = trades.filter(trade => trade.x >= cutoffTime);
 
                 // Update chart after cleanup
                 if (tradesChart) {
@@ -519,13 +563,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     scheduleTradesChartUpdate();
                 }
 
+                const removedCount = originalLength - trades.length;
                 console.log(
-                    `Cleaned up ${indexToKeep} old trades, ${trades.length} remaining`
+                    `Trade cleanup complete: filtered ${removedCount} old trades, ${trades.length} remaining`
                 );
             }
         },
-        15 * 60 * 1000
-    ); // Every 15 minutes
+        30 * 60 * 1000
+    ); // Every 30 minutes (reduced frequency)
 });
 
 const tradeWebsocket = new TradeWebSocket({
@@ -584,20 +629,46 @@ const tradeWebsocket = new TradeWebSocket({
 
             // Add circular reference check for message.data with size limits
             if (message.data && typeof message.data === "object") {
-                // Skip circular reference check for very large objects to prevent performance issues
-                const dataSize = JSON.stringify(message.data).length;
-                if (dataSize > 1000000) {
+                // STEP 1: Safe size approximation (no JSON operations)
+                const estimatedSize = getSafeObjectSize(message.data);
+
+                if (estimatedSize > 1000000) {
                     // 1MB limit
                     console.warn(
-                        `Skipping circular reference check for large message (${dataSize} bytes):`,
+                        `Skipping checks for large message (${estimatedSize} bytes estimated):`,
                         message.type
                     );
-                } else if (hasCircularReference(message.data)) {
-                    console.error(
-                        "Message contains circular reference, skipping:",
-                        message.type
-                    );
-                    return;
+                } else {
+                    // STEP 2: Safe circular reference check
+                    try {
+                        if (hasCircularReference(message.data)) {
+                            console.error(
+                                "Message contains circular reference, skipping:",
+                                message.type
+                            );
+                            return;
+                        }
+                    
+                    } catch (error) {
+                        console.warn(
+                            "Circular reference check failed, proceeding cautiously:",
+                            error.message
+                        );
+                    }
+
+                    // STEP 3: Safe JSON size check (with error handling)
+                    try {
+                        const dataSize = JSON.stringify(message.data).length;
+                        if (dataSize > 1000000) {
+                            console.warn(
+                                `Large message detected (${dataSize} bytes):`,
+                                message.type
+                            );
+                        }
+                    } catch (error) {
+                        console.error("JSON size check failed:", error.message);
+                        // Continue processing - don't block valid messages
+                    }
                 }
             }
 
