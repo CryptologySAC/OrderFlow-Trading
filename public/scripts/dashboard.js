@@ -7,7 +7,7 @@
 
 import { TradeWebSocket } from "./websocket.js";
 
-const TRADE_WEBSOCKET_URL = "ws://localhost:3001";
+const TRADE_WEBSOCKET_URL = "wss://api.cryptology.pe/ltcusdt_trades";
 const MAX_TRADES = 50000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY_MS = 1000;
@@ -448,18 +448,23 @@ function renderSignalsList() {
             const timeAgo = formatSignalTime(signal.time);
 
             // Determine classification display
-            const classification = signal.signal_classification || signal.signalClassification || '';
-            const classificationBadge = classification === 'reversal' 
-                ? '<span class="signal-classification reversal">⚡ REVERSAL</span>'
-                : classification === 'trend_following'
-                ? '<span class="signal-classification trend">📈 TREND</span>'
-                : '';
-            
-            const signalClass = classification === 'reversal' 
-                ? 'signal-reversal' 
-                : classification === 'trend_following' 
-                ? 'signal-trend' 
-                : '';
+            const classification =
+                signal.signal_classification ||
+                signal.signalClassification ||
+                "";
+            const classificationBadge =
+                classification === "reversal"
+                    ? '<span class="signal-classification reversal">⚡ REVERSAL</span>'
+                    : classification === "trend_following"
+                      ? '<span class="signal-classification trend">📈 TREND</span>'
+                      : "";
+
+            const signalClass =
+                classification === "reversal"
+                    ? "signal-reversal"
+                    : classification === "trend_following"
+                      ? "signal-trend"
+                      : "";
 
             return `
                 <div class="signal-row signal-${signal.side} ${signalClass}" 
@@ -644,7 +649,7 @@ const tradeWebsocket = new TradeWebSocket({
                 );
             }
         }
-        
+
         tradesChart.data.datasets[0].data = [...trades];
 
         if (trades.length > 0) {
@@ -985,7 +990,6 @@ function isValidTrade(trade) {
         ["BUY", "SELL"].includes(trade.orderType)
     );
 }
-
 
 /**
  * Gets the background color for a trade based on type and quantity.
@@ -3434,21 +3438,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Set up efficient trade cleanup every 15 minutes
     // This prevents memory bloat while maintaining 90 minutes of visible trades
-    setInterval(() => {
-        const cutoffTime = Date.now() - (90 * 60 * 1000); // 90 minutes ago
-        const indexToKeep = trades.findIndex(t => t.x >= cutoffTime);
-        
-        if (indexToKeep > 0) {
-            // Remove all old trades in one efficient operation
-            trades.splice(0, indexToKeep);
-            
-            // Update chart after cleanup
-            if (tradesChart) {
-                tradesChart.data.datasets[0].data = [...trades];
-                scheduleTradesChartUpdate();
+    setInterval(
+        () => {
+            const cutoffTime = Date.now() - 90 * 60 * 1000; // 90 minutes ago
+            const indexToKeep = trades.findIndex((t) => t.x >= cutoffTime);
+
+            if (indexToKeep > 0) {
+                // Remove all old trades in one efficient operation
+                trades.splice(0, indexToKeep);
+
+                // Update chart after cleanup
+                if (tradesChart) {
+                    tradesChart.data.datasets[0].data = [...trades];
+                    scheduleTradesChartUpdate();
+                }
+
+                console.log(
+                    `Cleaned up ${indexToKeep} old trades, ${trades.length} remaining`
+                );
             }
-            
-            console.log(`Cleaned up ${indexToKeep} old trades, ${trades.length} remaining`);
-        }
-    }, 15 * 60 * 1000); // Every 15 minutes
+        },
+        15 * 60 * 1000
+    ); // Every 15 minutes
 });

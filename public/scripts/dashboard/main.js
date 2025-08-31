@@ -131,23 +131,67 @@ function createTrade(time, price, quantity, orderType) {
  * Detects circular references in objects to prevent infinite recursion.
  * @param {any} obj - The object to check for circular references.
  * @param {WeakSet} visited - Set of already visited objects.
+ * @param {number} depth - Current recursion depth.
  * @returns {boolean} - True if circular reference is found, false otherwise.
  */
-function hasCircularReference(obj, visited = new WeakSet()) {
+function hasCircularReference(obj, visited = new WeakSet(), depth = 0) {
+    // Prevent infinite recursion by limiting depth
+    if (depth > 10) {
+        return false; // Assume no circular reference at deep levels
+    }
+
     if (!obj || typeof obj !== "object") {
         return false;
     }
 
+    // Handle different object types safely
+    if (obj === null) {
+        return false;
+    }
+
+    // Check for circular reference
     if (visited.has(obj)) {
         return true;
     }
 
+    // Skip certain object types that are unlikely to have circular references
+    // but can cause issues with deep traversal
+    if (obj instanceof Date || obj instanceof RegExp || obj instanceof Error) {
+        return false;
+    }
+
+    // Add to visited set
     visited.add(obj);
 
-    for (const key in obj) {
-        if (hasCircularReference(obj[key], visited)) {
-            return true;
+    try {
+        // Use Object.keys for safer iteration (only enumerable properties)
+        const keys = Object.keys(obj);
+
+        for (const key of keys) {
+            const value = obj[key];
+
+            // Skip functions and primitives
+            if (typeof value === "function" || typeof value !== "object") {
+                continue;
+            }
+
+            if (hasCircularReference(value, visited, depth + 1)) {
+                return true;
+            }
         }
+
+        // Also check prototype chain safely
+        const proto = Object.getPrototypeOf(obj);
+        if (proto && proto !== Object.prototype) {
+            if (hasCircularReference(proto, visited, depth + 1)) {
+                return true;
+            }
+        }
+    } catch (error) {
+        // If there's any error during traversal, assume no circular reference
+        // This prevents crashes from malformed objects
+        console.warn("Error during circular reference check:", error);
+        return false;
     }
 
     return false;
