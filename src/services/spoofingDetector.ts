@@ -161,6 +161,9 @@ export class SpoofingDetector extends EventEmitter {
                 side: "bid" | "ask";
             }
         >(cancellationTTL);
+
+        // Add periodic cleanup to prevent memory bloat
+        setInterval(() => this.cleanupExpiredEntries(), 300000); // Every 5 minutes
     }
 
     /**
@@ -921,5 +924,121 @@ export class SpoofingDetector extends EventEmitter {
         void price;
         // For now: just return wallTicks from config
         return this.config.wallTicks;
+    }
+
+    /**
+     * Cleanup expired cache entries to prevent memory bloat
+     */
+    private cleanupExpiredEntries(): void {
+        const now = Date.now();
+        let totalCleaned = 0;
+
+        // Clean up order placement history
+        const placementKeys = Array.from(this.orderPlacementHistory.keys());
+        for (const price of placementKeys) {
+            const history = this.orderPlacementHistory.get(price);
+            if (history) {
+                const originalLength = history.length;
+                // Filter out old entries
+                const validHistory = history.filter(
+                    (entry) =>
+                        now - entry.time <=
+                        (this.config.orderPlacementCacheTTL ?? 300000)
+                );
+
+                if (validHistory.length === 0) {
+                    this.orderPlacementHistory.delete(price);
+                    totalCleaned += originalLength;
+                } else if (validHistory.length < originalLength) {
+                    this.orderPlacementHistory.set(price, validHistory);
+                    totalCleaned += originalLength - validHistory.length;
+                }
+            }
+        }
+
+        // Clean up passive change history
+        const passiveKeys = Array.from(this.passiveChangeHistory.keys());
+        for (const price of passiveKeys) {
+            const history = this.passiveChangeHistory.get(price);
+            if (history) {
+                const originalLength = history.length;
+                const validHistory = history.filter(
+                    (entry) =>
+                        now - entry.time <=
+                        (this.config.passiveHistoryCacheTTL ?? 300000)
+                );
+
+                if (validHistory.length === 0) {
+                    this.passiveChangeHistory.delete(price);
+                    totalCleaned += originalLength;
+                } else if (validHistory.length < originalLength) {
+                    this.passiveChangeHistory.set(price, validHistory);
+                    totalCleaned += originalLength - validHistory.length;
+                }
+            }
+        }
+
+        // Clean up cancellation patterns
+        const cancellationKeys = Array.from(this.cancellationPatterns.keys());
+        for (const placementId of cancellationKeys) {
+            const pattern = this.cancellationPatterns.get(placementId);
+            if (
+                pattern &&
+                now - pattern.cancellationTime >
+                    (this.config.cancellationPatternCacheTTL ?? 300000)
+            ) {
+                this.cancellationPatterns.delete(placementId);
+                totalCleaned++;
+            }
+        }
+
+        // Log cleanup activity if significant
+        if (totalCleaned > 0) {
+            // Calculate remaining entries for logging
+            let remainingPlacementHistory = 0;
+            let remainingPassiveHistory = 0;
+
+            // Use a safer approach to count remaining entries
+            try {
+                // Count placement history entries
+                const placementCache = (
+                    this.orderPlacementHistory as unknown as {
+                        cache: Map<unknown, { value: unknown }>;
+                    }
+                ).cache;
+                for (const [, entry] of placementCache.entries()) {
+                    if (entry?.value && Array.isArray(entry.value)) {
+                        remainingPlacementHistory += (entry.value as unknown[])
+                            .length;
+                    }
+                }
+
+                // Count passive history entries
+                const passiveCache = (
+                    this.passiveChangeHistory as unknown as {
+                        cache: Map<unknown, { value: unknown }>;
+                    }
+                ).cache;
+                for (const [, entry] of passiveCache.entries()) {
+                    if (entry?.value && Array.isArray(entry.value)) {
+                        remainingPassiveHistory += (entry.value as unknown[])
+                            .length;
+                    }
+                }
+            } catch {
+                // If cache access fails, use fallback values
+                remainingPlacementHistory = 0;
+                remainingPassiveHistory = 0;
+            }
+
+            this.logger?.info?.("SpoofingDetector cache cleanup completed", {
+                component: "SpoofingDetector",
+                entriesCleaned: totalCleaned,
+                remainingPlacementHistory,
+                remainingPassiveHistory,
+                // eslint-disable-next-line @typescript-eslint/unbound-method
+                remainingCancellationPatterns: this.cancellationPatterns.size,
+            });
+        }
     }
 }

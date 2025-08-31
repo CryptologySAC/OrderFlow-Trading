@@ -49,6 +49,8 @@ export interface AnomalyDetectorOptions {
     whaleCooldownMs?: number;
     /** Window for market health assessment in ms (default: 900,000ms) */
     marketHealthWindowMs?: number;
+    /** Maximum number of recent anomalies to store in memory (default: 500) */
+    maxStoredAnomalies?: number;
 }
 
 /**
@@ -135,6 +137,7 @@ export class AnomalyDetector extends EventEmitter {
     private readonly extremeVolatilityWindowMs: number;
     private readonly liquidityCheckWindowMs: number;
     private readonly marketHealthWindowMs: number;
+    private readonly maxStoredAnomalies: number;
 
     private readonly logger: ILogger;
     private lastTradeSymbol = "";
@@ -190,6 +193,7 @@ export class AnomalyDetector extends EventEmitter {
             options.extremeVolatilityWindowMs ?? 900000;
         this.liquidityCheckWindowMs = options.liquidityCheckWindowMs ?? 900000;
         this.marketHealthWindowMs = options.marketHealthWindowMs ?? 900000;
+        this.maxStoredAnomalies = options.maxStoredAnomalies ?? 500;
 
         this.marketHistory = new RollingWindow<MarketSnapshot>(
             this.windowSize,
@@ -710,10 +714,23 @@ export class AnomalyDetector extends EventEmitter {
         // structuredClone available in Node >=17
         const payload: AnomalyEvent = structuredClone(anomaly);
 
-        // Keep history for market health reporting
+        // Keep history for market health reporting with configurable limit
         this.recentAnomalies.push(payload);
-        if (this.recentAnomalies.length > 500) {
-            this.recentAnomalies.shift();
+        if (this.recentAnomalies.length > this.maxStoredAnomalies) {
+            // Remove oldest anomalies to maintain memory limit
+            const excess =
+                this.recentAnomalies.length - this.maxStoredAnomalies;
+            this.recentAnomalies.splice(0, excess);
+
+            this.logger?.warn?.(
+                "AnomalyDetector memory limit exceeded, cleaned up old anomalies",
+                {
+                    component: "AnomalyDetector",
+                    removedCount: excess,
+                    remainingCount: this.recentAnomalies.length,
+                    maxStoredAnomalies: this.maxStoredAnomalies,
+                }
+            );
         }
 
         this.logger?.info?.("Market health anomaly detected", {
