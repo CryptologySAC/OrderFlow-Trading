@@ -921,3 +921,6 @@ const tradeWebsocket = new TradeWebSocket({
         }
     },
 });
+
+// Connect to WebSocket after all initialization
+tradeWebsocket.connect();
