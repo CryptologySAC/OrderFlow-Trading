@@ -35,9 +35,11 @@ export function saveColumnWidths() {
             timestamp: Date.now(),
         };
 
+        // Use safe stringify to prevent potential recursion issues
+        const safeStringify = window.safeStringify || JSON.stringify;
         localStorage.setItem(
             "dashboardColumnWidths",
-            JSON.stringify(columnWidths)
+            safeStringify(columnWidths)
         );
 
         console.log("Column widths saved:", columnWidths);
@@ -56,9 +58,11 @@ export function saveAnomalyFilters() {
             timestamp: Date.now(),
         };
 
+        // Use safe stringify to prevent potential recursion issues
+        const safeStringify = window.safeStringify || JSON.stringify;
         localStorage.setItem(
             "dashboardAnomalyFilters",
-            JSON.stringify(filterSettings)
+            safeStringify(filterSettings)
         );
         console.log("Anomaly filters saved:", filterSettings);
     } catch (error) {
@@ -123,9 +127,11 @@ export function saveTimeRange() {
             timestamp: Date.now(),
         };
 
+        // Use safe stringify to prevent potential recursion issues
+        const safeStringify = window.safeStringify || JSON.stringify;
         localStorage.setItem(
             "dashboardTimeRange",
-            JSON.stringify(rangeSettings)
+            safeStringify(rangeSettings)
         );
         console.log("Time range saved:", rangeSettings);
     } catch (error) {
@@ -142,9 +148,11 @@ export function saveVerticalLayout() {
             isVertical: document.body.classList.contains("vertical-layout"),
             timestamp: Date.now(),
         };
+        // Use safe stringify to prevent potential recursion issues
+        const safeStringify = window.safeStringify || JSON.stringify;
         localStorage.setItem(
             "dashboardVerticalLayout",
-            JSON.stringify(layoutSettings)
+            safeStringify(layoutSettings)
         );
         console.log("Vertical layout saved:", layoutSettings);
     } catch (error) {

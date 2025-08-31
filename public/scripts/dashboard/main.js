@@ -137,7 +137,7 @@ function createTrade(time, price, quantity, orderType) {
  * @returns {number} - Estimated size in bytes
  */
 function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
-    if (!obj || typeof obj !== 'object') return 0;
+    if (!obj || typeof obj !== "object") return 0;
     if (visited.has(obj)) return 0; // Circular reference detected
     if (maxDepth <= 0) return 1000; // Estimate for deep objects
 
@@ -154,8 +154,8 @@ function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
         // Sample a few properties for better estimation
         for (let i = 0; i < Math.min(keys.length, 5); i++) {
             const value = obj[keys[i]];
-            if (typeof value === 'string') size += value.length;
-            else if (typeof value === 'object' && value !== null) {
+            if (typeof value === "string") size += value.length;
+            else if (typeof value === "object" && value !== null) {
                 size += getSafeObjectSize(value, maxDepth - 1, visited);
             }
         }
@@ -165,6 +165,49 @@ function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
         visited.delete(obj);
     }
 }
+
+/**
+ * Safe JSON.stringify replacement that handles circular references
+ * @param {any} obj - The object to stringify
+ * @param {number} maxDepth - Maximum recursion depth
+ * @returns {string} - JSON string or error message
+ */
+function safeStringify(obj, maxDepth = 3) {
+    try {
+        // For simple primitives, use normal JSON.stringify
+        if (obj === null || typeof obj !== "object") {
+            return JSON.stringify(obj);
+        }
+
+        // Check for circular references first
+        if (hasCircularReference(obj)) {
+            console.warn(
+                "Circular reference detected, using fallback serialization"
+            );
+            return "[Circular Reference Detected]";
+        }
+
+        // For simple objects/arrays, try normal stringify with error handling
+        if (
+            Array.isArray(obj) ||
+            (obj.constructor === Object && Object.keys(obj).length < 10)
+        ) {
+            return JSON.stringify(obj);
+        }
+
+        // For complex objects, use size estimation instead
+        console.warn(
+            "Complex object detected, skipping JSON serialization to prevent stack overflow"
+        );
+        return "[Complex Object - Size: " + getSafeObjectSize(obj) + " bytes]";
+    } catch (error) {
+        console.warn("JSON.stringify failed:", error.message);
+        return "[Serialization Error: " + error.message + "]";
+    }
+}
+
+// Make safeStringify globally available for other scripts
+window.safeStringify = safeStringify;
 
 /**
  * Detects circular references in objects using iterative approach.
@@ -548,18 +591,33 @@ document.addEventListener("DOMContentLoaded", () => {
             const cutoffTime = Date.now() - 90 * 60 * 1000; // 90 minutes ago
             const originalLength = trades.length;
 
-            // Only cleanup if we have significant old data (> 1000 trades)
-            const oldTradesCount = trades.findIndex(t => t.x >= cutoffTime);
+            // Find the index of the first trade to keep. This is also the number of trades to remove.
+            let tradesToRemoveCount = trades.findIndex((t) => t.x >= cutoffTime);
 
-            if (oldTradesCount > 1000) {
-                console.log(`Starting trade cleanup: ${oldTradesCount} old trades detected`);
+            // If all trades are older, findIndex returns -1. In that case, all trades should be removed.
+            if (tradesToRemoveCount === -1 && originalLength > 0) {
+                tradesToRemoveCount = originalLength;
+            } else if (tradesToRemoveCount === -1) {
+                tradesToRemoveCount = 0;
+            }
 
-                // More efficient: use filter instead of splice to avoid array mutation
-                trades = trades.filter(trade => trade.x >= cutoffTime);
+            // Only cleanup if we have a significant number of old trades to remove.
+            if (tradesToRemoveCount > 1000) {
+                console.log(
+                    `Starting trade cleanup: ${tradesToRemoveCount} old trades detected`
+                );
+
+                // Use slice to get the trades to keep, which is more performant than filter.
+                const keptTrades = trades.slice(tradesToRemoveCount);
+
+                // Modify the array in-place to avoid breaking references in other modules.
+                trades.length = 0;
+                trades.push(...keptTrades);
 
                 // Update chart after cleanup
                 if (tradesChart) {
-                    tradesChart.data.datasets[0].data = [...trades];
+                    // The chart now points to the same, but modified, trades array.
+                    tradesChart.data.datasets[0].data = trades;
                     scheduleTradesChartUpdate();
                 }
 
@@ -621,77 +679,52 @@ const tradeWebsocket = new TradeWebSocket({
 
     onMessage: (message) => {
         try {
+            // FIX: Deep clone the incoming message to prevent stack overflows.
+            // This sanitizes the object, removing any circular references or Proxies
+            // that can cause infinite recursion during processing.
+            const cleanMessage = JSON.parse(JSON.stringify(message));
+
             // Check if message is null or undefined
-            if (!message) {
+            if (!cleanMessage) {
                 console.warn("Received null or undefined message");
                 return;
             }
 
-            // Add circular reference check for message.data with size limits
-            if (message.data && typeof message.data === "object") {
-                // STEP 1: Safe size approximation (no JSON operations)
-                const estimatedSize = getSafeObjectSize(message.data);
-
-                if (estimatedSize > 1000000) {
-                    // 1MB limit
-                    console.warn(
-                        `Skipping checks for large message (${estimatedSize} bytes estimated):`,
-                        message.type
-                    );
-                } else {
-                    // STEP 2: Safe circular reference check
-                    try {
-                        if (hasCircularReference(message.data)) {
-                            console.error(
-                                "Message contains circular reference, skipping:",
-                                message.type
-                            );
-                            return;
-                        }
-                    
-                    } catch (error) {
+            // Simple message validation - no complex checks to prevent stack overflow
+            if (cleanMessage.data && typeof cleanMessage.data === "object") {
+                try {
+                    const dataSize = getSafeObjectSize(cleanMessage.data);
+                    if (dataSize > 2000000) {
                         console.warn(
-                            "Circular reference check failed, proceeding cautiously:",
-                            error.message
+                            `Large message (${dataSize} bytes):`,
+                            cleanMessage.type
                         );
                     }
-
-                    // STEP 3: Safe JSON size check (with error handling)
-                    try {
-                        const dataSize = JSON.stringify(message.data).length;
-                        if (dataSize > 1000000) {
-                            console.warn(
-                                `Large message detected (${dataSize} bytes):`,
-                                message.type
-                            );
-                        }
-                    } catch (error) {
-                        console.error("JSON size check failed:", error.message);
-                        // Continue processing - don't block valid messages
-                    }
+                } catch (error) {
+                    console.warn("Size check failed:", error.message);
                 }
             }
 
             const receiveTime = Date.now();
-            const messageTime = message.now ?? 0;
+            const messageTime = cleanMessage.now ?? 0;
             const delay = receiveTime - messageTime;
             if (delay >= 0) {
                 // Update the trade delay indicator (gauge was removed)
                 updateTradeDelayIndicator(delay);
             }
 
-            switch (message.type) {
+            switch (cleanMessage.type) {
                 case "anomaly":
-                    console.log("Anomaly received:", message.data);
-                    anomalyList.unshift(message.data);
+                    anomalyList.unshift(cleanMessage.data);
                     // Limit list length
-                    if (anomalyList.length > 100)
-                        anomalyList = anomalyList.slice(0, 100);
+                    if (anomalyList.length > 100) {
+                        anomalyList.length = 100;
+                    }
                     renderAnomalyList();
                     // Badge only for high/critical
                     if (
-                        message.data.severity === "high" ||
-                        message.data.severity === "critical"
+                        cleanMessage.data.severity === "high" ||
+                        cleanMessage.data.severity === "critical"
                     ) {
                         //showAnomalyBadge(message.data);
                     }
@@ -699,7 +732,7 @@ const tradeWebsocket = new TradeWebSocket({
                     //addAnomalyChartLabel(message.data);
                     break;
                 case "trade":
-                    const trade = message.data;
+                    const trade = cleanMessage.data;
                     if (isValidTrade(trade)) {
                         trades.push(
                             createTrade(
@@ -729,7 +762,7 @@ const tradeWebsocket = new TradeWebSocket({
                     break;
 
                 case "rsi":
-                    const rsiDataPoint = message.data;
+                    const rsiDataPoint = cleanMessage.data;
                     if (
                         rsiDataPoint &&
                         typeof rsiDataPoint.time === "number" &&
@@ -768,7 +801,7 @@ const tradeWebsocket = new TradeWebSocket({
 
                 case "rsi_backlog":
                     console.log(
-                        `${message.data.length} RSI backlog data received.`
+                        `${cleanMessage.data.length} RSI backlog data received.`
                     );
 
                     // Process backlog data and replace chart data entirely
@@ -822,26 +855,26 @@ const tradeWebsocket = new TradeWebSocket({
                     };
 
                     // Process backlog and replace data
-                    processBacklogChunk(message.data);
+                    processBacklogChunk(cleanMessage.data);
                     break;
 
                 case "signal":
-                    const label = buildSignalLabel(message.data);
-                    const id = message.data.id;
+                    const label = buildSignalLabel(cleanMessage.data);
+                    const id = cleanMessage.data.id;
 
                     // Add to signals list
-                    signalsList.unshift(message.data);
+                    signalsList.unshift(cleanMessage.data);
                     // Limit list length
                     if (signalsList.length > 50) {
-                        signalsList = signalsList.slice(0, 50);
+                        signalsList.length = 50;
                     }
                     renderSignalsList();
 
                     // Add to chart
                     tradesChart.options.plugins.annotation.annotations[id] = {
                         type: "label",
-                        xValue: message.data.time,
-                        yValue: message.data.price,
+                        xValue: cleanMessage.data.time,
+                        yValue: cleanMessage.data.price,
                         content: label,
                         backgroundColor: "rgba(90, 50, 255, 0.5)",
                         color: "white",
@@ -862,11 +895,11 @@ const tradeWebsocket = new TradeWebSocket({
 
                 case "signal_backlog":
                     console.log(
-                        `${message.data.length} backlog signals received.`
+                        `${cleanMessage.data.length} backlog signals received.`
                     );
 
                     // Process backlog signals in reverse order (oldest first)
-                    const backlogSignals = [...message.data].reverse();
+                    const backlogSignals = [...cleanMessage.data].reverse();
 
                     for (const signal of backlogSignals) {
                         const normalizedSignal = {
@@ -915,7 +948,7 @@ const tradeWebsocket = new TradeWebSocket({
 
                     // Limit total signals list length
                     if (signalsList.length > 50) {
-                        signalsList = signalsList.slice(-50); // Keep most recent 50
+                        signalsList.length = 50; // Keep most recent 50
                     }
 
                     renderSignalsList();
@@ -926,8 +959,8 @@ const tradeWebsocket = new TradeWebSocket({
                     break;
 
                 case "signal_bundle":
-                    if (Array.isArray(message.data) && message.data.length) {
-                        const filtered = message.data.filter((s) => {
+                    if (Array.isArray(cleanMessage.data) && cleanMessage.data.length) {
+                        const filtered = cleanMessage.data.filter((s) => {
                             const last = signalsList[0];
                             if (!last) return true;
                             const diff = Math.abs(s.price - last.price);
@@ -936,9 +969,6 @@ const tradeWebsocket = new TradeWebSocket({
 
                         filtered.forEach((signal) => {
                             signalsList.unshift(signal);
-                            if (signalsList.length > 50) {
-                                signalsList = signalsList.slice(0, 50);
-                            }
 
                             const label = buildSignalLabel(signal);
                             tradesChart.options.plugins.annotation.annotations[
@@ -963,6 +993,10 @@ const tradeWebsocket = new TradeWebSocket({
                             };
                         });
 
+                        if (signalsList.length > 50) {
+                            signalsList.length = 50;
+                        }
+
                         renderSignalsList();
                         tradesChart.update("none");
                         showSignalBundleBadge(filtered);
@@ -971,11 +1005,11 @@ const tradeWebsocket = new TradeWebSocket({
 
                 case "rsi_backlog":
                     console.log(
-                        `${message.data.length} RSI backlog data received.`
+                        `${cleanMessage.data.length} RSI backlog data received.`
                     );
                     rsiData.length = 0; // Clear existing data
 
-                    for (const rsiPoint of message.data) {
+                    for (const rsiPoint of cleanMessage.data) {
                         if (
                             rsiPoint &&
                             typeof rsiPoint.time === "number" &&
@@ -996,178 +1030,51 @@ const tradeWebsocket = new TradeWebSocket({
                     break;
 
                 case "runtimeConfig":
-                    if (message.data && typeof message.data === "object") {
-                        setRuntimeConfig(message.data);
+                    if (cleanMessage.data && typeof cleanMessage.data === "object") {
+                        setRuntimeConfig(cleanMessage.data);
                     }
                     break;
 
                 case "supportResistanceLevel":
                     console.log(
                         "Support/Resistance level received:",
-                        message.data
+                        cleanMessage.data
                     );
-                    handleSupportResistanceLevel(message.data);
+                    handleSupportResistanceLevel(cleanMessage.data);
                     break;
 
                 case "zoneUpdate":
-                    console.log("Zone update received:", message.data);
-                    handleZoneUpdate(message.data);
+                    console.log("Zone update received:", cleanMessage.data);
+                    handleZoneUpdate(cleanMessage.data);
                     break;
 
                 case "zoneSignal":
-                    console.log("Zone signal received:", message.data);
-                    handleZoneSignal(message.data);
+                    console.log("Zone signal received:", cleanMessage.data);
+                    handleZoneSignal(cleanMessage.data);
                     break;
 
                 case "orderbook":
                     if (
-                        !message.data ||
-                        !Array.isArray(message.data.priceLevels)
+                        !cleanMessage.data ||
+                        !Array.isArray(cleanMessage.data.priceLevels)
                     ) {
-                        console.error(
-                            "Invalid order book data: priceLevels is missing or not an array",
-                            message.data
-                        );
+                        console.error("Invalid orderbook data");
                         return;
                     }
 
-                    orderBookData = message.data;
+                    orderBookData = cleanMessage.data;
 
-                    // Enhanced debug: Log depletion data validation and statistics
-                    if (
-                        orderBookData.priceLevels &&
-                        orderBookData.priceLevels.length > 0
-                    ) {
-                        // Only log detailed info once per session to avoid spam
-                        if (!window.depletionDataLogged) {
-                            const depletionLevels =
-                                orderBookData.priceLevels.filter(
-                                    (level) => level.depletionRatio > 0
-                                );
-
-                            if (depletionLevels.length > 0) {
-                                const sampleLevel = depletionLevels[0];
-                                console.log(
-                                    "📊 Depletion data received from backend:",
-                                    {
-                                        totalLevels:
-                                            orderBookData.priceLevels.length,
-                                        depletionLevels: depletionLevels.length,
-                                        samplePrice: sampleLevel.price,
-                                        depletionRatio:
-                                            sampleLevel.depletionRatio,
-                                        depletionVelocity:
-                                            sampleLevel.depletionVelocity,
-                                        originalBidVolume:
-                                            sampleLevel.originalBidVolume,
-                                        originalAskVolume:
-                                            sampleLevel.originalAskVolume,
-                                        midPrice: orderBookData.midPrice,
-                                        hasDepletionData: true,
-                                    }
-                                );
-
-                                // Log depletion statistics
-                                const avgDepletion =
-                                    depletionLevels.reduce(
-                                        (sum, level) =>
-                                            sum + level.depletionRatio,
-                                        0
-                                    ) / depletionLevels.length;
-
-                                const highDepletionLevels =
-                                    depletionLevels.filter(
-                                        (level) => level.depletionRatio > 0.5
-                                    );
-
-                                console.log("📈 Depletion statistics:", {
-                                    averageDepletionRatio:
-                                        (avgDepletion * 100).toFixed(1) + "%",
-                                    highDepletionCount:
-                                        highDepletionLevels.length,
-                                    totalBidVolume:
-                                        orderBookData.totalBidVolume,
-                                    totalAskVolume:
-                                        orderBookData.totalAskVolume,
-                                    timestamp: new Date(
-                                        orderBookData.timestamp
-                                    ).toLocaleTimeString(),
-                                });
-                            } else {
-                                console.log(
-                                    "📊 Orderbook data received (no depletion yet):",
-                                    {
-                                        priceLevelsCount:
-                                            orderBookData.priceLevels.length,
-                                        samplePrice:
-                                            orderBookData.priceLevels[0]?.price,
-                                        midPrice: orderBookData.midPrice,
-                                        totalBidVolume:
-                                            orderBookData.totalBidVolume,
-                                        totalAskVolume:
-                                            orderBookData.totalAskVolume,
-                                        hasDepletionData: false,
-                                        timestamp: new Date(
-                                            orderBookData.timestamp
-                                        ).toLocaleTimeString(),
-                                    }
-                                );
-                            }
-                            window.depletionDataLogged = true;
-                        }
-
-                        // Periodic validation logging (every 30 seconds)
-                        if (
-                            !window.lastDepletionValidation ||
-                            Date.now() - window.lastDepletionValidation > 30000
-                        ) {
-                            const currentLevels = orderBookData.priceLevels;
-                            const depletionLevels = currentLevels.filter(
-                                (level) => level.depletionRatio > 0
-                            );
-
-                            if (depletionLevels.length > 0) {
-                                const staleLevels = depletionLevels.filter(
-                                    (level) => {
-                                        if (!level.timestamp) return false;
-                                        return (
-                                            Date.now() - level.timestamp >
-                                            10 * 60 * 1000
-                                        ); // 10 minutes
-                                    }
-                                );
-
-                                if (staleLevels.length > 0) {
-                                    console.warn(
-                                        "⚠️ Stale depletion data detected:",
-                                        {
-                                            staleCount: staleLevels.length,
-                                            totalDepletionLevels:
-                                                depletionLevels.length,
-                                            sampleStalePrice:
-                                                staleLevels[0]?.price,
-                                            ageMinutes: Math.round(
-                                                (Date.now() -
-                                                    staleLevels[0]?.timestamp) /
-                                                    60000
-                                            ),
-                                        }
-                                    );
-                                }
-                            }
-
-                            window.lastDepletionValidation = Date.now();
-                        }
+                    // Minimal logging - only once per session
+                    if (!window.orderbookInitialized) {
+                        console.log("📊 Orderbook initialized:", {
+                            levels: orderBookData.priceLevels.length,
+                            midPrice: orderBookData.midPrice,
+                        });
+                        window.orderbookInitialized = true;
                     }
 
-                    // Display the data directly from backend (already 1-tick precision)
-                    if (orderBookChart) {
-                        updateOrderBookDisplay(orderBookData);
-                    } else {
-                        console.warn(
-                            "Order book chart not initialized; skipping update"
-                        );
-                    }
+                    // Direct chart update - no conditional checks
+                    updateOrderBookDisplay(orderBookData);
                     break;
             }
         } catch (error) {

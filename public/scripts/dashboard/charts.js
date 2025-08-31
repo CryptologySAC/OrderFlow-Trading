@@ -41,13 +41,10 @@ let orderBookUpdateTimeout = null;
 let lastOrderBookDraw = 0;
 export function scheduleOrderBookUpdate() {
     if (!orderBookChart) return;
-    const now = Date.now();
-    const delay = Math.max(0, 500 - (now - lastOrderBookDraw));
-    if (orderBookUpdateTimeout) clearTimeout(orderBookUpdateTimeout);
-    orderBookUpdateTimeout = setTimeout(() => {
-        orderBookChart.update();
-        lastOrderBookDraw = Date.now();
-    }, delay);
+
+    // Direct update - let Chart.js handle optimization internally
+    orderBookChart.update();
+    lastOrderBookDraw = Date.now();
 }
 
 /**
