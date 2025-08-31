@@ -654,7 +654,6 @@ const tradeWebsocket = new TradeWebSocket({
 
             switch (message.type) {
                 case "anomaly":
-                    console.log("Anomaly received:", message.data);
                     anomalyList.unshift(message.data);
                     // Limit list length
                     if (anomalyList.length > 100)
