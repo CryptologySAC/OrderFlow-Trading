@@ -741,6 +741,32 @@ const tradeWebsocket = new TradeWebSocket({
                     }
                     break;
 
+                case "rsi_backlog":
+                    console.log(
+                        `${message.data.length} RSI backlog data received.`
+                    );
+                    rsiData.length = 0; // Clear existing data
+
+                    for (const rsiPoint of message.data) {
+                        if (
+                            rsiPoint &&
+                            typeof rsiPoint.time === "number" &&
+                            typeof rsiPoint.rsi === "number"
+                        ) {
+                            rsiData.push(rsiPoint);
+                        }
+                    }
+
+                    // Update RSI chart with backlog data
+                    if (rsiChart && rsiData.length > 0) {
+                        rsiChart.data.datasets[0].data = [...rsiData];
+                    }
+
+                    console.log(
+                        `${rsiData.length} RSI backlog points added to chart`
+                    );
+                    break;
+
                 case "runtimeConfig":
                     if (message.data && typeof message.data === "object") {
                         setRuntimeConfig(message.data);
