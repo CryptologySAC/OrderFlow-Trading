@@ -439,14 +439,20 @@ export class SpoofingDetector extends EventEmitter {
                 baseConfidence = 0.7;
                 break;
             default:
-                baseConfidence = 0.6;
+                baseConfidence = SpoofingDetector.DEFAULT_BASE_CONFIDENCE;
         }
 
         // Adjust based on size (larger = more suspicious)
-        const sizeMultiplier = Math.min(event.canceled / 100, 2.0);
+        const sizeMultiplier = Math.min(
+            event.canceled / SpoofingDetector.SIZE_MULTIPLIER_DIVISOR,
+            SpoofingDetector.SIZE_MULTIPLIER_CAP
+        );
 
         // Adjust based on timing (faster = more suspicious)
-        const timeMultiplier = Math.max(0.5, 1 - event.cancelTimeMs / 2000);
+        const timeMultiplier = Math.max(
+            SpoofingDetector.TIME_MULTIPLIER_MIN,
+            1 - event.cancelTimeMs / SpoofingDetector.CANCEL_TIME_MULTIPLIER
+        );
 
         return Math.min(baseConfidence * sizeMultiplier * timeMultiplier, 1.0);
     }
@@ -545,7 +551,9 @@ export class SpoofingDetector extends EventEmitter {
         let maxSpoofEvent: SpoofingEvent | null = null;
 
         // Performance optimization: Pre-calculate all band prices to avoid repeated floating-point operations in hot path
-        const scalingFactor = this.config.priceScalingFactor ?? 100000000;
+        const scalingFactor =
+            this.config.priceScalingFactor ??
+            SpoofingDetector.PRICE_SCALING_FACTOR;
         const scaledPrice = Math.round(price * scalingFactor);
         const scaledTickSize = Math.round(tickSize * scalingFactor);
         const bandOffsetDivisor = this.config.bandOffsetDivisor ?? 2;
@@ -614,9 +622,12 @@ export class SpoofingDetector extends EventEmitter {
                 }
                 const delta = prevQty - currQty;
                 if (prevQty < minWallSize) continue; // ignore small walls
-                const wallPullRatio = this.config.wallPullThresholdRatio ?? 0.6;
+                const wallPullRatio =
+                    this.config.wallPullThresholdRatio ??
+                    SpoofingDetector.WALL_PULL_RATIO;
                 const wallPullTimeMs =
-                    this.config.wallPullTimeThresholdMs ?? 1200;
+                    this.config.wallPullTimeThresholdMs ??
+                    SpoofingDetector.CANCEL_TIME_MULTIPLIER / 2;
                 if (
                     prevQty > 0 &&
                     delta / prevQty > wallPullRatio &&
@@ -705,7 +716,9 @@ export class SpoofingDetector extends EventEmitter {
                         }
                     }
                 }
-                const scanWindow = this.config.historyScanTimeWindowMs ?? 2000;
+                const scanWindow =
+                    this.config.historyScanTimeWindowMs ??
+                    SpoofingDetector.CANCEL_TIME_MULTIPLIER;
                 if (curr.time < tradeTime - scanWindow) break;
             }
         }
@@ -781,10 +794,12 @@ export class SpoofingDetector extends EventEmitter {
                 zone: spoofingZone,
                 significance:
                     spoofingEvent.confidence >
-                    (this.config.highSignificanceThreshold ?? 0.8)
+                    (this.config.highSignificanceThreshold ??
+                        SpoofingDetector.HIGH_SIGNIFICANCE_THRESHOLD)
                         ? "high"
                         : spoofingEvent.confidence >
-                            (this.config.mediumSignificanceThreshold ?? 0.6)
+                            (this.config.mediumSignificanceThreshold ??
+                                SpoofingDetector.MEDIUM_SIGNIFICANCE_THRESHOLD)
                           ? "medium"
                           : "low",
             });
@@ -975,7 +990,8 @@ export class SpoofingDetector extends EventEmitter {
                 lateQty < this.config.minWallSize &&
                 totalTimeMs < ghostThresholdMs &&
                 disappearanceRatio >
-                    (this.config.ghostLiquidityDisappearanceRatio ?? 0.85)
+                    (this.config.ghostLiquidityDisappearanceRatio ??
+                        SpoofingDetector.GHOST_DISAPPEARANCE_RATIO)
             ) {
                 // >85% of liquidity must disappear
 
@@ -990,7 +1006,9 @@ export class SpoofingDetector extends EventEmitter {
                     timestamp: latest.time,
                     spoofedSide: side === "buy" ? "bid" : "ask",
                     spoofType: "ghost_liquidity",
-                    confidence: this.config.ghostLiquidityConfidence ?? 0.85,
+                    confidence:
+                        this.config.ghostLiquidityConfidence ??
+                        SpoofingDetector.GHOST_DISAPPEARANCE_RATIO,
                     cancelTimeMs: latest.time - middle.time,
                     marketImpact: 0,
                 };
@@ -1036,6 +1054,40 @@ export class SpoofingDetector extends EventEmitter {
         return spoofingEvents;
     }
 
+    // Constants for dynamic wall width calculation
+    private static readonly VOLATILITY_ADJUSTMENT = 0.5;
+    private static readonly DEPTH_MULTIPLIER = 0.5;
+    private static readonly CANCELLATION_SENSITIVITY = 0.7;
+    private static readonly ACTIVITY_MULTIPLIER = 0.3;
+    private static readonly MIN_MULTIPLIER = 0.2;
+    private static readonly MAX_MULTIPLIER = 3.0;
+
+    // Constants for cancellation intensity calculation
+    private static readonly CANCELLATION_TIME_WINDOW_MS = 30000; // 30 seconds
+    private static readonly EXPECTED_CANCELLATIONS = 5; // Baseline expectation
+
+    // Constants for market activity calculation
+    private static readonly ACTIVITY_TIME_WINDOW_MS = 60000; // 1 minute
+    private static readonly EXPECTED_ACTIVITY = 20; // Baseline expectation per minute
+
+    // Additional constants for spoofing detection
+    private static readonly WALL_PULL_RATIO = 0.6;
+    private static readonly CANCEL_TIME_MULTIPLIER = 2000;
+    private static readonly PRICE_SCALING_FACTOR = 100000000;
+    private static readonly GHOST_DISAPPEARANCE_RATIO = 0.85;
+    private static readonly ACTIVITY_MULTIPLIER_CAP = 1.5;
+    private static readonly DEFAULT_BASE_CONFIDENCE = 0.6;
+    private static readonly SIZE_MULTIPLIER_DIVISOR = 100;
+    private static readonly SIZE_MULTIPLIER_CAP = 2.0;
+    private static readonly TIME_MULTIPLIER_MIN = 0.5;
+    private static readonly HIGH_SIGNIFICANCE_THRESHOLD = 0.8;
+    private static readonly MEDIUM_SIGNIFICANCE_THRESHOLD = 0.6;
+    private static readonly BASE_MULTIPLIER = 1.0;
+    private static readonly RECENT_HISTORY_LENGTH = 10;
+    private static readonly DEPTH_CALCULATION_HISTORY_LENGTH = 20;
+    private static readonly LOG_THRESHOLD_RATIO = 0.3;
+    private static readonly PRICE_TOLERANCE_RATIO = 0.005;
+
     /**
      * Dynamic wall width calculation based on recent market conditions.
      * ✅ COMPLETED: Analyzes liquidity volatility, order book depth, cancellation intensity,
@@ -1060,8 +1112,10 @@ export class SpoofingDetector extends EventEmitter {
             if (liquidityVolatility > 0) {
                 // Higher volatility = narrower walls (more sensitive detection)
                 dynamicMultiplier *= Math.max(
-                    0.5,
-                    1.0 - liquidityVolatility * 0.5
+                    SpoofingDetector.MIN_MULTIPLIER,
+                    1.0 -
+                        liquidityVolatility *
+                            SpoofingDetector.VOLATILITY_ADJUSTMENT
                 );
             }
 
@@ -1069,7 +1123,10 @@ export class SpoofingDetector extends EventEmitter {
             const depthRatio = this.calculateOrderBookDepth(price, side);
             if (depthRatio > 0) {
                 // Deeper order book = wider walls (less sensitive to small changes)
-                dynamicMultiplier *= Math.min(2.0, 1.0 + depthRatio * 0.5);
+                dynamicMultiplier *= Math.min(
+                    2.0,
+                    1.0 + depthRatio * SpoofingDetector.DEPTH_MULTIPLIER
+                );
             }
 
             // Factor 3: Recent Cancellation Activity
@@ -1080,8 +1137,10 @@ export class SpoofingDetector extends EventEmitter {
             if (cancellationIntensity > 0) {
                 // Higher cancellation activity = narrower walls (more alert to spoofing)
                 dynamicMultiplier *= Math.max(
-                    0.3,
-                    1.0 - cancellationIntensity * 0.7
+                    SpoofingDetector.MIN_MULTIPLIER,
+                    1.0 -
+                        cancellationIntensity *
+                            SpoofingDetector.CANCELLATION_SENSITIVITY
                 );
             }
 
@@ -1089,16 +1148,26 @@ export class SpoofingDetector extends EventEmitter {
             const activityLevel = this.calculateMarketActivity(price);
             if (activityLevel > 0) {
                 // Higher activity = slightly wider walls (account for normal fluctuations)
-                dynamicMultiplier *= Math.min(1.5, 1.0 + activityLevel * 0.3);
+                dynamicMultiplier *= Math.min(
+                    SpoofingDetector.ACTIVITY_MULTIPLIER_CAP,
+                    SpoofingDetector.BASE_MULTIPLIER +
+                        activityLevel * SpoofingDetector.ACTIVITY_MULTIPLIER
+                );
             }
 
             // Apply bounds to prevent extreme values
-            dynamicMultiplier = Math.max(0.2, Math.min(3.0, dynamicMultiplier));
+            dynamicMultiplier = Math.max(
+                SpoofingDetector.MIN_MULTIPLIER,
+                Math.min(SpoofingDetector.MAX_MULTIPLIER, dynamicMultiplier)
+            );
 
             const dynamicTicks = Math.round(baseTicks * dynamicMultiplier);
 
             // Log significant changes for monitoring
-            if (Math.abs(dynamicTicks - baseTicks) > baseTicks * 0.3) {
+            if (
+                Math.abs(dynamicTicks - baseTicks) >
+                baseTicks * SpoofingDetector.LOG_THRESHOLD_RATIO
+            ) {
                 this.logger?.info?.("Dynamic wall width adjustment", {
                     component: "SpoofingDetector",
                     price: price.toFixed(2),
@@ -1149,7 +1218,9 @@ export class SpoofingDetector extends EventEmitter {
             }
 
             // Calculate volatility as coefficient of variation of liquidity changes
-            const recentHistory = history.slice(-10); // Last 10 entries
+            const recentHistory = history.slice(
+                -SpoofingDetector.RECENT_HISTORY_LENGTH
+            ); // Last N entries
             const changes: number[] = [];
 
             for (let i = 1; i < recentHistory.length; i++) {
@@ -1180,7 +1251,7 @@ export class SpoofingDetector extends EventEmitter {
             const stdDev = Math.sqrt(variance);
 
             return mean > 0 ? stdDev / mean : 0;
-        } catch (error) {
+        } catch {
             return 0; // Safe fallback
         }
     }
@@ -1207,7 +1278,9 @@ export class SpoofingDetector extends EventEmitter {
             const currentLiquidity = side === "buy" ? current.bid : current.ask;
 
             // Calculate average liquidity over recent history
-            const recentHistory = history.slice(-20); // Last 20 entries
+            const recentHistory = history.slice(
+                -SpoofingDetector.DEPTH_CALCULATION_HISTORY_LENGTH
+            ); // Last N entries
             const avgLiquidity =
                 recentHistory.reduce((sum, entry) => {
                     return sum + (side === "buy" ? entry.bid : entry.ask);
@@ -1217,7 +1290,7 @@ export class SpoofingDetector extends EventEmitter {
 
             // Return ratio (current / average) - values > 1 mean deeper than average
             return currentLiquidity / avgLiquidity;
-        } catch (error) {
+        } catch {
             return 0; // Safe fallback
         }
     }
@@ -1231,31 +1304,47 @@ export class SpoofingDetector extends EventEmitter {
     ): number {
         try {
             const now = Date.now();
-            const timeWindow = 30000; // 30 seconds
             let cancellationCount = 0;
-            let totalVolume = 0;
 
             // Count recent cancellations in the price area
-            for (const [patternId, pattern] of this.cancellationPatterns) {
+            const cancellationKeys = this.cancellationPatterns.keys();
+            for (const key of cancellationKeys) {
+                const pattern = this.cancellationPatterns.get(key);
                 if (
                     pattern &&
-                    Math.abs(pattern.price - price) < price * 0.001 && // Within 0.1% of price
-                    pattern.side === (side === "buy" ? "bid" : "ask") &&
-                    now - pattern.cancellationTime < timeWindow
+                    typeof pattern === "object" &&
+                    "price" in pattern &&
+                    "side" in pattern &&
+                    "cancellationTime" in pattern
                 ) {
-                    cancellationCount++;
-                    totalVolume += pattern.quantity;
+                    const typedPattern = pattern as {
+                        price: number;
+                        side: string;
+                        cancellationTime: number;
+                    };
+                    if (
+                        typeof typedPattern.price === "number" &&
+                        typeof typedPattern.side === "string" &&
+                        typeof typedPattern.cancellationTime === "number" &&
+                        Math.abs(typedPattern.price - price) < price * 0.001 && // Within 0.1% of price
+                        typedPattern.side ===
+                            (side === "buy" ? "bid" : "ask") &&
+                        now - typedPattern.cancellationTime <
+                            SpoofingDetector.CANCELLATION_TIME_WINDOW_MS
+                    ) {
+                        cancellationCount++;
+                    }
                 }
             }
 
             if (cancellationCount === 0) return 0;
 
             // Normalize by expected activity level (rough heuristic)
-            const expectedCancellations = 5; // Baseline expectation
-            const intensity = cancellationCount / expectedCancellations;
+            const intensity =
+                cancellationCount / SpoofingDetector.EXPECTED_CANCELLATIONS;
 
             return Math.min(2.0, intensity); // Cap at 2.0
-        } catch (error) {
+        } catch {
             return 0; // Safe fallback
         }
     }
@@ -1266,35 +1355,66 @@ export class SpoofingDetector extends EventEmitter {
     private calculateMarketActivity(price: number): number {
         try {
             const now = Date.now();
-            const timeWindow = 60000; // 1 minute
             let activityCount = 0;
 
             // Count recent order placements and cancellations
-            for (const [priceKey, placements] of this.orderPlacementHistory) {
-                if (Math.abs(priceKey - price) < price * 0.005) {
+            const placementKeys = this.orderPlacementHistory.keys();
+            for (const priceKey of placementKeys) {
+                const placements = this.orderPlacementHistory.get(priceKey);
+                if (!placements) continue;
+                if (
+                    Math.abs(priceKey - price) <
+                    price * SpoofingDetector.PRICE_TOLERANCE_RATIO
+                ) {
                     // Within 0.5% of price
-                    activityCount += placements.filter(
-                        (p) => now - p.time < timeWindow
-                    ).length;
+                    if (Array.isArray(placements)) {
+                        activityCount += placements.filter(
+                            (p) =>
+                                p &&
+                                typeof p === "object" &&
+                                "time" in p &&
+                                typeof (p as { time: number }).time ===
+                                    "number" &&
+                                now - (p as { time: number }).time <
+                                    SpoofingDetector.ACTIVITY_TIME_WINDOW_MS
+                        ).length;
+                    }
                 }
             }
 
-            for (const [patternId, pattern] of this.cancellationPatterns) {
+            const cancellationKeys2 = this.cancellationPatterns.keys();
+            for (const key of cancellationKeys2) {
+                const pattern = this.cancellationPatterns.get(key);
+                if (!pattern) continue;
                 if (
                     pattern &&
-                    Math.abs(pattern.price - price) < price * 0.005 &&
-                    now - pattern.cancellationTime < timeWindow
+                    typeof pattern === "object" &&
+                    "price" in pattern &&
+                    "cancellationTime" in pattern
                 ) {
-                    activityCount++;
+                    const typedPattern = pattern as {
+                        price: number;
+                        cancellationTime: number;
+                    };
+                    if (
+                        typeof typedPattern.price === "number" &&
+                        typeof typedPattern.cancellationTime === "number" &&
+                        Math.abs(typedPattern.price - price) <
+                            price * SpoofingDetector.PRICE_TOLERANCE_RATIO &&
+                        now - typedPattern.cancellationTime <
+                            SpoofingDetector.ACTIVITY_TIME_WINDOW_MS
+                    ) {
+                        activityCount++;
+                    }
                 }
             }
 
             // Normalize activity level (rough heuristic)
-            const expectedActivity = 20; // Baseline expectation per minute
-            const activityRatio = activityCount / expectedActivity;
+            const activityRatio =
+                activityCount / SpoofingDetector.EXPECTED_ACTIVITY;
 
             return Math.min(3.0, activityRatio); // Cap at 3.0
-        } catch (error) {
+        } catch {
             return 0; // Safe fallback
         }
     }
@@ -1371,46 +1491,40 @@ export class SpoofingDetector extends EventEmitter {
             let remainingPlacementHistory = 0;
             let remainingPassiveHistory = 0;
 
-            // Use a safer approach to count remaining entries
+            // Count remaining entries safely
             try {
                 // Count placement history entries
-                const placementCache = (
-                    this.orderPlacementHistory as unknown as {
-                        cache: Map<unknown, { value: unknown }>;
-                    }
-                ).cache;
-                for (const [, entry] of placementCache.entries()) {
-                    if (entry?.value && Array.isArray(entry.value)) {
-                        remainingPlacementHistory += (entry.value as unknown[])
-                            .length;
+                const placementKeys = this.orderPlacementHistory.keys();
+                for (const price of placementKeys) {
+                    const placements = this.orderPlacementHistory.get(price);
+                    if (placements && Array.isArray(placements)) {
+                        remainingPlacementHistory += placements.length;
                     }
                 }
 
                 // Count passive history entries
-                const passiveCache = (
-                    this.passiveChangeHistory as unknown as {
-                        cache: Map<unknown, { value: unknown }>;
-                    }
-                ).cache;
-                for (const [, entry] of passiveCache.entries()) {
-                    if (entry?.value && Array.isArray(entry.value)) {
-                        remainingPassiveHistory += (entry.value as unknown[])
-                            .length;
+                const passiveKeys = this.passiveChangeHistory.keys();
+                for (const price of passiveKeys) {
+                    const history = this.passiveChangeHistory.get(price);
+                    if (history && Array.isArray(history)) {
+                        remainingPassiveHistory += history.length;
                     }
                 }
             } catch {
-                // If cache access fails, use fallback values
+                // If counting fails, use fallback values
                 remainingPlacementHistory = 0;
                 remainingPassiveHistory = 0;
             }
 
+            const remainingCancellationPatterns = Array.from(
+                this.cancellationPatterns.keys()
+            ).length;
             this.logger?.info?.("SpoofingDetector cache cleanup completed", {
                 component: "SpoofingDetector",
                 entriesCleaned: totalCleaned,
                 remainingPlacementHistory,
                 remainingPassiveHistory,
-                // eslint-disable-next-line @typescript-eslint/unbound-method
-                remainingCancellationPatterns: this.cancellationPatterns.size,
+                remainingCancellationPatterns,
             });
         }
     }
