@@ -33,6 +33,15 @@ export class WebSocketManager {
     private readonly activeConnections = new Set<ExtendedWebSocket>();
     private isShuttingDown = false;
 
+    // Constants for object validation and size estimation
+    private readonly MAX_OBJECT_SIZE_BYTES = 1000000;
+    private readonly BASE_OBJECT_OVERHEAD = 16;
+    private readonly ARRAY_ELEMENT_OVERHEAD = 8;
+    private readonly REMAINING_ELEMENT_ESTIMATE = 16;
+    private readonly PROPERTY_OVERHEAD = 32;
+    private readonly UTF16_BYTES_PER_CHAR = 2;
+    private readonly PRIMITIVE_SIZE_ESTIMATE = 8;
+
     constructor(
         port: number,
         private readonly logger: ILogger,
@@ -129,54 +138,22 @@ export class WebSocketManager {
                 ws.clientId || "unknown",
                 correlationId
             );
-            // Security: Safe JSON parsing with size and depth limits
+            // PERFORMANCE OPTIMIZATION: Fast size and security checks before JSON parsing
             let parsed: unknown;
             try {
-                // Basic protection against JSON bombs
+                // Basic protection against JSON bombs - check raw string size first
                 if (raw.length > 100 * 1024) {
                     // 100KB JSON limit
                     throw new Error("JSON too large");
                 }
 
+                // PERFORMANCE: Parse JSON first, then validate
                 parsed = JSON.parse(raw);
 
-                // Security: Check object depth to prevent stack overflow
-                const checkDepth = (obj: unknown, depth = 0): void => {
-                    if (depth > 10) {
-                        // Max 10 levels deep
-                        throw new Error("JSON too deeply nested");
-                    }
-                    if (obj && typeof obj === "object" && obj !== null) {
-                        if (Array.isArray(obj)) {
-                            obj.forEach((value) =>
-                                checkDepth(value, depth + 1)
-                            );
-                        } else {
-                            Object.values(obj).forEach((value) =>
-                                checkDepth(value, depth + 1)
-                            );
-                        }
-                    }
-                };
-
-                checkDepth(parsed);
-
-                // Security: Check for dangerous object properties (own properties only)
-                if (parsed && typeof parsed === "object" && parsed !== null) {
-                    const dangerousProps = [
-                        "__proto__",
-                        "constructor",
-                        "prototype",
-                    ];
-                    for (const prop of dangerousProps) {
-                        if (
-                            Object.prototype.hasOwnProperty.call(parsed, prop)
-                        ) {
-                            throw new Error(
-                                "Dangerous object property detected"
-                            );
-                        }
-                    }
+                // PERFORMANCE OPTIMIZATION: Combined size and security validation
+                const validation = this.fastValidateObject(parsed);
+                if (!validation.isValid) {
+                    throw new Error(validation.error || "Validation failed");
                 }
             } catch (jsonError) {
                 this.metricsCollector.incrementCounter(
@@ -308,6 +285,135 @@ export class WebSocketManager {
         }
 
         return messageStr;
+    }
+
+    /**
+     * PERFORMANCE OPTIMIZATION: Fast object validation without expensive JSON operations
+     */
+    private fastValidateObject(obj: unknown): {
+        isValid: boolean;
+        error?: string;
+    } {
+        // Quick type checks first
+        if (!obj || typeof obj !== "object") {
+            return { isValid: true }; // Primitives are safe
+        }
+
+        if (obj === null) {
+            return { isValid: true };
+        }
+
+        // Fast size estimation without JSON.stringify
+        const estimatedSize = this.estimateObjectSize(obj);
+        if (estimatedSize > this.MAX_OBJECT_SIZE_BYTES) {
+            // 1MB limit
+            return {
+                isValid: false,
+                error: `Object too large (${estimatedSize} bytes)`,
+            };
+        }
+
+        // Fast depth check with early exit
+        const maxDepth = 10;
+        const visited = new WeakSet<object>();
+
+        function checkDepth(obj: unknown, depth = 0): boolean {
+            if (depth > maxDepth) return false;
+
+            if (!obj || typeof obj !== "object") return true;
+
+            // Prevent circular references
+            if (visited.has(obj)) return true;
+            visited.add(obj);
+
+            if (Array.isArray(obj)) {
+                // Limit array processing for performance
+                const maxArrayCheck = Math.min(obj.length, 100);
+                for (let i = 0; i < maxArrayCheck; i++) {
+                    if (!checkDepth(obj[i], depth + 1)) return false;
+                }
+            } else {
+                // Check object properties
+                const keys = Object.keys(obj);
+                const maxPropsCheck = Math.min(keys.length, 50);
+                for (let i = 0; i < maxPropsCheck; i++) {
+                    const key = keys[i];
+                    if (key === undefined) continue; // Safety check
+                    if (
+                        !checkDepth(
+                            (obj as Record<string, unknown>)[key],
+                            depth + 1
+                        )
+                    ) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        if (!checkDepth(obj)) {
+            return { isValid: false, error: "Object too deeply nested" };
+        }
+
+        // Fast dangerous property check
+        const dangerousProps = ["__proto__", "constructor", "prototype"];
+        for (const prop of dangerousProps) {
+            if (Object.prototype.hasOwnProperty.call(obj, prop)) {
+                return {
+                    isValid: false,
+                    error: `Dangerous property detected: ${prop}`,
+                };
+            }
+        }
+
+        return { isValid: true };
+    }
+
+    /**
+     * PERFORMANCE OPTIMIZATION: Estimate object size without JSON.stringify
+     */
+    private estimateObjectSize(
+        obj: unknown,
+        visited = new WeakSet<object>()
+    ): number {
+        if (!obj || typeof obj !== "object") {
+            if (typeof obj === "string")
+                return obj.length * this.UTF16_BYTES_PER_CHAR; // UTF-16 estimate
+            return this.PRIMITIVE_SIZE_ESTIMATE; // Primitive size estimate
+        }
+
+        if (visited.has(obj)) return 0;
+        visited.add(obj);
+
+        let size = this.BASE_OBJECT_OVERHEAD; // Base object overhead
+
+        if (Array.isArray(obj)) {
+            size += obj.length * this.ARRAY_ELEMENT_OVERHEAD; // Array element overhead
+            // Sample first 10 elements for size estimation
+            for (let i = 0; i < Math.min(obj.length, 10); i++) {
+                size += this.estimateObjectSize(obj[i], visited);
+            }
+            if (obj.length > 10) {
+                size += (obj.length - 10) * this.REMAINING_ELEMENT_ESTIMATE; // Estimate for remaining elements
+            }
+        } else {
+            const keys = Object.keys(obj);
+            size += keys.length * this.PROPERTY_OVERHEAD; // Property overhead
+            // Sample first 20 properties
+            for (let i = 0; i < Math.min(keys.length, 20); i++) {
+                const key = keys[i];
+                if (key === undefined) continue; // Safety check
+                size += key.length * this.UTF16_BYTES_PER_CHAR; // Key string size
+                size += this.estimateObjectSize(
+                    (obj as Record<string, unknown>)[key],
+                    visited
+                );
+            }
+        }
+
+        return size;
     }
 
     /**

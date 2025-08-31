@@ -198,7 +198,7 @@ describe("WebSocketManager", () => {
             expect.objectContaining({
                 error: expect.objectContaining({
                     message: expect.stringContaining(
-                        "Dangerous object property detected"
+                        "Dangerous property detected"
                     ),
                 }),
             }),
