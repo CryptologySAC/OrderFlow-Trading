@@ -46,16 +46,6 @@ export class TradeWebSocket {
             }, 50);
         };
 
-            // Small delay to ensure connection is stable
-            setTimeout(() => {
-                this.sendMessage({
-                    type: "backlog",
-                    data: { amount: this.maxTrades },
-                });
-                this.startPing();
-            }, 50);
-        };
-
         this.ws.onmessage = (event) => {
             try {
                 const message = JSON.parse(event.data);
