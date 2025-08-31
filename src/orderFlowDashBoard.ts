@@ -1438,7 +1438,7 @@ export class OrderFlowDashboard {
             // Broadcast to WebSocket clients
             this.broadcastMessage({
                 type: "signal",
-                data: signal,
+                data: JSON.parse(JSON.stringify(signal)),
                 now: Date.now(),
             });
         } catch {
