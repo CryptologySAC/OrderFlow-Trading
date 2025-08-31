@@ -996,150 +996,23 @@ const tradeWebsocket = new TradeWebSocket({
                         !message.data ||
                         !Array.isArray(message.data.priceLevels)
                     ) {
-                        console.error(
-                            "Invalid order book data: priceLevels is missing or not an array",
-                            message.data
-                        );
+                        console.error("Invalid orderbook data");
                         return;
                     }
 
                     orderBookData = message.data;
 
-                    // Enhanced debug: Log depletion data validation and statistics
-                    if (
-                        orderBookData.priceLevels &&
-                        orderBookData.priceLevels.length > 0
-                    ) {
-                        // Only log detailed info once per session to avoid spam
-                        if (!window.depletionDataLogged) {
-                            const depletionLevels =
-                                orderBookData.priceLevels.filter(
-                                    (level) => level.depletionRatio > 0
-                                );
-
-                            if (depletionLevels.length > 0) {
-                                const sampleLevel = depletionLevels[0];
-                                console.log(
-                                    "📊 Depletion data received from backend:",
-                                    {
-                                        totalLevels:
-                                            orderBookData.priceLevels.length,
-                                        depletionLevels: depletionLevels.length,
-                                        samplePrice: sampleLevel.price,
-                                        depletionRatio:
-                                            sampleLevel.depletionRatio,
-                                        depletionVelocity:
-                                            sampleLevel.depletionVelocity,
-                                        originalBidVolume:
-                                            sampleLevel.originalBidVolume,
-                                        originalAskVolume:
-                                            sampleLevel.originalAskVolume,
-                                        midPrice: orderBookData.midPrice,
-                                        hasDepletionData: true,
-                                    }
-                                );
-
-                                // Log depletion statistics
-                                const avgDepletion =
-                                    depletionLevels.reduce(
-                                        (sum, level) =>
-                                            sum + level.depletionRatio,
-                                        0
-                                    ) / depletionLevels.length;
-
-                                const highDepletionLevels =
-                                    depletionLevels.filter(
-                                        (level) => level.depletionRatio > 0.5
-                                    );
-
-                                console.log("📈 Depletion statistics:", {
-                                    averageDepletionRatio:
-                                        (avgDepletion * 100).toFixed(1) + "%",
-                                    highDepletionCount:
-                                        highDepletionLevels.length,
-                                    totalBidVolume:
-                                        orderBookData.totalBidVolume,
-                                    totalAskVolume:
-                                        orderBookData.totalAskVolume,
-                                    timestamp: new Date(
-                                        orderBookData.timestamp
-                                    ).toLocaleTimeString(),
-                                });
-                            } else {
-                                console.log(
-                                    "📊 Orderbook data received (no depletion yet):",
-                                    {
-                                        priceLevelsCount:
-                                            orderBookData.priceLevels.length,
-                                        samplePrice:
-                                            orderBookData.priceLevels[0]?.price,
-                                        midPrice: orderBookData.midPrice,
-                                        totalBidVolume:
-                                            orderBookData.totalBidVolume,
-                                        totalAskVolume:
-                                            orderBookData.totalAskVolume,
-                                        hasDepletionData: false,
-                                        timestamp: new Date(
-                                            orderBookData.timestamp
-                                        ).toLocaleTimeString(),
-                                    }
-                                );
-                            }
-                            window.depletionDataLogged = true;
-                        }
-
-                        // Periodic validation logging (every 30 seconds)
-                        if (
-                            !window.lastDepletionValidation ||
-                            Date.now() - window.lastDepletionValidation > 30000
-                        ) {
-                            const currentLevels = orderBookData.priceLevels;
-                            const depletionLevels = currentLevels.filter(
-                                (level) => level.depletionRatio > 0
-                            );
-
-                            if (depletionLevels.length > 0) {
-                                const staleLevels = depletionLevels.filter(
-                                    (level) => {
-                                        if (!level.timestamp) return false;
-                                        return (
-                                            Date.now() - level.timestamp >
-                                            10 * 60 * 1000
-                                        ); // 10 minutes
-                                    }
-                                );
-
-                                if (staleLevels.length > 0) {
-                                    console.warn(
-                                        "⚠️ Stale depletion data detected:",
-                                        {
-                                            staleCount: staleLevels.length,
-                                            totalDepletionLevels:
-                                                depletionLevels.length,
-                                            sampleStalePrice:
-                                                staleLevels[0]?.price,
-                                            ageMinutes: Math.round(
-                                                (Date.now() -
-                                                    staleLevels[0]?.timestamp) /
-                                                    60000
-                                            ),
-                                        }
-                                    );
-                                }
-                            }
-
-                            window.lastDepletionValidation = Date.now();
-                        }
+                    // Minimal logging - only once per session
+                    if (!window.orderbookInitialized) {
+                        console.log("📊 Orderbook initialized:", {
+                            levels: orderBookData.priceLevels.length,
+                            midPrice: orderBookData.midPrice,
+                        });
+                        window.orderbookInitialized = true;
                     }
 
-                    // Display the data directly from backend (already 1-tick precision)
-                    if (orderBookChart) {
-                        updateOrderBookDisplay(orderBookData);
-                    } else {
-                        console.warn(
-                            "Order book chart not initialized; skipping update"
-                        );
-                    }
+                    // Direct chart update - no conditional checks
+                    updateOrderBookDisplay(orderBookData);
                     break;
             }
         } catch (error) {
