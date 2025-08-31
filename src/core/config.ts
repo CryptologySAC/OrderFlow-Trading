@@ -301,7 +301,7 @@ export const TraditionalIndicatorsSchema = z.object({
     rsi: z.object({
         enabled: z.boolean(),
         period: z.number().int().min(5).max(50), // RSI calculation periods
-        timeframeMs: z.number().int().min(60000).max(3600000), // Per period timeframe
+        timeframeMs: z.number().int().min(30000).max(3600000), // Per period timeframe
         overboughtThreshold: z.number().min(60).max(90), // RSI overbought level
         oversoldThreshold: z.number().min(10).max(40), // RSI oversold level
         extremeOverbought: z.number().min(75).max(95), // Extreme overbought

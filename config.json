@@ -220,7 +220,7 @@
                 "priorityQueueHighThreshold": 8.0,
                 "backpressureYieldMs": 1,
                 "marketVolatilityWeight": 0.7,
-                "rsiUpdateFrequency": 10,
+                "rsiUpdateFrequency": 50,
                 "maxRsiBacklogSize": 3000,
                 "maxSignalBacklogAgeMinutes": 90,
                 "accumulationDetectorPriority": 40,
@@ -451,7 +451,7 @@
                 "rsi": {
                     "enabled": true,
                     "period": 14,
-                    "timeframeMs": 120000,
+                    "timeframeMs": 30000,
                     "overboughtThreshold": 70,
                     "oversoldThreshold": 30,
                     "extremeOverbought": 80,

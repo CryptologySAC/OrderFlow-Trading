@@ -462,11 +462,7 @@ export function initializeRSIChart(ctx) {
                     {
                         label: "RSI",
                         parsing: { xAxisKey: "time", yAxisKey: "rsi" },
-                        data: [
-                            // Add placeholder points to ensure time axis displays correctly
-                            { time: initialMin, rsi: 50 },
-                            { time: initialMax, rsi: 50 },
-                        ],
+                        data: [], // Start with empty data - will be populated by real RSI data
                         borderColor: getRSIColor,
                         backgroundColor: getRSIBackgroundColor,
                         borderWidth: 2,
@@ -654,20 +650,10 @@ export function safeUpdateRSIChart(rsiData) {
         rsiChart.data.datasets &&
         rsiChart.data.datasets[0]
     ) {
-        // Single optimized update with time range preservation
-        const currentMin = rsiChart.options.scales.x.min;
-        const currentMax = rsiChart.options.scales.x.max;
-
-        // Update data and time range in single operation
+        // Update data directly (backlog loading handles data replacement)
         rsiChart.data.datasets[0].data = rsiData;
 
-        // Set time range without triggering re-render
-        if (currentMin !== undefined && currentMax !== undefined) {
-            rsiChart.options.scales.x.min = currentMin;
-            rsiChart.options.scales.x.max = currentMax;
-        }
-
-        // Single chart update (removes redundant second update)
+        // Update chart
         rsiChart.update("none");
         return true;
     }

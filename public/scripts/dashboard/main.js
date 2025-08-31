@@ -590,7 +590,7 @@ const tradeWebsocket = new TradeWebSocket({
                         typeof rsiDataPoint.time === "number" &&
                         typeof rsiDataPoint.rsi === "number"
                     ) {
-                        // Add to RSI data array
+                        // Add to RSI data array (backlog already handles deduplication)
                         rsiData.push(rsiDataPoint);
 
                         // Limit data size
@@ -626,7 +626,8 @@ const tradeWebsocket = new TradeWebSocket({
                         `${message.data.length} RSI backlog data received.`
                     );
 
-                    // Process backlog in optimized chunks to avoid blocking
+                    // Process backlog data and replace chart data entirely
+                    const backlogData = [];
                     const processBacklogChunk = (data, startIndex = 0) => {
                         const chunkSize = 10; // Process 10 points at a time
                         const endIndex = Math.min(
@@ -634,7 +635,7 @@ const tradeWebsocket = new TradeWebSocket({
                             data.length
                         );
 
-                        // Pre-validate and add data points
+                        // Pre-validate and add data points to backlog array
                         for (let i = startIndex; i < endIndex; i++) {
                             const rsiPoint = data[i];
                             if (
@@ -644,7 +645,7 @@ const tradeWebsocket = new TradeWebSocket({
                                 rsiPoint.rsi >= 0 &&
                                 rsiPoint.rsi <= 100
                             ) {
-                                rsiData.push(rsiPoint);
+                                backlogData.push(rsiPoint);
                             }
                         }
 
@@ -655,18 +656,27 @@ const tradeWebsocket = new TradeWebSocket({
                                 0
                             );
                         } else {
-                            // All chunks processed - update chart once with all data
-                            if (rsiChart && rsiData.length > 0) {
-                                rsiChart.data.datasets[0].data = rsiData;
-                                rsiChart.update("none");
+                            // All chunks processed - replace rsiData with backlog
+                            if (backlogData.length > 0) {
+                                rsiData.length = 0; // Clear existing data
+                                rsiData.push(...backlogData); // Add backlog data
+
+                                // Update chart immediately with backlog data
+                                if (rsiChart) {
+                                    rsiChart.data.datasets[0].data = [
+                                        ...rsiData,
+                                    ];
+                                    rsiChart.update("none");
+                                }
+
                                 console.log(
-                                    `${rsiData.length} RSI backlog points processed and chart updated`
+                                    `${backlogData.length} RSI backlog points loaded and chart updated`
                                 );
                             }
                         }
                     };
 
-                    rsiData.length = 0; // Clear existing data
+                    // Process backlog and replace data
                     processBacklogChunk(message.data);
                     break;
 
