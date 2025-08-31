@@ -128,7 +128,9 @@ export class TradeWebSocket {
     sendMessage(message) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             try {
-                this.ws.send(JSON.stringify(message));
+                // Import safe stringify from main.js or use fallback
+                const safeStringify = window.safeStringify || JSON.stringify;
+                this.ws.send(safeStringify(message));
                 return true;
             } catch (error) {
                 console.error("Error sending WebSocket message:", error);

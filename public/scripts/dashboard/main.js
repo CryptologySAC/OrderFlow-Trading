@@ -167,6 +167,49 @@ function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
 }
 
 /**
+ * Safe JSON.stringify replacement that handles circular references
+ * @param {any} obj - The object to stringify
+ * @param {number} maxDepth - Maximum recursion depth
+ * @returns {string} - JSON string or error message
+ */
+function safeStringify(obj, maxDepth = 3) {
+    try {
+        // For simple primitives, use normal JSON.stringify
+        if (obj === null || typeof obj !== "object") {
+            return JSON.stringify(obj);
+        }
+
+        // Check for circular references first
+        if (hasCircularReference(obj)) {
+            console.warn(
+                "Circular reference detected, using fallback serialization"
+            );
+            return "[Circular Reference Detected]";
+        }
+
+        // For simple objects/arrays, try normal stringify with error handling
+        if (
+            Array.isArray(obj) ||
+            (obj.constructor === Object && Object.keys(obj).length < 10)
+        ) {
+            return JSON.stringify(obj);
+        }
+
+        // For complex objects, use size estimation instead
+        console.warn(
+            "Complex object detected, skipping JSON serialization to prevent stack overflow"
+        );
+        return "[Complex Object - Size: " + getSafeObjectSize(obj) + " bytes]";
+    } catch (error) {
+        console.warn("JSON.stringify failed:", error.message);
+        return "[Serialization Error: " + error.message + "]";
+    }
+}
+
+// Make safeStringify globally available for other scripts
+window.safeStringify = safeStringify;
+
+/**
  * Detects circular references in objects using iterative approach.
  * Prevents stack overflow by avoiding deep recursion.
  *
@@ -632,7 +675,7 @@ const tradeWebsocket = new TradeWebSocket({
             // Simple message validation - no complex checks to prevent stack overflow
             if (message.data && typeof message.data === "object") {
                 try {
-                    const dataSize = JSON.stringify(message.data).length;
+                    const dataSize = getSafeObjectSize(message.data);
                     if (dataSize > 2000000) {
                         console.warn(
                             `Large message (${dataSize} bytes):`,

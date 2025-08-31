@@ -221,9 +221,11 @@ export function getDepletionVisualizationEnabled() {
 }
 
 export function setDepletionVisualizationEnabled(enabled) {
+    // Use safe stringify to prevent potential recursion issues
+    const safeStringify = window.safeStringify || JSON.stringify;
     localStorage.setItem(
         "depletionVisualizationEnabled",
-        JSON.stringify(enabled)
+        safeStringify(enabled)
     );
 }
 
