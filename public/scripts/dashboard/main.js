@@ -137,7 +137,7 @@ function createTrade(time, price, quantity, orderType) {
  * @returns {number} - Estimated size in bytes
  */
 function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
-    if (!obj || typeof obj !== 'object') return 0;
+    if (!obj || typeof obj !== "object") return 0;
     if (visited.has(obj)) return 0; // Circular reference detected
     if (maxDepth <= 0) return 1000; // Estimate for deep objects
 
@@ -154,8 +154,8 @@ function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
         // Sample a few properties for better estimation
         for (let i = 0; i < Math.min(keys.length, 5); i++) {
             const value = obj[keys[i]];
-            if (typeof value === 'string') size += value.length;
-            else if (typeof value === 'object' && value !== null) {
+            if (typeof value === "string") size += value.length;
+            else if (typeof value === "object" && value !== null) {
                 size += getSafeObjectSize(value, maxDepth - 1, visited);
             }
         }
@@ -549,13 +549,15 @@ document.addEventListener("DOMContentLoaded", () => {
             const originalLength = trades.length;
 
             // Only cleanup if we have significant old data (> 1000 trades)
-            const oldTradesCount = trades.findIndex(t => t.x >= cutoffTime);
+            const oldTradesCount = trades.findIndex((t) => t.x >= cutoffTime);
 
             if (oldTradesCount > 1000) {
-                console.log(`Starting trade cleanup: ${oldTradesCount} old trades detected`);
+                console.log(
+                    `Starting trade cleanup: ${oldTradesCount} old trades detected`
+                );
 
                 // More efficient: use filter instead of splice to avoid array mutation
-                trades = trades.filter(trade => trade.x >= cutoffTime);
+                trades = trades.filter((trade) => trade.x >= cutoffTime);
 
                 // Update chart after cleanup
                 if (tradesChart) {
@@ -627,48 +629,18 @@ const tradeWebsocket = new TradeWebSocket({
                 return;
             }
 
-            // Add circular reference check for message.data with size limits
+            // Simple message validation - no complex checks to prevent stack overflow
             if (message.data && typeof message.data === "object") {
-                // STEP 1: Safe size approximation (no JSON operations)
-                const estimatedSize = getSafeObjectSize(message.data);
-
-                if (estimatedSize > 1000000) {
-                    // 1MB limit
-                    console.warn(
-                        `Skipping checks for large message (${estimatedSize} bytes estimated):`,
-                        message.type
-                    );
-                } else {
-                    // STEP 2: Safe circular reference check
-                    try {
-                        if (hasCircularReference(message.data)) {
-                            console.error(
-                                "Message contains circular reference, skipping:",
-                                message.type
-                            );
-                            return;
-                        }
-                    
-                    } catch (error) {
+                try {
+                    const dataSize = JSON.stringify(message.data).length;
+                    if (dataSize > 2000000) {
                         console.warn(
-                            "Circular reference check failed, proceeding cautiously:",
-                            error.message
+                            `Large message (${dataSize} bytes):`,
+                            message.type
                         );
                     }
-
-                    // STEP 3: Safe JSON size check (with error handling)
-                    try {
-                        const dataSize = JSON.stringify(message.data).length;
-                        if (dataSize > 1000000) {
-                            console.warn(
-                                `Large message detected (${dataSize} bytes):`,
-                                message.type
-                            );
-                        }
-                    } catch (error) {
-                        console.error("JSON size check failed:", error.message);
-                        // Continue processing - don't block valid messages
-                    }
+                } catch (error) {
+                    console.warn("Size check failed:", error.message);
                 }
             }
 
