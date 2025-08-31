@@ -591,20 +591,33 @@ document.addEventListener("DOMContentLoaded", () => {
             const cutoffTime = Date.now() - 90 * 60 * 1000; // 90 minutes ago
             const originalLength = trades.length;
 
-            // Only cleanup if we have significant old data (> 1000 trades)
-            const oldTradesCount = trades.findIndex((t) => t.x >= cutoffTime);
+            // Find the index of the first trade to keep. This is also the number of trades to remove.
+            let tradesToRemoveCount = trades.findIndex((t) => t.x >= cutoffTime);
 
-            if (oldTradesCount > 1000) {
+            // If all trades are older, findIndex returns -1. In that case, all trades should be removed.
+            if (tradesToRemoveCount === -1 && originalLength > 0) {
+                tradesToRemoveCount = originalLength;
+            } else if (tradesToRemoveCount === -1) {
+                tradesToRemoveCount = 0;
+            }
+
+            // Only cleanup if we have a significant number of old trades to remove.
+            if (tradesToRemoveCount > 1000) {
                 console.log(
-                    `Starting trade cleanup: ${oldTradesCount} old trades detected`
+                    `Starting trade cleanup: ${tradesToRemoveCount} old trades detected`
                 );
 
-                // More efficient: use filter instead of splice to avoid array mutation
-                trades = trades.filter((trade) => trade.x >= cutoffTime);
+                // Use slice to get the trades to keep, which is more performant than filter.
+                const keptTrades = trades.slice(tradesToRemoveCount);
+
+                // Modify the array in-place to avoid breaking references in other modules.
+                trades.length = 0;
+                trades.push(...keptTrades);
 
                 // Update chart after cleanup
                 if (tradesChart) {
-                    tradesChart.data.datasets[0].data = [...trades];
+                    // The chart now points to the same, but modified, trades array.
+                    tradesChart.data.datasets[0].data = trades;
                     scheduleTradesChartUpdate();
                 }
 
@@ -666,20 +679,25 @@ const tradeWebsocket = new TradeWebSocket({
 
     onMessage: (message) => {
         try {
+            // FIX: Deep clone the incoming message to prevent stack overflows.
+            // This sanitizes the object, removing any circular references or Proxies
+            // that can cause infinite recursion during processing.
+            const cleanMessage = JSON.parse(JSON.stringify(message));
+
             // Check if message is null or undefined
-            if (!message) {
+            if (!cleanMessage) {
                 console.warn("Received null or undefined message");
                 return;
             }
 
             // Simple message validation - no complex checks to prevent stack overflow
-            if (message.data && typeof message.data === "object") {
+            if (cleanMessage.data && typeof cleanMessage.data === "object") {
                 try {
-                    const dataSize = getSafeObjectSize(message.data);
+                    const dataSize = getSafeObjectSize(cleanMessage.data);
                     if (dataSize > 2000000) {
                         console.warn(
                             `Large message (${dataSize} bytes):`,
-                            message.type
+                            cleanMessage.type
                         );
                     }
                 } catch (error) {
@@ -688,24 +706,25 @@ const tradeWebsocket = new TradeWebSocket({
             }
 
             const receiveTime = Date.now();
-            const messageTime = message.now ?? 0;
+            const messageTime = cleanMessage.now ?? 0;
             const delay = receiveTime - messageTime;
             if (delay >= 0) {
                 // Update the trade delay indicator (gauge was removed)
                 updateTradeDelayIndicator(delay);
             }
 
-            switch (message.type) {
+            switch (cleanMessage.type) {
                 case "anomaly":
-                    anomalyList.unshift(message.data);
+                    anomalyList.unshift(cleanMessage.data);
                     // Limit list length
-                    if (anomalyList.length > 100)
-                        anomalyList = anomalyList.slice(0, 100);
+                    if (anomalyList.length > 100) {
+                        anomalyList.length = 100;
+                    }
                     renderAnomalyList();
                     // Badge only for high/critical
                     if (
-                        message.data.severity === "high" ||
-                        message.data.severity === "critical"
+                        cleanMessage.data.severity === "high" ||
+                        cleanMessage.data.severity === "critical"
                     ) {
                         //showAnomalyBadge(message.data);
                     }
@@ -713,7 +732,7 @@ const tradeWebsocket = new TradeWebSocket({
                     //addAnomalyChartLabel(message.data);
                     break;
                 case "trade":
-                    const trade = message.data;
+                    const trade = cleanMessage.data;
                     if (isValidTrade(trade)) {
                         trades.push(
                             createTrade(
@@ -743,7 +762,7 @@ const tradeWebsocket = new TradeWebSocket({
                     break;
 
                 case "rsi":
-                    const rsiDataPoint = message.data;
+                    const rsiDataPoint = cleanMessage.data;
                     if (
                         rsiDataPoint &&
                         typeof rsiDataPoint.time === "number" &&
@@ -782,7 +801,7 @@ const tradeWebsocket = new TradeWebSocket({
 
                 case "rsi_backlog":
                     console.log(
-                        `${message.data.length} RSI backlog data received.`
+                        `${cleanMessage.data.length} RSI backlog data received.`
                     );
 
                     // Process backlog data and replace chart data entirely
@@ -836,26 +855,26 @@ const tradeWebsocket = new TradeWebSocket({
                     };
 
                     // Process backlog and replace data
-                    processBacklogChunk(message.data);
+                    processBacklogChunk(cleanMessage.data);
                     break;
 
                 case "signal":
-                    const label = buildSignalLabel(message.data);
-                    const id = message.data.id;
+                    const label = buildSignalLabel(cleanMessage.data);
+                    const id = cleanMessage.data.id;
 
                     // Add to signals list
-                    signalsList.unshift(message.data);
+                    signalsList.unshift(cleanMessage.data);
                     // Limit list length
                     if (signalsList.length > 50) {
-                        signalsList = signalsList.slice(0, 50);
+                        signalsList.length = 50;
                     }
                     renderSignalsList();
 
                     // Add to chart
                     tradesChart.options.plugins.annotation.annotations[id] = {
                         type: "label",
-                        xValue: message.data.time,
-                        yValue: message.data.price,
+                        xValue: cleanMessage.data.time,
+                        yValue: cleanMessage.data.price,
                         content: label,
                         backgroundColor: "rgba(90, 50, 255, 0.5)",
                         color: "white",
@@ -876,11 +895,11 @@ const tradeWebsocket = new TradeWebSocket({
 
                 case "signal_backlog":
                     console.log(
-                        `${message.data.length} backlog signals received.`
+                        `${cleanMessage.data.length} backlog signals received.`
                     );
 
                     // Process backlog signals in reverse order (oldest first)
-                    const backlogSignals = [...message.data].reverse();
+                    const backlogSignals = [...cleanMessage.data].reverse();
 
                     for (const signal of backlogSignals) {
                         const normalizedSignal = {
@@ -929,7 +948,7 @@ const tradeWebsocket = new TradeWebSocket({
 
                     // Limit total signals list length
                     if (signalsList.length > 50) {
-                        signalsList = signalsList.slice(-50); // Keep most recent 50
+                        signalsList.length = 50; // Keep most recent 50
                     }
 
                     renderSignalsList();
@@ -940,8 +959,8 @@ const tradeWebsocket = new TradeWebSocket({
                     break;
 
                 case "signal_bundle":
-                    if (Array.isArray(message.data) && message.data.length) {
-                        const filtered = message.data.filter((s) => {
+                    if (Array.isArray(cleanMessage.data) && cleanMessage.data.length) {
+                        const filtered = cleanMessage.data.filter((s) => {
                             const last = signalsList[0];
                             if (!last) return true;
                             const diff = Math.abs(s.price - last.price);
@@ -950,9 +969,6 @@ const tradeWebsocket = new TradeWebSocket({
 
                         filtered.forEach((signal) => {
                             signalsList.unshift(signal);
-                            if (signalsList.length > 50) {
-                                signalsList = signalsList.slice(0, 50);
-                            }
 
                             const label = buildSignalLabel(signal);
                             tradesChart.options.plugins.annotation.annotations[
@@ -977,6 +993,10 @@ const tradeWebsocket = new TradeWebSocket({
                             };
                         });
 
+                        if (signalsList.length > 50) {
+                            signalsList.length = 50;
+                        }
+
                         renderSignalsList();
                         tradesChart.update("none");
                         showSignalBundleBadge(filtered);
@@ -985,11 +1005,11 @@ const tradeWebsocket = new TradeWebSocket({
 
                 case "rsi_backlog":
                     console.log(
-                        `${message.data.length} RSI backlog data received.`
+                        `${cleanMessage.data.length} RSI backlog data received.`
                     );
                     rsiData.length = 0; // Clear existing data
 
-                    for (const rsiPoint of message.data) {
+                    for (const rsiPoint of cleanMessage.data) {
                         if (
                             rsiPoint &&
                             typeof rsiPoint.time === "number" &&
@@ -1010,39 +1030,39 @@ const tradeWebsocket = new TradeWebSocket({
                     break;
 
                 case "runtimeConfig":
-                    if (message.data && typeof message.data === "object") {
-                        setRuntimeConfig(message.data);
+                    if (cleanMessage.data && typeof cleanMessage.data === "object") {
+                        setRuntimeConfig(cleanMessage.data);
                     }
                     break;
 
                 case "supportResistanceLevel":
                     console.log(
                         "Support/Resistance level received:",
-                        message.data
+                        cleanMessage.data
                     );
-                    handleSupportResistanceLevel(message.data);
+                    handleSupportResistanceLevel(cleanMessage.data);
                     break;
 
                 case "zoneUpdate":
-                    console.log("Zone update received:", message.data);
-                    handleZoneUpdate(message.data);
+                    console.log("Zone update received:", cleanMessage.data);
+                    handleZoneUpdate(cleanMessage.data);
                     break;
 
                 case "zoneSignal":
-                    console.log("Zone signal received:", message.data);
-                    handleZoneSignal(message.data);
+                    console.log("Zone signal received:", cleanMessage.data);
+                    handleZoneSignal(cleanMessage.data);
                     break;
 
                 case "orderbook":
                     if (
-                        !message.data ||
-                        !Array.isArray(message.data.priceLevels)
+                        !cleanMessage.data ||
+                        !Array.isArray(cleanMessage.data.priceLevels)
                     ) {
                         console.error("Invalid orderbook data");
                         return;
                     }
 
-                    orderBookData = message.data;
+                    orderBookData = cleanMessage.data;
 
                     // Minimal logging - only once per session
                     if (!window.orderbookInitialized) {
