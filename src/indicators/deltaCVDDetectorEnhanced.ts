@@ -1493,4 +1493,16 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             }
         );
     }
+
+    /**
+     * Reset running statistics for testing purposes
+     * This method allows tests to reset accumulated statistics between test runs
+     */
+    public resetRunningStatistics(): void {
+        this.tradesPerSecStats.clear();
+        this.volumePerSecStats.clear();
+        this.logger.debug(
+            "DeltaCVDDetectorEnhanced: Running statistics reset for testing"
+        );
+    }
 }
