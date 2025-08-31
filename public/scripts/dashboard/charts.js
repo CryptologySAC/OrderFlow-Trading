@@ -654,20 +654,21 @@ export function safeUpdateRSIChart(rsiData) {
         rsiChart.data.datasets &&
         rsiChart.data.datasets[0]
     ) {
-        // Preserve current time range before updating data
+        // Single optimized update with time range preservation
         const currentMin = rsiChart.options.scales.x.min;
         const currentMax = rsiChart.options.scales.x.max;
 
+        // Update data and time range in single operation
         rsiChart.data.datasets[0].data = rsiData;
-        rsiChart.update("none");
 
-        // Restore time range to prevent auto-scaling
+        // Set time range without triggering re-render
         if (currentMin !== undefined && currentMax !== undefined) {
             rsiChart.options.scales.x.min = currentMin;
             rsiChart.options.scales.x.max = currentMax;
-            rsiChart.update("none");
         }
 
+        // Single chart update (removes redundant second update)
+        rsiChart.update("none");
         return true;
     }
 

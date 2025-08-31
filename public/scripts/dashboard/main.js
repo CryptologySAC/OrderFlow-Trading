@@ -554,14 +554,20 @@ const tradeWebsocket = new TradeWebSocket({
                             rsiData.shift();
                         }
 
-                        // Update RSI chart with new data
-                        const updateSuccess = safeUpdateRSIChart([...rsiData]);
+                        // Batch real-time RSI updates to reduce chart re-renders
+                        if (!window.rsiUpdateTimeout) {
+                            window.rsiUpdateTimeout = setTimeout(() => {
+                                const updateSuccess = safeUpdateRSIChart([
+                                    ...rsiData,
+                                ]);
+                                window.rsiUpdateTimeout = null;
 
-                        if (!updateSuccess) {
-                            console.error(
-                                "Failed to update RSI chart with data:",
-                                rsiDataPoint
-                            );
+                                if (!updateSuccess) {
+                                    console.error(
+                                        "Failed to update RSI chart with batched data"
+                                    );
+                                }
+                            }, 100); // Update at most every 100ms
                         }
                     } else {
                         console.warn(
@@ -575,26 +581,49 @@ const tradeWebsocket = new TradeWebSocket({
                     console.log(
                         `${message.data.length} RSI backlog data received.`
                     );
-                    rsiData.length = 0; // Clear existing data
 
-                    for (const rsiPoint of message.data) {
-                        if (
-                            rsiPoint &&
-                            typeof rsiPoint.time === "number" &&
-                            typeof rsiPoint.rsi === "number"
-                        ) {
-                            rsiData.push(rsiPoint);
+                    // Process backlog in optimized chunks to avoid blocking
+                    const processBacklogChunk = (data, startIndex = 0) => {
+                        const chunkSize = 10; // Process 10 points at a time
+                        const endIndex = Math.min(
+                            startIndex + chunkSize,
+                            data.length
+                        );
+
+                        // Pre-validate and add data points
+                        for (let i = startIndex; i < endIndex; i++) {
+                            const rsiPoint = data[i];
+                            if (
+                                rsiPoint &&
+                                typeof rsiPoint.time === "number" &&
+                                typeof rsiPoint.rsi === "number" &&
+                                rsiPoint.rsi >= 0 &&
+                                rsiPoint.rsi <= 100
+                            ) {
+                                rsiData.push(rsiPoint);
+                            }
                         }
-                    }
 
-                    // Update RSI chart with backlog data
-                    if (rsiChart && rsiData.length > 0) {
-                        rsiChart.data.datasets[0].data = [...rsiData];
-                    }
+                        if (endIndex < data.length) {
+                            // Process next chunk asynchronously to avoid blocking
+                            setTimeout(
+                                () => processBacklogChunk(data, endIndex),
+                                0
+                            );
+                        } else {
+                            // All chunks processed - update chart once with all data
+                            if (rsiChart && rsiData.length > 0) {
+                                rsiChart.data.datasets[0].data = rsiData;
+                                rsiChart.update("none");
+                                console.log(
+                                    `${rsiData.length} RSI backlog points processed and chart updated`
+                                );
+                            }
+                        }
+                    };
 
-                    console.log(
-                        `${rsiData.length} RSI backlog points added to chart`
-                    );
+                    rsiData.length = 0; // Clear existing data
+                    processBacklogChunk(message.data);
                     break;
 
                 case "signal":
