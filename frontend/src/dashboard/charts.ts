@@ -18,9 +18,9 @@ import {
     FIFTEEN_MINUTES,
 } from "./state.js";
 
-let _isSyncing: boolean = false;
+//let _isSyncing: boolean = false;
 let chartUpdateScheduled: boolean = false;
-let _supportResistanceLevels: SupportResistanceLevel[] = [];
+//let _supportResistanceLevels: SupportResistanceLevel[] = [];
 
 export function scheduleTradesChartUpdate(): void {
     if (!chartUpdateScheduled) {
@@ -34,15 +34,76 @@ export function scheduleTradesChartUpdate(): void {
     }
 }
 
-let _orderBookUpdateTimeout: NodeJS.Timeout | null = null;
-let _lastOrderBookDraw: number = 0;
+//let _orderBookUpdateTimeout: NodeJS.Timeout | null = null;
+//let _lastOrderBookDraw: number = 0;
 
 export function scheduleOrderBookUpdate(): void {
     if (!orderBookChart) return;
 
     // Direct update - let Chart.js handle optimization internally
     orderBookChart.update();
-    _lastOrderBookDraw = Date.now();
+}
+
+// Placeholder functions for functions that will be implemented later
+// These are referenced in the original code but not yet converted
+
+export function updateOrderBookBarColors(theme: string): void {
+    // TODO: Implement order book bar color updates
+    console.log("updateOrderBookBarColors called with theme:", theme);
+}
+
+export function initializeTradesChart(ctx: CanvasRenderingContext2D): any {
+    // TODO: Implement trades chart initialization
+    console.log("initializeTradesChart called");
+    return null;
+}
+
+export function initializeRSIChart(ctx: CanvasRenderingContext2D): any {
+    // TODO: Implement RSI chart initialization
+    console.log("initializeRSIChart called");
+    return null;
+}
+
+export function initializeOrderBookChart(ctx: CanvasRenderingContext2D): any {
+    // TODO: Implement order book chart initialization
+    console.log("initializeOrderBookChart called");
+    return null;
+}
+
+export function cleanupOldSupportResistanceLevels(): void {
+    // TODO: Implement cleanup of old support/resistance levels
+    console.log("cleanupOldSupportResistanceLevels called");
+}
+
+export function cleanupOldZones(): void {
+    // TODO: Implement cleanup of old zones
+    console.log("cleanupOldZones called");
+}
+
+export function handleSupportResistanceLevel(data: any): void {
+    // TODO: Implement support/resistance level handling
+    console.log("handleSupportResistanceLevel called with:", data);
+}
+
+export function handleZoneUpdate(data: any): void {
+    // TODO: Implement zone update handling
+    console.log("handleZoneUpdate called with:", data);
+}
+
+export function handleZoneSignal(data: any): void {
+    // TODO: Implement zone signal handling
+    console.log("handleZoneSignal called with:", data);
+}
+
+export function updateOrderBookDisplay(data: OrderBookData): void {
+    // TODO: Implement order book display update
+    console.log("updateOrderBookDisplay called with:", data);
+}
+
+export function safeUpdateRSIChart(data: any): boolean {
+    // TODO: Implement safe RSI chart update
+    console.log("safeUpdateRSIChart called with:", data);
+    return true;
 }
 
 // =============================================================================
@@ -52,8 +113,11 @@ export function scheduleOrderBookUpdate(): void {
 /**
  * Updates Y-axis bounds based on visible trades (optimized for performance)
  */
-export function updateYAxisBounds(): void {
-    if (!tradesChart || trades.length === 0) return;
+export function updateYAxisBounds(
+    tradesData?: (ChartDataPoint | Trade)[]
+): void {
+    const tradesArray = tradesData || trades;
+    if (!tradesChart || tradesArray.length === 0) return;
 
     const xMin: number | undefined = tradesChart.options.scales.x.min;
     const xMax: number | undefined = tradesChart.options.scales.x.max;
@@ -67,16 +131,20 @@ export function updateYAxisBounds(): void {
     let visibleCount: number = 0;
 
     // Single efficient loop through trades
-    for (let i: number = trades.length - 1; i >= 0; i--) {
-        const trade: Trade | undefined = trades[i];
-        if (trade && trade.time >= xMin && trade.time <= xMax) {
-            const price: number = trade.price;
-            if (price < yMin) yMin = price;
-            if (price > yMax) yMax = price;
-            visibleCount++;
+    for (let i: number = tradesArray.length - 1; i >= 0; i--) {
+        const trade: ChartDataPoint | Trade | undefined = tradesArray[i];
+        if (trade) {
+            const tradeTime = (trade as any).x || (trade as any).time;
+            const tradePrice = (trade as any).y || (trade as any).price;
 
-            // Early exit if we have enough samples for accurate bounds
-            if (visibleCount >= 1000) break;
+            if (tradeTime >= xMin && tradeTime <= xMax) {
+                if (tradePrice < yMin) yMin = tradePrice;
+                if (tradePrice > yMax) yMax = tradePrice;
+                visibleCount++;
+
+                // Early exit if we have enough samples for accurate bounds
+                if (visibleCount >= 1000) break;
+            }
         }
     }
 
@@ -196,4 +264,9 @@ export function checkSupportResistanceBreaches(
 ): void {
     // TODO: Implement support/resistance breach checking
     console.log("checkSupportResistanceBreaches called with:", price, time);
+}
+
+export function buildSignalLabel(signal: Signal): string {
+    // TODO: Implement signal label building
+    return `${signal.type} ${signal.side || "unknown"} @ ${signal.price.toFixed(2)}`;
 }
