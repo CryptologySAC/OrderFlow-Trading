@@ -16,11 +16,11 @@
         "streamer": "bin/app"
     },
     "scripts": {
-        "start": "npx tsx src/app.ts",
+        "start": "bin/app",
         "start:dev": "NODE_ENV=development bin/app",
         "clean": "rm -r dist",
         "format": "yarn prettier && yarn lint",
-        "lint": "eslint \"src/**/*.{ts,tsx}\" --fix",
+        "lint": "eslint \"backend/src/**/*.{ts,tsx}\" --fix",
         "prettier": "npx prettier --write './**/*.{ts,tsx}'",
         "updates": "npx npm-check-updates",
         "update": "npx npm-check-updates -u",

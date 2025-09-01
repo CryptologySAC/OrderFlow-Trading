@@ -107,7 +107,7 @@ export default [
         },
     },
     {
-        files: ["test/**/*.ts", "**/*.test.ts"],
+        files: ["backend/test/**/*.ts", "**/*.test.ts"],
         rules: {
             "@typescript-eslint/no-magic-numbers": "off", // Allow magic numbers in tests
         },

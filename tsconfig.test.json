@@ -1,10 +1,10 @@
 {
     "extends": "./tsconfig.json",
     "compilerOptions": {
-        "rootDir": "test",
+        "rootDir": "backend/test",
         "types": ["vitest/globals", "node"],
         "strict": false, // <-- ✅ mocks may be sloppy
         "noEmit": true // only type-check, Jest transpiles itself
     },
-    "include": ["test/**/*"]
+    "include": ["backend/test/**/*"]
 }

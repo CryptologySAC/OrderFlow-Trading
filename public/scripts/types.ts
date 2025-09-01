@@ -118,7 +118,6 @@ export interface PriceLevel {
     originalAskVolume?: number; // Original ask volume before depletion
 }
 
-
 // RSI message
 export interface RsiMessage extends BaseMessage {
     type: MessageType.RSI;
