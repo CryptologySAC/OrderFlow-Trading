@@ -25,7 +25,7 @@
         "updates": "npx npm-check-updates",
         "update": "npx npm-check-updates -u",
         "build": "yarn format && tsc -p tsconfig.build.json && yarn build:frontend",
-        "build:frontend": "tsc -p tsconfig.frontend.json",
+        "build:frontend": "tsc -p tsconfig.frontend.json --noEmitOnError",
         "test": "vitest --run",
         "test:coverage": "vitest run --coverage",
         "check:deps": "yarn install --check-cache",
