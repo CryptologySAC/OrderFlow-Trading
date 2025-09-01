@@ -71,10 +71,14 @@ function updateTables(metrics: MetricsData): void {
     console.log("metrics.histograms:", metrics.histograms);
 
     // Update counters table
-    const countersBody = document.querySelector("#countersTable tbody") as HTMLTableSectionElement | null;
+    const countersBody = document.querySelector(
+        "#countersTable tbody"
+    ) as HTMLTableSectionElement | null;
     if (countersBody) {
         // Preserve the Active Connections row
-        const activeConnectionsRow = countersBody.querySelector("tr:first-child") as HTMLTableRowElement | null;
+        const activeConnectionsRow = countersBody.querySelector(
+            "tr:first-child"
+        ) as HTMLTableRowElement | null;
         countersBody.innerHTML = "";
 
         // Re-add the Active Connections row at the top
@@ -86,9 +90,10 @@ function updateTables(metrics: MetricsData): void {
             // Skip connections_active since we handle it separately
             if (name === "connections_active") continue;
 
-            const val = typeof counter === "object" && counter.value !== undefined
-                ? counter.value
-                : counter;
+            const val =
+                typeof counter === "object" && counter.value !== undefined
+                    ? counter.value
+                    : counter;
             const row = document.createElement("tr");
             const displayName = formatMetricName(name);
             const displayValue = formatMetricValue(name, val);
@@ -97,9 +102,11 @@ function updateTables(metrics: MetricsData): void {
         }
 
         // Add a "No data" row if empty (excluding Active Connections)
-        if (Object.keys(metrics.counters || {}).length === 0 ||
+        if (
+            Object.keys(metrics.counters || {}).length === 0 ||
             (Object.keys(metrics.counters || {}).length === 1 &&
-                metrics.counters.connections_active !== undefined)) {
+                metrics.counters.connections_active !== undefined)
+        ) {
             const row = document.createElement("tr");
             row.innerHTML = `<td colspan="2" style="text-align: center; color: var(--text-secondary, #666);">No counter data available</td>`;
             countersBody.appendChild(row);
@@ -107,7 +114,9 @@ function updateTables(metrics: MetricsData): void {
     }
 
     // Update gauges table
-    const gaugesBody = document.querySelector("#gaugesTable tbody") as HTMLTableSectionElement | null;
+    const gaugesBody = document.querySelector(
+        "#gaugesTable tbody"
+    ) as HTMLTableSectionElement | null;
     if (gaugesBody) {
         gaugesBody.innerHTML = "";
         for (const [name, value] of Object.entries(metrics.gauges || {})) {
@@ -127,7 +136,9 @@ function updateTables(metrics: MetricsData): void {
     }
 
     // Update histograms table
-    const histBody = document.querySelector("#histogramsTable tbody") as HTMLTableSectionElement | null;
+    const histBody = document.querySelector(
+        "#histogramsTable tbody"
+    ) as HTMLTableSectionElement | null;
     if (histBody) {
         histBody.innerHTML = "";
 
@@ -135,10 +146,12 @@ function updateTables(metrics: MetricsData): void {
         console.log("All metrics data:", metrics);
 
         // Try different data sources for histograms
-        const histograms = metrics.histograms || metrics.legacy?.histograms || {};
+        const histograms =
+            metrics.histograms || metrics.legacy?.histograms || {};
 
         // Also check for legacy processingLatency data
-        const legacyLatency = metrics.legacy?.processingLatency || metrics.processingLatency;
+        const legacyLatency =
+            metrics.legacy?.processingLatency || metrics.processingLatency;
 
         console.log("Histogram data:", histograms);
         console.log("Legacy latency data:", legacyLatency);
@@ -147,7 +160,11 @@ function updateTables(metrics: MetricsData): void {
         let hasData = false;
 
         // Add legacy processing latency if available
-        if (legacyLatency && Array.isArray(legacyLatency) && legacyLatency.length > 0) {
+        if (
+            legacyLatency &&
+            Array.isArray(legacyLatency) &&
+            legacyLatency.length > 0
+        ) {
             hasData = true;
             const row = document.createElement("tr");
             const count = legacyLatency.length;
@@ -169,7 +186,11 @@ function updateTables(metrics: MetricsData): void {
 
             // Handle different unit types based on metric name
             let meanDisplay: string, minDisplay: string, maxDisplay: string;
-            if (name.includes("duration") || name.includes("latency") || name.includes("time")) {
+            if (
+                name.includes("duration") ||
+                name.includes("latency") ||
+                name.includes("time")
+            ) {
                 meanDisplay = (summary as HistogramData).mean
                     ? `${(summary as HistogramData).mean!.toFixed(2)} ms`
                     : "0.00 ms";
@@ -180,9 +201,15 @@ function updateTables(metrics: MetricsData): void {
                     ? `${(summary as HistogramData).max!.toFixed(2)} ms`
                     : "0 ms";
             } else {
-                meanDisplay = (summary as HistogramData).mean ? (summary as HistogramData).mean!.toFixed(3) : "0.000";
-                minDisplay = (summary as HistogramData).min ? (summary as HistogramData).min!.toFixed(3) : "0";
-                maxDisplay = (summary as HistogramData).max ? (summary as HistogramData).max!.toFixed(3) : "0";
+                meanDisplay = (summary as HistogramData).mean
+                    ? (summary as HistogramData).mean!.toFixed(3)
+                    : "0.000";
+                minDisplay = (summary as HistogramData).min
+                    ? (summary as HistogramData).min!.toFixed(3)
+                    : "0";
+                maxDisplay = (summary as HistogramData).max
+                    ? (summary as HistogramData).max!.toFixed(3)
+                    : "0";
             }
 
             row.innerHTML = `<td>${displayName}</td><td>${count}</td><td>${meanDisplay}</td><td>${minDisplay}</td><td>${maxDisplay}</td>`;
@@ -244,8 +271,10 @@ function formatMetricName(name: string): string {
         error_count: "Error Count",
         health_checks: "Health Checks",
         // API connectivity metrics
-        api_connectivity_issue_websocket_disconnected: "WebSocket Disconnections",
-        api_connectivity_issue_asymmetric_streaming: "Asymmetric Streaming Issues",
+        api_connectivity_issue_websocket_disconnected:
+            "WebSocket Disconnections",
+        api_connectivity_issue_asymmetric_streaming:
+            "Asymmetric Streaming Issues",
         stream_connections_successful: "Successful Stream Connections",
         // Generic patterns
         api_connectivity_issue: "API Connectivity Issues",
@@ -282,8 +311,11 @@ function formatMetricValue(name: string, value: any): string {
         return `${value.toFixed(2)} ms`;
     }
 
-    if (name.includes("percentage") || name.includes("ratio") ||
-        (value >= 0 && value <= 1 && value % 1 !== 0)) {
+    if (
+        name.includes("percentage") ||
+        name.includes("ratio") ||
+        (value >= 0 && value <= 1 && value % 1 !== 0)
+    ) {
         return `${(value * 100).toFixed(1)}%`;
     }
 
@@ -310,7 +342,10 @@ function formatUptime(uptimeMs: number): string {
     }
 }
 
-function updateSignalMetrics(metrics: MetricsData, webSocketSignalTotals?: SignalTotals): void {
+function updateSignalMetrics(
+    metrics: MetricsData,
+    webSocketSignalTotals?: SignalTotals
+): void {
     const counters = metrics.counters || {};
     const histograms = metrics.histograms || {};
 
@@ -328,13 +363,16 @@ function updateSignalMetrics(metrics: MetricsData, webSocketSignalTotals?: Signa
     };
 
     // Signal Processing Overview - Use WebSocket signalTotals for real-time updates
-    const signalTotals = webSocketSignalTotals || metrics.signalTotals || {
-        candidates: 0,
-        confirmed: 0,
-        rejected: 0,
-    };
+    const signalTotals = webSocketSignalTotals ||
+        metrics.signalTotals || {
+            candidates: 0,
+            confirmed: 0,
+            rejected: 0,
+        };
     const signalCandidates = signalTotals.candidates;
-    const signalsProcessed = getCounterValue("signal_manager_signals_processed_total");
+    const signalsProcessed = getCounterValue(
+        "signal_manager_signals_processed_total"
+    );
     const signalsConfirmed = signalTotals.confirmed;
     const signalsRejected = signalTotals.rejected;
 
@@ -359,11 +397,16 @@ function updateSignalMetrics(metrics: MetricsData, webSocketSignalTotals?: Signa
     const totalRejections = signalsRejected;
 
     rejectionReasons.forEach((reason) => {
-        const count = getCounterValue(`signal_manager_rejection_reasons_total_${reason}`) ||
-            getCounterValue(`signal_manager_signal_rejected_${reason}_total`) || 0;
-        const percentage = totalRejections > 0
-            ? ((count / totalRejections) * 100).toFixed(1) + "%"
-            : "--";
+        const count =
+            getCounterValue(
+                `signal_manager_rejection_reasons_total_${reason}`
+            ) ||
+            getCounterValue(`signal_manager_signal_rejected_${reason}_total`) ||
+            0;
+        const percentage =
+            totalRejections > 0
+                ? ((count / totalRejections) * 100).toFixed(1) + "%"
+                : "--";
 
         const reasonCamelCase = reason.replace(/_([a-z])/g, (match, letter) =>
             letter.toUpperCase()
@@ -377,308 +420,6 @@ function updateSignalMetrics(metrics: MetricsData, webSocketSignalTotals?: Signa
             percentage
         );
     });
-
-    // Signal Quality Metrics
-    const confidenceHist = histograms["signal_manager_signal_confidence_distribution"];
-    const correlationHist = histograms["signal_manager_correlation_strength_distribution"];
-    const processingTimeHist = histograms["signal_manager_signal_processing_duration_ms"];
-
-    updateElement(
-        "avgConfidence",
-        confidenceHist ? ((confidenceHist as HistogramData).mean || 0).toFixed(3) : "--"
-    );
-    updateElement(
-        "confidenceP50",
-        confidenceHist ? getPercentile(confidenceHist as HistogramData, 50).toFixed(3) : "--"
-    );
-    updateElement(
-        "confidenceP95",
-        confidenceHist ? getPercentile(confidenceHist as HistogramData, 95).toFixed(3) : "--"
-    );
-    updateElement(
-        "avgCorrelationStrength",
-        correlationHist ? ((correlationHist as HistogramData).mean || 0).toFixed(3) : "--"
-    );
-    updateElement(
-        "avgProcessingTime",
-        processingTimeHist
-            ? `${((processingTimeHist as HistogramData).mean || 0).toFixed(2)} ms`
-            : "--"
-    );
-
-    // Queue depth from gauges
-    const queueDepth = metrics.gauges?.signal_coordinator_queue_size || 0;
-    updateElement("queueDepth", formatNumber(queueDepth));
-}
-
-function updateSignalTypeBreakdown(breakdown: SignalTypeBreakdown): void {
-    console.log("Updating signal type breakdown:", breakdown);
-
-    // Update each signal type
-    const signalTypes: Record<string, string> = {
-        absorption: "absorption",
-        exhaustion: "exhaustion",
-        accumulation: "accumulation",
-        distribution: "distribution",
-        deltacvd: "deltacvd", // Backend and frontend now use same ID
-    };
-
-    for (const [backendType, frontendId] of Object.entries(signalTypes)) {
-        const stats = breakdown[backendType] || {
-            candidates: 0,
-            confirmed: 0,
-            rejected: 0,
-            successRate: "--",
-        };
-
-        updateElement(`${frontendId}Candidates`, stats.candidates.toString());
-        updateElement(`${frontendId}Confirmed`, stats.confirmed.toString());
-        updateElement(`${frontendId}Rejected`, stats.rejected.toString());
-        updateElement(`${frontendId}SuccessRate`, stats.successRate);
-    }
-}
-
-function updateElement(id: string, value: string): void {
-    const element = document.getElementById(id);
-    if (element) {
-        element.textContent = value;
-    }
-}
-
-function getPercentile(histogram: HistogramData, percentile: number): number {
-    if (!histogram || !histogram.percentiles) return 0;
-    return histogram.percentiles[`p${percentile}`] || 0;
-}
-
-function updateWorkerInfo(data: { workers?: WorkerInfo }): void {
-    const workers = data.workers || {};
-
-    updateElement("loggerWorkerStatus", workers.loggerWorker || "Unknown");
-    updateElement("binanceWorkerStatus", workers.binanceWorker || "Unknown");
-    updateElement(
-        "communicationWorkerStatus",
-        workers.communicationWorker || "Unknown"
-    );
-    updateElement("wsConnections", formatNumber(workers.wsConnections || 0));
-    updateElement("streamHealth", workers.streamHealth || "Unknown");
-}
-
-function updateVisuals(data: MetricsData | { metrics?: MetricsData; signalTotals?: SignalTotals; signalTypeBreakdown?: SignalTypeBreakdown; workers?: WorkerInfo }): void {
-    const metrics = (data as any).metrics || data;
-
-    // Update connections number display
-    const connVal = metrics.gauges?.connections_active ??
-        (metrics as any).legacy?.connectionsActive ??
-        metrics.connections_active ??
-        0;
-    const connectionsElement = document.getElementById("connectionsNumber");
-    if (connectionsElement) {
-        connectionsElement.textContent = connVal.toString();
-    }
-
-    // Update tables with all metrics data
-    updateTables(metrics);
-
-    // Update signal metrics sections
-    updateSignalMetrics(metrics, (data as any).signalTotals);
-
-    // Update signal type breakdown
-    updateSignalTypeBreakdown((data as any).signalTypeBreakdown || {});
-
-    // Update worker information
-    updateWorkerInfo(data as any);
-}
-
-function connect(): void {
-    console.log("Connecting to stats WebSocket:", wsUrl);
-    ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-        console.log("Stats WebSocket connected");
-        pingTimer = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "ping" }));
-            }
-        }, 10000);
-    };
-
-    ws.onmessage = (event: MessageEvent) => {
-        try {
-            const msg = JSON.parse(event.data);
-            console.log("Received stats message:", msg.type, msg);
-
-            if (msg.type === "stats") {
-                updateVisuals(msg.data || msg);
-            } else if (msg.type === "metrics") {
-                updateVisuals(msg.data || msg);
-            } else if (msg.type === "pong") {
-                // Handle pong response
-                console.log("Received pong");
-            }
-        } catch (err) {
-            console.error("Stats parse error", err, "Raw data:", event.data);
-        }
-    };
-
-    ws.onerror = (error: Event) => {
-        console.error("WebSocket error:", error);
-    };
-
-    ws.onclose = (event: CloseEvent) => {
-        console.log("Stats WebSocket closed:", event.code, event.reason);
-        if (pingTimer) {
-            clearInterval(pingTimer);
-            pingTimer = null;
-        }
-        setTimeout(connect, 1000);
-    };
-}
-
-function setupColumnResizing(): void {
-    console.log("setupColumnResizing called");
-    if (typeof (window as any).interact === "undefined") {
-        console.error("Interact.js not loaded - resizing will not work");
-        return;
-    }
-    console.log("Interact.js is available, setting up resizing...");
-
-    // Setup column resizing for all resizable table headers
-    (window as any).interact(".resizable").draggable({
-        axis: "x",
-        listeners: {
-            start(event: any) {
-                event.target.classList.add("resizing");
-            },
-            move(event: any) {
-                const th = event.target as HTMLElement;
-                const table = th.closest("table") as HTMLTableElement;
-                const columnIndex = Array.from(th.parentNode!.children).indexOf(th);
-
-                // Get all cells in this column
-                const cells = table.querySelectorAll(
-                    `tr > *:nth-child(${columnIndex + 1})`
-                );
-
-                // Calculate new width
-                const currentWidth = th.offsetWidth;
-                const newWidth = Math.max(80, currentWidth + event.dx);
-
-                // Apply new width to all cells in the column
-                cells.forEach((cell) => {
-                    (cell as HTMLElement).style.width = `${newWidth}px`;
-                    (cell as HTMLElement).style.minWidth = `${newWidth}px`;
-                    (cell as HTMLElement).style.maxWidth = `${newWidth}px`;
-                });
-            },
-            end(event: any) {
-                event.target.classList.remove("resizing");
-            },
-        },
-    });
-}
-
-// Save and restore column widths
-function saveColumnWidths(): void {
-    const tables = document.querySelectorAll("table[id]");
-    const widths: Record<string, number[]> = {};
-
-    tables.forEach((table) => {
-        const tableId = (table as HTMLTableElement).id;
-        const headers = table.querySelectorAll("th.resizable");
-        widths[tableId] = Array.from(headers).map((th) => (th as HTMLElement).offsetWidth);
-    });
-
-    localStorage.setItem("statsColumnWidths", JSON.stringify(widths));
-}
-
-function restoreColumnWidths(): void {
-    try {
-        const savedWidths = JSON.parse(
-            localStorage.getItem("statsColumnWidths") || "{}"
-        ) as Record<string, number[]>;
-
-        Object.entries(savedWidths).forEach(([tableId, widths]) => {
-            const table = document.getElementById(tableId) as HTMLTableElement;
-            if (!table) return;
-
-            const headers = table.querySelectorAll("th.resizable");
-            widths.forEach((width, index) => {
-                const th = headers[index] as HTMLElement;
-                if (th && width) {
-                    const columnIndex = Array.from(th.parentNode!.children).indexOf(th);
-                    const cells = table.querySelectorAll(
-                        `tr > *:nth-child(${columnIndex + 1})`
-                    );
-
-                    cells.forEach((cell) => {
-                        (cell as HTMLElement).style.width = `${width}px`;
-                        (cell as HTMLElement).style.minWidth = `${width}px`;
-                        (cell as HTMLElement).style.maxWidth = `${width}px`;
-                    });
-                }
-            });
-        });
-    } catch (error) {
-        console.error("Failed to restore column widths:", error);
-    }
-}
-
-// Auto-save column widths when they change
-function setupAutoSave(): void {
-    let saveTimeout: NodeJS.Timeout | null = null;
-    document.addEventListener("mouseup", () => {
-        if (saveTimeout) {
-            clearTimeout(saveTimeout);
-        }
-        saveTimeout = setTimeout(saveColumnWidths, 500);
-    });
-}
-
-// Reset column widths for a specific table
-function resetTableColumns(tableId: string): void {
-    const table = document.getElementById(tableId) as HTMLTableElement;
-    if (!table) return;
-
-    const cells = table.querySelectorAll("th, td");
-    cells.forEach((cell) => {
-        (cell as HTMLElement).style.width = "";
-        (cell as HTMLElement).style.minWidth = "";
-        (cell as HTMLElement).style.maxWidth = "";
-    });
-
-    // Remove from saved widths
-    try {
-        const savedWidths = JSON.parse(
-            localStorage.getItem("statsColumnWidths") || "{}"
-        ) as Record<string, number[]>;
-        delete savedWidths[tableId];
-        localStorage.setItem("statsColumnWidths", JSON.stringify(savedWidths));
-    } catch (error) {
-        console.error("Failed to reset column widths:", error);
-    }
-}
-
-// Make resetTableColumns globally available
-(window as any).resetTableColumns = resetTableColumns;
-
-document.addEventListener("DOMContentLoaded", () => {
-    console.log("DOM Content Loaded - initializing stats page");
-    initVisuals();
-    connect();
-
-    // Setup column resizing after DOM is loaded - TEMPORARILY DISABLED FOR DEBUGGING
-    // setTimeout(() => {
-    //     try {
-    //         console.log("Setting up column resizing...");
-    //         restoreColumnWidths();
-    //         setupColumnResizing();
-    //         setupAutoSave();
-    //         console.log("Column resizing setup complete");
-    //     } catch (error) {
-    //         console.error("Error setting up column resizing:", error);
-    //     }
-    // }, 100);
-});
 
     // Signal Quality Metrics
     const confidenceHist =
@@ -859,14 +600,14 @@ function connect(): void {
 
 function setupColumnResizing(): void {
     console.log("setupColumnResizing called");
-    if (typeof window.interact === "undefined") {
+    if (typeof (window as any).interact === "undefined") {
         console.error("Interact.js not loaded - resizing will not work");
         return;
     }
     console.log("Interact.js is available, setting up resizing...");
 
     // Setup column resizing for all resizable table headers
-    window.interact(".resizable").draggable({
+    (window as any).interact(".resizable").draggable({
         axis: "x",
         listeners: {
             start(event: any) {
@@ -910,7 +651,9 @@ function saveColumnWidths(): void {
     tables.forEach((table) => {
         const tableId = (table as HTMLTableElement).id;
         const headers = table.querySelectorAll("th.resizable");
-        widths[tableId] = Array.from(headers).map((th) => th.offsetWidth);
+        widths[tableId] = Array.from(headers).map(
+            (th) => (th as HTMLElement).offsetWidth
+        );
     });
 
     localStorage.setItem("statsColumnWidths", JSON.stringify(widths));
@@ -986,13 +729,7 @@ function resetTableColumns(tableId: string): void {
 }
 
 // Make resetTableColumns globally available
-declare global {
-    interface Window {
-        resetTableColumns?: (tableId: string) => void;
-    }
-}
-
-window.resetTableColumns = resetTableColumns;
+(window as any).resetTableColumns = resetTableColumns;
 
 document.addEventListener("DOMContentLoaded", () => {
     console.log("DOM Content Loaded - initializing stats page");
