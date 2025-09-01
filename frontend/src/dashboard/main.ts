@@ -34,7 +34,6 @@ interface ChartInstance {
     update(mode?: string): void;
 }
 
-// @ts-expect-error - JavaScript module imports
 import {
     tradesCanvas,
     orderBookCanvas,
@@ -54,7 +53,6 @@ import {
     MAX_RSI_DATA,
     setRuntimeConfig,
 } from "./state";
-// @ts-expect-error - JavaScript module imports
 import {
     initializeTradesChart,
     initializeRSIChart,
@@ -73,14 +71,12 @@ import {
     updateOrderBookDisplay,
     safeUpdateRSIChart,
 } from "./charts";
-// @ts-expect-error - JavaScript module imports
 import {
     renderAnomalyList,
     renderSignalsList,
     updateTradeDelayIndicator,
     showSignalBundleBadge,
 } from "./render";
-// @ts-expect-error - JavaScript module imports
 import {
     restoreColumnWidths,
     restoreAnomalyFilters,
@@ -89,9 +85,7 @@ import {
     resetAllSettings,
     saveAnomalyFilters,
 } from "./persistence";
-// @ts-expect-error - JavaScript module imports
 import { setupColumnResizing, setRange } from "./ui";
-// @ts-expect-error - JavaScript module imports
 import {
     getCurrentTheme,
     getSystemTheme,
@@ -102,7 +96,6 @@ import {
     toggleDepletionVisualization,
     updateDepletionToggleButton,
 } from "./theme";
-// @ts-expect-error - JavaScript module imports
 import { TradeWebSocket } from "../websocket";
 
 declare module "./charts" {

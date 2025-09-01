@@ -224,11 +224,11 @@ export class TradeWebSocket {
 
         const obj = data as Record<string, unknown>;
 
-        if (typeof obj.type !== "string") {
+        if (typeof obj["type"] !== "string") {
             return false;
         }
 
-        return Object.values(MessageType).includes(obj.type as MessageType);
+        return Object.values(MessageType).includes(obj["type"] as MessageType);
     }
 
     private safeJsonParse(str: string): unknown {
