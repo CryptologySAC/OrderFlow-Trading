@@ -73,6 +73,9 @@ let orderBookData = {
 };
 let supportResistanceLevels = [];
 
+const messageQueue = [];
+let isProcessingQueue = false;
+
 /**
  * Centralized function to update the time range for both charts.
  * @param {number} latestTime - The latest timestamp to base the range on.
@@ -127,223 +130,7 @@ function createTrade(time, price, quantity, orderType) {
     };
 }
 
-/**
- * Safely estimates object size without using JSON.stringify
- * Prevents stack overflow during memory pressure situations
- *
- * @param {any} obj - The object to estimate size for
- * @param {number} maxDepth - Maximum recursion depth
- * @param {WeakSet} visited - Set of already visited objects
- * @returns {number} - Estimated size in bytes
- */
-function getSafeObjectSize(obj, maxDepth = 3, visited = new WeakSet()) {
-    if (!obj || typeof obj !== "object") return 0;
-    if (visited.has(obj)) return 0; // Circular reference detected
-    if (maxDepth <= 0) return 1000; // Estimate for deep objects
 
-    visited.add(obj);
-
-    try {
-        if (Array.isArray(obj)) {
-            return obj.length * 100; // Rough estimate per array item
-        }
-
-        const keys = Object.keys(obj);
-        let size = keys.length * 50; // Rough estimate per property
-
-        // Sample a few properties for better estimation
-        for (let i = 0; i < Math.min(keys.length, 5); i++) {
-            const value = obj[keys[i]];
-            if (typeof value === "string") size += value.length;
-            else if (typeof value === "object" && value !== null) {
-                size += getSafeObjectSize(value, maxDepth - 1, visited);
-            }
-        }
-
-        return size;
-    } finally {
-        visited.delete(obj);
-    }
-}
-
-/**
- * Safe JSON.stringify replacement that handles circular references
- * @param {any} obj - The object to stringify
- * @param {number} maxDepth - Maximum recursion depth
- * @returns {string} - JSON string or error message
- */
-function safeStringify(obj, maxDepth = 3) {
-    try {
-        // For simple primitives, use normal JSON.stringify
-        if (obj === null || typeof obj !== "object") {
-            return JSON.stringify(obj);
-        }
-
-        // Check for circular references first
-        if (hasCircularReference(obj)) {
-            console.warn(
-                "Circular reference detected, using fallback serialization"
-            );
-            return "[Circular Reference Detected]";
-        }
-
-        // For simple objects/arrays, try normal stringify with error handling
-        if (
-            Array.isArray(obj) ||
-            (obj.constructor === Object && Object.keys(obj).length < 10)
-        ) {
-            return JSON.stringify(obj);
-        }
-
-        // For complex objects, use size estimation instead
-        console.warn(
-            "Complex object detected, skipping JSON serialization to prevent stack overflow"
-        );
-        return "[Complex Object - Size: " + getSafeObjectSize(obj) + " bytes]";
-    } catch (error) {
-        console.warn("JSON.stringify failed:", error.message);
-        return "[Serialization Error: " + error.message + "]";
-    }
-}
-
-// Make safeStringify globally available for other scripts
-window.safeStringify = safeStringify;
-
-/**
- * Detects circular references in objects using iterative approach.
- * Prevents stack overflow by avoiding deep recursion.
- *
- * FIX: Replaced recursive algorithm with iterative queue-based approach
- * to prevent "Maximum call stack size exceeded" errors when processing
- * complex WebSocket messages with deeply nested object structures.
- *
- * @param {any} obj - The object to check for circular references.
- * @param {WeakSet} visited - Set of already visited objects.
- * @returns {boolean} - True if circular reference is found, false otherwise.
- */
-function hasCircularReference(obj, visited = new WeakSet()) {
-    // Performance optimization: Skip check for primitive values and small objects
-    if (!obj || typeof obj !== "object" || obj === null) {
-        return false;
-    }
-
-    // Quick check for common safe object types
-    if (obj instanceof Date || obj instanceof RegExp || obj instanceof Error) {
-        return false;
-    }
-
-    // Check for circular reference
-    if (visited.has(obj)) {
-        return true;
-    }
-
-    // Add to visited set
-    visited.add(obj);
-
-    try {
-        // Use iterative approach instead of recursion
-        const stack = [obj];
-        const path = new WeakSet();
-
-        while (stack.length > 0) {
-            const current = stack.pop();
-
-            // Skip if already processed
-            if (path.has(current)) {
-                continue;
-            }
-            path.add(current);
-
-            // Only process plain objects and arrays to avoid prototype issues
-            if (
-                current &&
-                typeof current === "object" &&
-                (Array.isArray(current) || current.constructor === Object)
-            ) {
-                // Limit processing to prevent excessive computation
-                const keys = Object.keys(current);
-                if (keys.length > 100) {
-                    // For very large objects, use a simpler check
-                    return false; // Assume no circular reference in large objects
-                }
-
-                for (const key of keys) {
-                    const value = current[key];
-
-                    // Skip functions and primitives
-                    if (
-                        typeof value === "function" ||
-                        typeof value !== "object"
-                    ) {
-                        continue;
-                    }
-
-                    // Check for circular reference
-                    if (
-                        value &&
-                        typeof value === "object" &&
-                        visited.has(value)
-                    ) {
-                        return true;
-                    }
-
-                    // Add to stack for processing (limit depth)
-                    if (stack.length < 50) {
-                        // Prevent stack from growing too large
-                        stack.push(value);
-                    }
-                }
-            }
-        }
-
-        return false;
-    } catch (error) {
-        // If there's any error during traversal, assume no circular reference
-        console.warn("Error during circular reference check:", error);
-        return false;
-    }
-}
-
-/**
- * Test function to verify circular reference detection works without stack overflow
- * This can be called from browser console to test the fix
- */
-function testCircularReferenceDetection() {
-    console.log("Testing circular reference detection...");
-
-    // Test 1: Simple object without circular references
-    const simpleObj = { a: 1, b: { c: 2 } };
-    const result1 = hasCircularReference(simpleObj);
-    console.log("Simple object test:", result1); // Should be false
-
-    // Test 2: Object with circular reference
-    const circularObj = { a: 1 };
-    circularObj.self = circularObj;
-    const result2 = hasCircularReference(circularObj);
-    console.log("Circular object test:", result2); // Should be true
-
-    // Test 3: Deep nested object (potential stack overflow scenario)
-    let deepObj = { level: 0 };
-    let current = deepObj;
-    for (let i = 1; i < 1000; i++) {
-        current = current[`level${i}`] = { level: i };
-    }
-    const result3 = hasCircularReference(deepObj);
-    console.log("Deep nested object test:", result3); // Should be false and not crash
-
-    // Test 4: Large object with many properties
-    const largeObj = {};
-    for (let i = 0; i < 200; i++) {
-        largeObj[`prop${i}`] = { value: i, nested: { data: `item${i}` } };
-    }
-    const result4 = hasCircularReference(largeObj);
-    console.log("Large object test:", result4); // Should be false
-
-    console.log("All circular reference tests completed successfully!");
-}
-
-// Make test function available globally for debugging
-window.testCircularReferenceDetection = testCircularReferenceDetection;
 
 function initialize() {
     // Restore ALL saved settings FIRST, before any UI setup or rendering
@@ -483,6 +270,384 @@ function initialize() {
 
     // Setup periodic update for signal times display
     setInterval(renderSignalsList, 60000); // Update every minute
+
+    // Start the message queue processor
+    processMessageQueue();
+}
+
+function processMessageQueue() {
+    if (messageQueue.length === 0) {
+        isProcessingQueue = false;
+        requestAnimationFrame(processMessageQueue);
+        return;
+    }
+
+    isProcessingQueue = true;
+    const message = messageQueue.shift();
+
+    try {
+        // The actual message processing logic
+        handleMessage(message);
+    } catch (error) {
+        console.error("Error processing message from queue:", error);
+    }
+
+    requestAnimationFrame(processMessageQueue);
+}
+
+function handleMessage(message) {
+    // Check if message is null or undefined
+    if (!message) {
+        console.warn("Received null or undefined message");
+        return;
+    }
+
+    const receiveTime = Date.now();
+    const messageTime = message.now ?? 0;
+    const delay = receiveTime - messageTime;
+    if (delay >= 0) {
+        // Update the trade delay indicator (gauge was removed)
+        updateTradeDelayIndicator(delay);
+    }
+
+    switch (message.type) {
+        case "anomaly":
+            anomalyList.unshift(message.data);
+            // Limit list length
+            if (anomalyList.length > 100) {
+                anomalyList.length = 100;
+            }
+            renderAnomalyList();
+            // Badge only for high/critical
+            if (
+                message.data.severity === "high" ||
+                message.data.severity === "critical"
+            ) {
+                //showAnomalyBadge(message.data);
+            }
+            // Annotate chart if desired (optional, see below)
+            //addAnomalyChartLabel(message.data);
+            break;
+        case "trade":
+            const trade = message.data;
+            if (isValidTrade(trade)) {
+                trades.push(
+                    createTrade(
+                        trade.time,
+                        trade.price,
+                        trade.quantity,
+                        trade.orderType
+                    )
+                );
+
+                tradesChart.data.datasets[0].data = [...trades];
+
+                const line =
+                    tradesChart.options.plugins.annotation.annotations
+                        .lastPriceLine;
+                line.yMin = trade.price;
+                line.yMax = trade.price;
+
+                updateUnifiedTimeRange(trade.time);
+                updateYAxisBounds(trades);
+
+                // Check for support/resistance zone breaches
+                checkSupportResistanceBreaches(trade.price, trade.time);
+
+                scheduleTradesChartUpdate();
+            }
+            break;
+
+        case "rsi":
+            const rsiDataPoint = message.data;
+            if (
+                rsiDataPoint &&
+                typeof rsiDataPoint.time === "number" &&
+                typeof rsiDataPoint.rsi === "number"
+            ) {
+                // Add to RSI data array (backlog already handles deduplication)
+                rsiData.push(rsiDataPoint);
+
+                // Limit data size
+                if (rsiData.length > MAX_RSI_DATA) {
+                    rsiData.shift();
+                }
+
+                // Batch real-time RSI updates to reduce chart re-renders
+                if (!window.rsiUpdateTimeout) {
+                    window.rsiUpdateTimeout = setTimeout(() => {
+                        const updateSuccess = safeUpdateRSIChart([
+                            ...rsiData,
+                        ]);
+                        window.rsiUpdateTimeout = null;
+
+                        if (!updateSuccess) {
+                            console.error(
+                                "Failed to update RSI chart with batched data"
+                            );
+                        }
+                    }, 100); // Update at most every 100ms
+                }
+            } else {
+                console.warn(
+                    "Invalid RSI data received:",
+                    rsiDataPoint
+                );
+            }
+            break;
+
+        case "rsi_backlog":
+            console.log(
+                `${message.data.length} RSI backlog data received.`
+            );
+
+            // Process backlog data and replace chart data entirely
+            const backlogData = [];
+            const processBacklogChunk = (data, startIndex = 0) => {
+                const chunkSize = 10; // Process 10 points at a time
+                const endIndex = Math.min(
+                    startIndex + chunkSize,
+                    data.length
+                );
+
+                // Pre-validate and add data points to backlog array
+                for (let i = startIndex; i < endIndex; i++) {
+                    const rsiPoint = data[i];
+                    if (
+                        rsiPoint &&
+                        typeof rsiPoint.time === "number" &&
+                        typeof rsiPoint.rsi === "number" &&
+                        rsiPoint.rsi >= 0 &&
+                        rsiPoint.rsi <= 100
+                    ) {
+                        backlogData.push(rsiPoint);
+                    }
+                }
+
+                if (endIndex < data.length) {
+                    // Process next chunk asynchronously to avoid blocking
+                    setTimeout(
+                        () => processBacklogChunk(data, endIndex),
+                        0
+                    );
+                } else {
+                    // All chunks processed - replace rsiData with backlog
+                    if (backlogData.length > 0) {
+                        rsiData.length = 0; // Clear existing data
+                        rsiData.push(...backlogData); // Add backlog data
+
+                        // Update chart immediately with backlog data
+                        if (rsiChart) {
+                            rsiChart.data.datasets[0].data = [
+                                ...rsiData,
+                            ];
+                            rsiChart.update("none");
+                        }
+
+                        console.log(
+                            `${backlogData.length} RSI backlog points loaded and chart updated`
+                        );
+                    }
+                }
+            };
+
+            // Process backlog and replace data
+            processBacklogChunk(message.data);
+            break;
+
+        case "signal":
+            const label = buildSignalLabel(message.data);
+            const id = message.data.id;
+
+            // Add to signals list
+            signalsList.unshift(message.data);
+            // Limit list length
+            if (signalsList.length > 50) {
+                signalsList.length = 50;
+            }
+            renderSignalsList();
+
+            // Add to chart
+            tradesChart.options.plugins.annotation.annotations[id] = {
+                type: "label",
+                xValue: message.data.time,
+                yValue: message.data.price,
+                content: label,
+                backgroundColor: "rgba(90, 50, 255, 0.5)",
+                color: "white",
+                font: {
+                    size: 12,
+                    family: "monospace",
+                },
+                borderRadius: 4,
+                padding: 8,
+                position: {
+                    x: "center",
+                    y: "center",
+                },
+            };
+            tradesChart.update("none");
+            console.log("Signal label added:", label);
+            break;
+
+        case "signal_backlog":
+            console.log(
+                `${message.data.length} backlog signals received.`
+            );
+
+            // Process backlog signals in reverse order (oldest first)
+            const backlogSignals = [...message.data].reverse();
+
+            for (const signal of backlogSignals) {
+                const normalizedSignal = {
+                    id: signal.id,
+                    type:
+                        signal.originalSignals?.[0]?.type ||
+                        "confirmed",
+                    side:
+                        signal.originalSignals?.[0]?.metadata?.side ||
+                        "unknown",
+                    price: signal.finalPrice || signal.price,
+                    time: signal.confirmedAt || signal.time,
+                    confidence: signal.confidence,
+                    // Include original signal data for buildSignalLabel
+                    ...signal,
+                };
+
+                const signalLabel = buildSignalLabel(normalizedSignal);
+                const signalId = signal.id;
+
+                // Add to signals list - use unshift to maintain newest-first order
+                signalsList.unshift(normalizedSignal);
+
+                // Add to chart
+                tradesChart.options.plugins.annotation.annotations[
+                    signalId
+                ] = {
+                    type: "label",
+                    xValue: normalizedSignal.time,
+                    yValue: normalizedSignal.price,
+                    content: signalLabel,
+                    backgroundColor: "rgba(90, 50, 255, 0.4)", // Slightly more transparent for backlog
+                    color: "white",
+                    font: {
+                        size: 12,
+                        family: "monospace",
+                    },
+                    borderRadius: 4,
+                    padding: 8,
+                    position: {
+                        x: "center",
+                        y: "center",
+                    },
+                };
+            }
+
+            // Limit total signals list length
+            if (signalsList.length > 50) {
+                signalsList.length = 50; // Keep most recent 50
+            }
+
+            renderSignalsList();
+            tradesChart.update("none");
+            console.log(
+                `${backlogSignals.length} backlog signals added to chart and list`
+            );
+            break;
+
+        case "signal_bundle":
+            if (Array.isArray(message.data) && message.data.length) {
+                const filtered = message.data.filter((s) => {
+                    const last = signalsList[0];
+                    if (!last) return true;
+                    const diff = Math.abs(s.price - last.price);
+                    return diff > last.price * dedupTolerance;
+                });
+
+                filtered.forEach((signal) => {
+                    signalsList.unshift(signal);
+
+                    const label = buildSignalLabel(signal);
+                    tradesChart.options.plugins.annotation.annotations[
+                        signal.id
+                    ] = {
+                        type: "label",
+                        xValue: signal.time,
+                        yValue: signal.price,
+                        content: label,
+                        backgroundColor: "rgba(90, 50, 255, 0.5)",
+                        color: "white",
+                        font: {
+                            size: 12,
+                            family: "monospace",
+                        },
+                        borderRadius: 4,
+                        padding: 8,
+                        position: {
+                            x: "center",
+                            y: "center",
+                        },
+                    };
+                });
+
+                if (signalsList.length > 50) {
+                    signalsList.length = 50;
+                }
+
+                renderSignalsList();
+                tradesChart.update("none");
+                showSignalBundleBadge(filtered);
+            }
+            break;
+
+        case "runtimeConfig":
+            if (message.data && typeof message.data === "object") {
+                setRuntimeConfig(message.data);
+            }
+            break;
+
+        case "supportResistanceLevel":
+            console.log(
+                "Support/Resistance level received:",
+                message.data
+            );
+            handleSupportResistanceLevel(message.data);
+            break;
+
+        case "zoneUpdate":
+            console.log("Zone update received:", message.data);
+            handleZoneUpdate(message.data);
+            break;
+
+        case "zoneSignal":
+            console.log("Zone signal received:", message.data);
+            handleZoneSignal(message.data);
+            break;
+
+        case "orderbook":
+            if (
+                !message.data ||
+                !Array.isArray(message.data.priceLevels)
+            ) {
+                console.error("Invalid orderbook data");
+                return;
+            }
+
+            orderBookData = message.data;
+
+            // Minimal logging - only once per session
+            if (!window.orderbookInitialized) {
+                console.log("📊 Orderbook initialized:", {
+                    levels: orderBookData.priceLevels.length,
+                    midPrice: orderBookData.midPrice,
+                });
+                window.orderbookInitialized = true;
+            }
+
+            // Direct chart update - no conditional checks
+            updateOrderBookDisplay(orderBookData);
+            break;
+    }
 }
 
 document.addEventListener("DOMContentLoaded", initialize);
@@ -678,407 +843,9 @@ const tradeWebsocket = new TradeWebSocket({
     },
 
     onMessage: (message) => {
-        try {
-            // FIX: Deep clone the incoming message to prevent stack overflows.
-            // This sanitizes the object, removing any circular references or Proxies
-            // that can cause infinite recursion during processing.
-            const cleanMessage = JSON.parse(JSON.stringify(message));
-
-            // Check if message is null or undefined
-            if (!cleanMessage) {
-                console.warn("Received null or undefined message");
-                return;
-            }
-
-            // Simple message validation - no complex checks to prevent stack overflow
-            if (cleanMessage.data && typeof cleanMessage.data === "object") {
-                try {
-                    const dataSize = getSafeObjectSize(cleanMessage.data);
-                    if (dataSize > 2000000) {
-                        console.warn(
-                            `Large message (${dataSize} bytes):`,
-                            cleanMessage.type
-                        );
-                    }
-                } catch (error) {
-                    console.warn("Size check failed:", error.message);
-                }
-            }
-
-            const receiveTime = Date.now();
-            const messageTime = cleanMessage.now ?? 0;
-            const delay = receiveTime - messageTime;
-            if (delay >= 0) {
-                // Update the trade delay indicator (gauge was removed)
-                updateTradeDelayIndicator(delay);
-            }
-
-            switch (cleanMessage.type) {
-                case "anomaly":
-                    anomalyList.unshift(cleanMessage.data);
-                    // Limit list length
-                    if (anomalyList.length > 100) {
-                        anomalyList.length = 100;
-                    }
-                    renderAnomalyList();
-                    // Badge only for high/critical
-                    if (
-                        cleanMessage.data.severity === "high" ||
-                        cleanMessage.data.severity === "critical"
-                    ) {
-                        //showAnomalyBadge(message.data);
-                    }
-                    // Annotate chart if desired (optional, see below)
-                    //addAnomalyChartLabel(message.data);
-                    break;
-                case "trade":
-                    const trade = cleanMessage.data;
-                    if (isValidTrade(trade)) {
-                        trades.push(
-                            createTrade(
-                                trade.time,
-                                trade.price,
-                                trade.quantity,
-                                trade.orderType
-                            )
-                        );
-
-                        tradesChart.data.datasets[0].data = [...trades];
-
-                        const line =
-                            tradesChart.options.plugins.annotation.annotations
-                                .lastPriceLine;
-                        line.yMin = trade.price;
-                        line.yMax = trade.price;
-
-                        updateUnifiedTimeRange(trade.time);
-                        updateYAxisBounds(trades);
-
-                        // Check for support/resistance zone breaches
-                        checkSupportResistanceBreaches(trade.price, trade.time);
-
-                        scheduleTradesChartUpdate();
-                    }
-                    break;
-
-                case "rsi":
-                    const rsiDataPoint = cleanMessage.data;
-                    if (
-                        rsiDataPoint &&
-                        typeof rsiDataPoint.time === "number" &&
-                        typeof rsiDataPoint.rsi === "number"
-                    ) {
-                        // Add to RSI data array (backlog already handles deduplication)
-                        rsiData.push(rsiDataPoint);
-
-                        // Limit data size
-                        if (rsiData.length > MAX_RSI_DATA) {
-                            rsiData.shift();
-                        }
-
-                        // Batch real-time RSI updates to reduce chart re-renders
-                        if (!window.rsiUpdateTimeout) {
-                            window.rsiUpdateTimeout = setTimeout(() => {
-                                const updateSuccess = safeUpdateRSIChart([
-                                    ...rsiData,
-                                ]);
-                                window.rsiUpdateTimeout = null;
-
-                                if (!updateSuccess) {
-                                    console.error(
-                                        "Failed to update RSI chart with batched data"
-                                    );
-                                }
-                            }, 100); // Update at most every 100ms
-                        }
-                    } else {
-                        console.warn(
-                            "Invalid RSI data received:",
-                            rsiDataPoint
-                        );
-                    }
-                    break;
-
-                case "rsi_backlog":
-                    console.log(
-                        `${cleanMessage.data.length} RSI backlog data received.`
-                    );
-
-                    // Process backlog data and replace chart data entirely
-                    const backlogData = [];
-                    const processBacklogChunk = (data, startIndex = 0) => {
-                        const chunkSize = 10; // Process 10 points at a time
-                        const endIndex = Math.min(
-                            startIndex + chunkSize,
-                            data.length
-                        );
-
-                        // Pre-validate and add data points to backlog array
-                        for (let i = startIndex; i < endIndex; i++) {
-                            const rsiPoint = data[i];
-                            if (
-                                rsiPoint &&
-                                typeof rsiPoint.time === "number" &&
-                                typeof rsiPoint.rsi === "number" &&
-                                rsiPoint.rsi >= 0 &&
-                                rsiPoint.rsi <= 100
-                            ) {
-                                backlogData.push(rsiPoint);
-                            }
-                        }
-
-                        if (endIndex < data.length) {
-                            // Process next chunk asynchronously to avoid blocking
-                            setTimeout(
-                                () => processBacklogChunk(data, endIndex),
-                                0
-                            );
-                        } else {
-                            // All chunks processed - replace rsiData with backlog
-                            if (backlogData.length > 0) {
-                                rsiData.length = 0; // Clear existing data
-                                rsiData.push(...backlogData); // Add backlog data
-
-                                // Update chart immediately with backlog data
-                                if (rsiChart) {
-                                    rsiChart.data.datasets[0].data = [
-                                        ...rsiData,
-                                    ];
-                                    rsiChart.update("none");
-                                }
-
-                                console.log(
-                                    `${backlogData.length} RSI backlog points loaded and chart updated`
-                                );
-                            }
-                        }
-                    };
-
-                    // Process backlog and replace data
-                    processBacklogChunk(cleanMessage.data);
-                    break;
-
-                case "signal":
-                    const label = buildSignalLabel(cleanMessage.data);
-                    const id = cleanMessage.data.id;
-
-                    // Add to signals list
-                    signalsList.unshift(cleanMessage.data);
-                    // Limit list length
-                    if (signalsList.length > 50) {
-                        signalsList.length = 50;
-                    }
-                    renderSignalsList();
-
-                    // Add to chart
-                    tradesChart.options.plugins.annotation.annotations[id] = {
-                        type: "label",
-                        xValue: cleanMessage.data.time,
-                        yValue: cleanMessage.data.price,
-                        content: label,
-                        backgroundColor: "rgba(90, 50, 255, 0.5)",
-                        color: "white",
-                        font: {
-                            size: 12,
-                            family: "monospace",
-                        },
-                        borderRadius: 4,
-                        padding: 8,
-                        position: {
-                            x: "center",
-                            y: "center",
-                        },
-                    };
-                    tradesChart.update("none");
-                    console.log("Signal label added:", label);
-                    break;
-
-                case "signal_backlog":
-                    console.log(
-                        `${cleanMessage.data.length} backlog signals received.`
-                    );
-
-                    // Process backlog signals in reverse order (oldest first)
-                    const backlogSignals = [...cleanMessage.data].reverse();
-
-                    for (const signal of backlogSignals) {
-                        const normalizedSignal = {
-                            id: signal.id,
-                            type:
-                                signal.originalSignals?.[0]?.type ||
-                                "confirmed",
-                            side:
-                                signal.originalSignals?.[0]?.metadata?.side ||
-                                "unknown",
-                            price: signal.finalPrice || signal.price,
-                            time: signal.confirmedAt || signal.time,
-                            confidence: signal.confidence,
-                            // Include original signal data for buildSignalLabel
-                            ...signal,
-                        };
-
-                        const signalLabel = buildSignalLabel(normalizedSignal);
-                        const signalId = signal.id;
-
-                        // Add to signals list - use unshift to maintain newest-first order
-                        signalsList.unshift(normalizedSignal);
-
-                        // Add to chart
-                        tradesChart.options.plugins.annotation.annotations[
-                            signalId
-                        ] = {
-                            type: "label",
-                            xValue: normalizedSignal.time,
-                            yValue: normalizedSignal.price,
-                            content: signalLabel,
-                            backgroundColor: "rgba(90, 50, 255, 0.4)", // Slightly more transparent for backlog
-                            color: "white",
-                            font: {
-                                size: 12,
-                                family: "monospace",
-                            },
-                            borderRadius: 4,
-                            padding: 8,
-                            position: {
-                                x: "center",
-                                y: "center",
-                            },
-                        };
-                    }
-
-                    // Limit total signals list length
-                    if (signalsList.length > 50) {
-                        signalsList.length = 50; // Keep most recent 50
-                    }
-
-                    renderSignalsList();
-                    tradesChart.update("none");
-                    console.log(
-                        `${backlogSignals.length} backlog signals added to chart and list`
-                    );
-                    break;
-
-                case "signal_bundle":
-                    if (Array.isArray(cleanMessage.data) && cleanMessage.data.length) {
-                        const filtered = cleanMessage.data.filter((s) => {
-                            const last = signalsList[0];
-                            if (!last) return true;
-                            const diff = Math.abs(s.price - last.price);
-                            return diff > last.price * dedupTolerance;
-                        });
-
-                        filtered.forEach((signal) => {
-                            signalsList.unshift(signal);
-
-                            const label = buildSignalLabel(signal);
-                            tradesChart.options.plugins.annotation.annotations[
-                                signal.id
-                            ] = {
-                                type: "label",
-                                xValue: signal.time,
-                                yValue: signal.price,
-                                content: label,
-                                backgroundColor: "rgba(90, 50, 255, 0.5)",
-                                color: "white",
-                                font: {
-                                    size: 12,
-                                    family: "monospace",
-                                },
-                                borderRadius: 4,
-                                padding: 8,
-                                position: {
-                                    x: "center",
-                                    y: "center",
-                                },
-                            };
-                        });
-
-                        if (signalsList.length > 50) {
-                            signalsList.length = 50;
-                        }
-
-                        renderSignalsList();
-                        tradesChart.update("none");
-                        showSignalBundleBadge(filtered);
-                    }
-                    break;
-
-                case "rsi_backlog":
-                    console.log(
-                        `${cleanMessage.data.length} RSI backlog data received.`
-                    );
-                    rsiData.length = 0; // Clear existing data
-
-                    for (const rsiPoint of cleanMessage.data) {
-                        if (
-                            rsiPoint &&
-                            typeof rsiPoint.time === "number" &&
-                            typeof rsiPoint.rsi === "number"
-                        ) {
-                            rsiData.push(rsiPoint);
-                        }
-                    }
-
-                    // Update RSI chart with backlog data
-                    if (rsiChart && rsiData.length > 0) {
-                        rsiChart.data.datasets[0].data = [...rsiData];
-                    }
-
-                    console.log(
-                        `${rsiData.length} RSI backlog points added to chart`
-                    );
-                    break;
-
-                case "runtimeConfig":
-                    if (cleanMessage.data && typeof cleanMessage.data === "object") {
-                        setRuntimeConfig(cleanMessage.data);
-                    }
-                    break;
-
-                case "supportResistanceLevel":
-                    console.log(
-                        "Support/Resistance level received:",
-                        cleanMessage.data
-                    );
-                    handleSupportResistanceLevel(cleanMessage.data);
-                    break;
-
-                case "zoneUpdate":
-                    console.log("Zone update received:", cleanMessage.data);
-                    handleZoneUpdate(cleanMessage.data);
-                    break;
-
-                case "zoneSignal":
-                    console.log("Zone signal received:", cleanMessage.data);
-                    handleZoneSignal(cleanMessage.data);
-                    break;
-
-                case "orderbook":
-                    if (
-                        !cleanMessage.data ||
-                        !Array.isArray(cleanMessage.data.priceLevels)
-                    ) {
-                        console.error("Invalid orderbook data");
-                        return;
-                    }
-
-                    orderBookData = cleanMessage.data;
-
-                    // Minimal logging - only once per session
-                    if (!window.orderbookInitialized) {
-                        console.log("📊 Orderbook initialized:", {
-                            levels: orderBookData.priceLevels.length,
-                            midPrice: orderBookData.midPrice,
-                        });
-                        window.orderbookInitialized = true;
-                    }
-
-                    // Direct chart update - no conditional checks
-                    updateOrderBookDisplay(orderBookData);
-                    break;
-            }
-        } catch (error) {
-            console.error("Error parsing trade WebSocket message:", error);
+        messageQueue.push(message);
+        if (!isProcessingQueue) {
+            processMessageQueue();
         }
     },
 });

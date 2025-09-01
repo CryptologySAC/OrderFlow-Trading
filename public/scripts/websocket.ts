@@ -1,46 +1,88 @@
-import { MessageType, } from "./types.js";
+import {
+    type WebSocketMessage,
+    MessageType,
+    type TradeMessage,
+    type BacklogMessage,
+    type PingMessage,
+    // @ts-ignore
+    type PongMessage,
+} from "./types.js";
+
+// --- Configuration Interfaces ---
+interface TradeWebSocketConfig {
+    url: string;
+    maxTrades?: number;
+    maxReconnectAttempts?: number;
+    reconnectDelay?: number;
+    pingInterval?: number;
+    pongWait?: number;
+    onMessage?: (message: WebSocketMessage) => void;
+    onBacklog?: (data: TradeMessage[]) => void;
+    onReconnectFail?: () => void;
+    onTimeout?: () => void;
+}
+
+// --- Main Class ---
 export class TradeWebSocket {
-    url;
-    maxTrades;
-    maxReconnectAttempts;
-    reconnectDelay;
-    pingIntervalTime;
-    pongWaitTime;
-    onMessage;
-    onBacklog;
-    onReconnectFail;
-    onTimeout;
-    ws = null;
-    pingInterval = null;
-    pongTimeout = null;
-    reconnectAttempts = 0;
-    constructor({ url, maxTrades = 50000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onReconnectFail = () => { }, onTimeout = () => { }, }) {
+    private readonly url: string;
+    private readonly maxTrades: number;
+    private readonly maxReconnectAttempts: number;
+    private readonly reconnectDelay: number;
+    private readonly pingIntervalTime: number;
+    private readonly pongWaitTime: number;
+
+    private onMessage: (message: WebSocketMessage) => void;
+    private onBacklog: (data: TradeMessage[]) => void;
+    private onReconnectFail: () => void;
+    // @ts-ignore
+    private onTimeout: () => void;
+
+    private ws: WebSocket | null = null;
+    private pingInterval: NodeJS.Timeout | null = null;
+    private pongTimeout: NodeJS.Timeout | null = null;
+    private reconnectAttempts = 0;
+
+    constructor({
+        url,
+        maxTrades = 50000,
+        maxReconnectAttempts = 10,
+        reconnectDelay = 1000,
+        pingInterval = 10000,
+        pongWait = 5000,
+        onMessage = () => {},
+        onBacklog = () => {},
+        onReconnectFail = () => {},
+        onTimeout = () => {},
+    }: TradeWebSocketConfig) {
         this.url = url;
         this.maxTrades = maxTrades;
         this.maxReconnectAttempts = maxReconnectAttempts;
         this.reconnectDelay = reconnectDelay;
         this.pingIntervalTime = pingInterval;
         this.pongWaitTime = pongWait;
+
         this.onMessage = onMessage;
         this.onBacklog = onBacklog;
         this.onReconnectFail = onReconnectFail;
         this.onTimeout = onTimeout;
     }
-    connect() {
+
+    connect(): void {
         try {
             this.ws = new WebSocket(this.url);
-        }
-        catch (error) {
+        } catch (error) {
             console.error("WebSocket instantiation failed:", error);
             this.handleReconnect();
             return;
         }
+
         this.ws.onopen = this.handleOpen.bind(this);
         this.ws.onmessage = this.handleMessage.bind(this);
         this.ws.onerror = this.handleError.bind(this);
         this.ws.onclose = this.handleClose.bind(this);
     }
-    handleOpen() {
+
+    private handleOpen(): void {
         console.log("WebSocket connected:", this.url);
         this.reconnectAttempts = 0;
         setTimeout(() => {
@@ -51,102 +93,119 @@ export class TradeWebSocket {
             this.startPing();
         }, 50);
     }
-    handleMessage(event) {
+
+    private handleMessage(event: MessageEvent): void {
         try {
             const message = this.safeJsonParse(event.data);
             if (!this.isValidMessage(message)) {
                 console.warn("Invalid message structure or type:", message);
                 return;
             }
+
             switch (message.type) {
                 case MessageType.PONG:
                     this.clearPongTimeout();
                     break;
                 case MessageType.BACKLOG:
-                    this.handleBacklog(message);
+                    this.handleBacklog(message as BacklogMessage);
                     break;
                 default:
                     this.onMessage(message);
                     break;
             }
-        }
-        catch (error) {
+        } catch (error) {
             console.error("Failed to process message:", error, event.data);
         }
     }
-    handleBacklog(message) {
+
+    private handleBacklog(message: BacklogMessage): void {
         if (Array.isArray(message.data)) {
             console.log(`Backlog of ${message.data.length} trades received.`);
             this.onBacklog(message.data);
-        }
-        else {
+        } else {
             console.warn("Received malformed backlog data:", message.data);
         }
     }
-    handleError(event) {
+
+    private handleError(event: Event): void {
         console.error("WebSocket error:", event);
         this.stopPing();
     }
-    handleClose() {
+
+    private handleClose(): void {
         console.warn("WebSocket closed:", this.url);
         this.stopPing();
         this.handleReconnect();
     }
-    handleReconnect() {
+
+    private handleReconnect(): void {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-            console.log(`Reconnecting in ${delay / 1000}s... (Attempt ${this.reconnectAttempts})`);
+            const delay =
+                this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+            console.log(
+                `Reconnecting in ${delay / 1000}s... (Attempt ${this.reconnectAttempts})`
+            );
             setTimeout(() => this.connect(), delay);
-        }
-        else {
+        } else {
             console.error("Max reconnect attempts reached. Giving up.");
             this.onReconnectFail();
         }
     }
-    startPing() {
-        this.stopPing();
+
+    private startPing(): void {
+        this.stopPing(); // Ensure no multiple intervals are running
         this.pingInterval = setInterval(() => {
             if (this.sendMessage({ type: MessageType.PING })) {
                 this.startPongTimeout();
             }
         }, this.pingIntervalTime);
     }
-    startPongTimeout() {
+
+    private startPongTimeout(): void {
         this.clearPongTimeout();
         this.pongTimeout = setTimeout(() => {
-            console.warn("Pong timeout — closing WebSocket to force reconnect.");
+            console.warn(
+                "Pong timeout — closing WebSocket to force reconnect."
+            );
             this.ws?.close();
         }, this.pongWaitTime);
     }
-    clearPongTimeout() {
+
+    private clearPongTimeout(): void {
         if (this.pongTimeout) {
             clearTimeout(this.pongTimeout);
             this.pongTimeout = null;
         }
     }
-    stopPing() {
+
+    private stopPing(): void {
         if (this.pingInterval) {
             clearInterval(this.pingInterval);
             this.pingInterval = null;
         }
         this.clearPongTimeout();
     }
-    disconnect() {
+
+    disconnect(): void {
         console.log("Disconnecting WebSocket.");
         this.stopPing();
         if (this.ws) {
-            this.ws.onclose = null;
+            this.ws.onclose = null; // Prevent reconnect logic on manual disconnect
             this.ws.close();
         }
     }
-    sendMessage(message) {
+
+    sendMessage(
+        message:
+            | PingMessage
+            | { type: MessageType.BACKLOG; data: { amount: number } }
+    ): boolean {
         if (this.ws?.readyState === WebSocket.OPEN) {
             try {
                 this.ws.send(this.safeJsonStringify(message));
                 return true;
-            }
-            catch (error) {
+            } catch (error) {
                 console.error("Error sending WebSocket message:", error);
                 return false;
             }
@@ -154,28 +213,35 @@ export class TradeWebSocket {
         console.warn("WebSocket not open. Ready state:", this.ws?.readyState);
         return false;
     }
-    isValidMessage(data) {
-        if (typeof data !== "object" ||
+
+    // --- Data Safety & Validation ---
+
+    private isValidMessage(data: any): data is WebSocketMessage {
+        if (
+            typeof data !== "object" ||
             data === null ||
-            typeof data.type !== "string") {
+            typeof data.type !== "string"
+        ) {
             return false;
         }
-        return Object.values(MessageType).includes(data.type);
+        return Object.values(MessageType).includes(data.type as MessageType);
     }
-    safeJsonParse(str) {
+
+    private safeJsonParse(str: string): any {
         try {
             return JSON.parse(str);
-        }
-        catch (e) {
+        } catch (e) {
             console.error("JSON parsing error:", e);
             return null;
         }
     }
-    safeJsonStringify(obj) {
+
+    private safeJsonStringify(obj: any): string {
         const cache = new Set();
         return JSON.stringify(obj, (_key, value) => {
             if (typeof value === "object" && value !== null) {
                 if (cache.has(value)) {
+                    // Circular reference found, discard key
                     return;
                 }
                 cache.add(value);

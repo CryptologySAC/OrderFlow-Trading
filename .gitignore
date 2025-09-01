@@ -22,3 +22,4 @@ logs/
 .pnp.*
 analysis/reports/*
 *.log
+1*.bak
