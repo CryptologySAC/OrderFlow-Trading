@@ -1,7 +1,7 @@
 // backend/src/storage/marketDataCollector.ts
 
 import * as fs from "fs";
-import type { ILogger } from "../../infrastructure/loggerInterface.js";
+import type { ILogger } from "../infrastructure/loggerInterface.js";
 
 /**
  * Configuration for the market data collector

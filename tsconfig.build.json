@@ -8,5 +8,5 @@
         "noEmit": false,
         "types": ["vitest/globals"]
     },
-    "include": ["src"]
+    "include": ["backend/src"]
 }
