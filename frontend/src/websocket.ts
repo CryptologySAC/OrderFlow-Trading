@@ -4,8 +4,6 @@ import {
     type TradeMessage,
     type BacklogMessage,
     type PingMessage,
-    // @ts-ignore
-    type PongMessage,
 } from "./types.js";
 
 // --- Configuration Interfaces ---
@@ -34,7 +32,6 @@ export class TradeWebSocket {
     private onMessage: (message: WebSocketMessage) => void;
     private onBacklog: (data: TradeMessage[]) => void;
     private onReconnectFail: () => void;
-    // @ts-ignore
     private onTimeout: () => void;
 
     private ws: WebSocket | null = null;
@@ -96,7 +93,7 @@ export class TradeWebSocket {
 
     private handleMessage(event: MessageEvent): void {
         try {
-            const message = this.safeJsonParse(event.data);
+            const message = this.safeJsonParse(event.data as string);
             if (!this.isValidMessage(message)) {
                 console.warn("Invalid message structure or type:", message);
                 return;
@@ -107,7 +104,7 @@ export class TradeWebSocket {
                     this.clearPongTimeout();
                     break;
                 case MessageType.BACKLOG:
-                    this.handleBacklog(message as BacklogMessage);
+                    this.handleBacklog(message);
                     break;
                 default:
                     this.onMessage(message);
@@ -203,7 +200,12 @@ export class TradeWebSocket {
     ): boolean {
         if (this.ws?.readyState === WebSocket.OPEN) {
             try {
-                this.ws.send(this.safeJsonStringify(message));
+                const safeMessage = this.safeJsonStringify(message);
+                if (!safeMessage) {
+                    return false;
+                }
+
+                this.ws.send(safeMessage);
                 return true;
             } catch (error) {
                 console.error("Error sending WebSocket message:", error);
@@ -215,19 +217,21 @@ export class TradeWebSocket {
     }
 
     // --- Data Safety & Validation ---
-
-    private isValidMessage(data: any): data is WebSocketMessage {
-        if (
-            typeof data !== "object" ||
-            data === null ||
-            typeof data.type !== "string"
-        ) {
+    private isValidMessage(data: unknown): data is WebSocketMessage {
+        if (typeof data !== "object" || data === null) {
             return false;
         }
-        return Object.values(MessageType).includes(data.type as MessageType);
+
+        const obj = data as Record<string, unknown>;
+
+        if (typeof obj.type !== "string") {
+            return false;
+        }
+
+        return Object.values(MessageType).includes(obj.type as MessageType);
     }
 
-    private safeJsonParse(str: string): any {
+    private safeJsonParse(str: string): unknown {
         try {
             return JSON.parse(str);
         } catch (e) {
@@ -236,17 +240,17 @@ export class TradeWebSocket {
         }
     }
 
-    private safeJsonStringify(obj: any): string {
+    private safeJsonStringify(obj: unknown): string | null {
         const cache = new Set();
         return JSON.stringify(obj, (_key, value) => {
             if (typeof value === "object" && value !== null) {
                 if (cache.has(value)) {
                     // Circular reference found, discard key
-                    return;
+                    return null;
                 }
                 cache.add(value);
             }
-            return value;
+            return value as string;
         });
     }
 }
