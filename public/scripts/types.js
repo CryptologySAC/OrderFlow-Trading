@@ -1,0 +1,21 @@
+export var MessageType;
+(function (MessageType) {
+    MessageType["PING"] = "ping";
+    MessageType["BACKLOG_REQUEST"] = "backlog";
+    MessageType["PONG"] = "pong";
+    MessageType["BACKLOG"] = "backlog";
+    MessageType["TRADE"] = "trade";
+    MessageType["SIGNAL"] = "signal";
+    MessageType["STATS"] = "stats";
+    MessageType["ANOMALY"] = "anomaly";
+    MessageType["ERROR"] = "error";
+    MessageType["ORDERBOOK"] = "orderbook";
+    MessageType["RSI"] = "rsi";
+    MessageType["RSI_BACKLOG"] = "rsi_backlog";
+    MessageType["SIGNAL_BACKLOG"] = "signal_backlog";
+    MessageType["SIGNAL_BUNDLE"] = "signal_bundle";
+    MessageType["RUNTIMECONFIG"] = "runtimeConfig";
+    MessageType["SUPPORTRESISTANCELEVEL"] = "supportResistanceLevel";
+    MessageType["ZONEUPDATE"] = "zoneUpdate";
+    MessageType["ZONESIGNAL"] = "zoneSignal";
+})(MessageType || (MessageType = {}));
