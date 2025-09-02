@@ -49,7 +49,7 @@
             "bandTicks": 7,
             "largeTradeThreshold": 100,
             "maxEventListeners": 50,
-            "dashboardUpdateInterval": 100,
+            "dashboardUpdateInterval": 200,
             "maxDashboardInterval": 500,
             "significantChangeThreshold": 0.0005,
             "standardZoneConfig": {
