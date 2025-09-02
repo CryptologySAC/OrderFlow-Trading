@@ -25,6 +25,7 @@ export const PING_INTERVAL_MS = 10000;
 export const PONG_WAIT_MS = 5000;
 export const PADDING_TIME = 300000; // 5 minutes
 export const FIFTEEN_MINUTES = 15 * 60 * 1000; // 15 minutes
+export const NINETHY_MINUTES = 90 * 60 * 1000; // 90 minutes
 export const TRADE_TIMEOUT_MS = 10000; // 10 seconds
 export const GRID_SIZE = 25; // snapping grid for draggable/resizable elements
 export const ITEM_MARGIN = 20; // fixed space between dashboard items
@@ -160,7 +161,7 @@ export const trades: ChartDataPoint[] = [];
 // ACTIVE TIME RANGE
 // =============================================================================
 
-export let activeRange = 90 * 60000; // 90 minutes
+export let activeRange = NINETHY_MINUTES; // 90 minutes
 
 export function setActiveRange(range: number): void {
     activeRange = range;

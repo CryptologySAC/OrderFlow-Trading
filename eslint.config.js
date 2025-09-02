@@ -152,7 +152,8 @@ export default [
                         24,
                         30,
                         50,
-                        60, // Time intervals
+                        60, 
+                        90, // Time intervals
                         100,
                         200,
                         500,
