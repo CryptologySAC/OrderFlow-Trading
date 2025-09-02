@@ -32,7 +32,7 @@ export function setOrderBookChart(chart) {
 export function setRsiChart(chart) {
     rsiChart = chart;
 }
-export let anomalyList = [];
+export const anomalyList = [];
 export const anomalySeverityOrder = [
     "critical",
     "high",
@@ -40,15 +40,15 @@ export const anomalySeverityOrder = [
     "info",
 ];
 export let anomalyFilters = new Set(["critical", "high"]);
-export let signalsList = [];
-export let signalFilters = new Set(["buy", "sell"]);
-export let activeSignalTooltip = null;
-export let supportResistanceLevels = [];
-export let maxSupportResistanceLevels = 20;
-export let activeZones = new Map();
-export let maxActiveZones = 10;
-export let rsiData = [];
-export let orderBookData = {
+export const signalsList = [];
+export const signalFilters = new Set(["buy", "sell"]);
+export const activeSignalTooltip = null;
+export const supportResistanceLevels = [];
+export const maxSupportResistanceLevels = 20;
+export const activeZones = new Map();
+export const maxActiveZones = 10;
+export const rsiData = [];
+export const orderBookData = {
     priceLevels: [],
     bestBid: 0,
     bestAsk: 0,
@@ -59,15 +59,15 @@ export let orderBookData = {
     imbalance: 0,
     timestamp: 0,
 };
-export let badgeTimeout = null;
-export let latestBadgeElem = null;
+export const badgeTimeout = null;
+export const latestBadgeElem = null;
 export let dedupTolerance = 0.01;
 if (typeof window !== "undefined" &&
     window.runtimeConfig &&
     typeof window.runtimeConfig.dedupTolerance === "number") {
     dedupTolerance = window.runtimeConfig.dedupTolerance;
 }
-export let trades = [];
+export const trades = [];
 export let activeRange = 90 * 60000;
 export function setActiveRange(range) {
     activeRange = range;
@@ -89,9 +89,8 @@ export function setRuntimeConfig(config) {
         }
         catch (error) {
             console.error("Error processing runtime config:", error);
-            const fallbackConfig = config;
-            if (typeof fallbackConfig.dedupTolerance === "number") {
-                dedupTolerance = fallbackConfig.dedupTolerance;
+            if (typeof config.dedupTolerance === "number") {
+                dedupTolerance = config.dedupTolerance;
             }
         }
     }
@@ -120,7 +119,7 @@ function safeConfigMerge(target, source) {
         }
         const result = {};
         for (const key in obj) {
-            if (obj.hasOwnProperty(key)) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 result[key] = safeClone(obj[key], depth + 1, maxDepth);
             }
         }

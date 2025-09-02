@@ -71,14 +71,18 @@ import type {
     TradeData,
     OrderBookData,
     Signal,
-    MarketAnomaly,
     RSIDataPoint,
     SupportResistanceLevel,
     ZoneUpdateEvent,
     ZoneSignalEvent,
 } from "./dashboard/types.js";
 import { isValidTradeData } from "./dashboard/types.js";
-import type { ChartAnnotation, ChartInstance } from "./frontend-types.js";
+import type {
+    ChartAnnotation,
+    ChartInstance,
+    ChartDataPoint,
+    Anomaly,
+} from "./frontend-types.js";
 
 // ============================================================================
 // TYPE GUARDS (NO UNKNOWN PARAMETERS)
@@ -94,7 +98,7 @@ function isValidSignalData(data: Signal): boolean {
     );
 }
 
-function isValidAnomalyData(data: MarketAnomaly): boolean {
+function isValidAnomalyData(data: Anomaly): boolean {
     return (
         typeof data.type === "string" &&
         typeof data.detectedAt === "number" &&
@@ -219,8 +223,8 @@ function createTrade(
     time: number,
     price: number,
     quantity: number,
-    orderType: "BUY" | "SELL"
-): { x: number; y: number; quantity: number; orderType: string } {
+    orderType: "buy" | "sell"
+): ChartDataPoint {
     return {
         x: time,
         y: price,
@@ -710,7 +714,7 @@ function handleMessage(message: WebSocketMessage): void {
             break;
 
         case "anomaly":
-            const anomaly = message.data as MarketAnomaly;
+            const anomaly = message.data as Anomaly;
             if (isValidAnomalyData(anomaly)) {
                 anomalyList.unshift(anomaly);
                 if (anomalyList.length > 100) {
@@ -842,7 +846,7 @@ const tradeWebsocket = new TradeWebSocket({
                         time: number;
                         price: number;
                         quantity: number;
-                        orderType: "BUY" | "SELL";
+                        orderType: "buy" | "sell";
                     };
                     trades.push(
                         createTrade(

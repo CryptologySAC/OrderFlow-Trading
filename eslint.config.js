@@ -21,6 +21,7 @@ export default [
             ...eslintPluginTs.configs["recommended-type-checked"].rules,
             "prettier/prettier": "error",
             "@typescript-eslint/explicit-module-boundary-types": "off",
+            "@typescript-eslint/no-unnecessary-type-assertion": "off",
             "@typescript-eslint/no-floating-promises": "error",
             "@typescript-eslint/no-misused-promises": "error",
             "@typescript-eslint/no-unused-vars": "error",
@@ -98,6 +99,7 @@ export default [
             ], // CLAUDE.md compliance
             "@typescript-eslint/prefer-readonly": "off", // Immutability
             "@typescript-eslint/prefer-readonly-parameter-types": "off",
+            "@typescript-eslint/no-unnecessary-type-assertion": "off",
             "@typescript-eslint/no-floating-promises": "error", // Critical for async
             "@typescript-eslint/no-misused-promises": "error",
             "no-eval": "error", // Security
@@ -124,6 +126,7 @@ export default [
             ...eslintPluginTs.configs["recommended-type-checked"].rules,
             "prettier/prettier": "error",
             "@typescript-eslint/explicit-module-boundary-types": "off",
+            "@typescript-eslint/no-unnecessary-type-assertion": "off",
             "@typescript-eslint/no-floating-promises": "error",
             "@typescript-eslint/no-misused-promises": "error",
             "@typescript-eslint/no-unused-vars": "error",

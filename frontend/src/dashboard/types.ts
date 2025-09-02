@@ -41,7 +41,7 @@ export interface TradeData {
     time: number;
     price: number;
     quantity: number;
-    orderType: "BUY" | "SELL";
+    orderType: "buy" | "sell";
     symbol: string;
     tradeId: number;
 }
