@@ -10,6 +10,9 @@ import type { Anomaly, Signal } from "../frontend-types.js";
 let latestBadgeElem: HTMLElement | null = null;
 let badgeTimeout: NodeJS.Timeout | null = null;
 
+// Constants for magic numbers
+const BADGE_TIMEOUT_MS = 4000;
+
 function getAnomalyIcon(type: string): string {
     switch (type) {
         case "flash_crash":
@@ -145,7 +148,7 @@ function getAnomalySummary(anomaly: Anomaly): string {
             parts.push(details.rationale);
         } else if (typeof details.rationale === "object") {
             const flags = Object.entries(details.rationale)
-                .filter(([_, v]) => Boolean(v))
+                .filter(([, v]) => Boolean(v))
                 .map(([k]) => k)
                 .join(", ");
             if (flags) parts.push(`Reasons: ${flags}`);
@@ -232,12 +235,12 @@ export function showAnomalyBadge(anomaly: Anomaly): void {
     badgeTimeout = setTimeout(() => {
         badge.remove();
         latestBadgeElem = null;
-    }, 4000);
+    }, BADGE_TIMEOUT_MS);
 }
 
 export function showSignalBundleBadge(signals: Signal[]): void {
     if (!Array.isArray(signals) || signals.length === 0) return;
-    const top = signals[0];
+    const top = signals[0]!;
     if (latestBadgeElem) latestBadgeElem.remove();
     const badge = document.createElement("div");
     badge.className = "anomaly-badge";
@@ -257,7 +260,7 @@ export function showSignalBundleBadge(signals: Signal[]): void {
     badgeTimeout = setTimeout(() => {
         badge.remove();
         latestBadgeElem = null;
-    }, 4000);
+    }, BADGE_TIMEOUT_MS);
 }
 
 // Signal list rendering
@@ -271,24 +274,31 @@ function formatSignalTime(timestamp: number): string {
 }
 
 function getSignalSummary(signal: Signal): string {
-    const signalData = (signal as any).signalData || {};
-    const confidence = (((signalData.confidence || 0) as number) * 100).toFixed(
-        1
-    );
-    const meta = signalData.meta || {};
-    const anomaly = signalData.anomalyCheck || {};
+    // Access signalData safely with proper typing
+    const signalData =
+        (signal as { signalData?: Record<string, unknown> }).signalData || {};
+    const confidence = (
+        ((signalData["confidence"] as number) || 0) * 100
+    ).toFixed(1);
+    const meta = (signalData["meta"] as Record<string, unknown>) || {};
+    const anomaly =
+        (signalData["anomalyCheck"] as { marketHealthy?: boolean }) || {};
+
+    // Access takeProfit and stopLoss safely
+    const takeProfit = (signal as { takeProfit?: number }).takeProfit;
+    const stopLoss = (signal as { stopLoss?: number }).stopLoss;
 
     return [
         `Signal: ${signal.type} (${signal.side})`,
         `Price: $${signal.price.toFixed(2)}`,
         `Confidence: ${confidence}%`,
-        `Take Profit: $${signal.takeProfit?.toFixed(2) || "N/A"}`,
-        `Stop Loss: $${signal.stopLoss?.toFixed(2) || "N/A"}`,
-        meta.volume && typeof meta.volume === "number"
-            ? `Volume: ${meta.volume.toFixed(2)}`
+        `Take Profit: $${takeProfit?.toFixed(2) || "N/A"}`,
+        `Stop Loss: $${stopLoss?.toFixed(2) || "N/A"}`,
+        meta["volume"] && typeof meta["volume"] === "number"
+            ? `Volume: ${(meta["volume"] as number).toFixed(2)}`
             : "",
-        meta.absorptionRatio && typeof meta.absorptionRatio === "number"
-            ? `Absorption: ${(meta.absorptionRatio * 100).toFixed(1)}%`
+        meta["absorptionRatio"] && typeof meta["absorptionRatio"] === "number"
+            ? `Absorption: ${((meta["absorptionRatio"] as number) * 100).toFixed(1)}%`
             : "",
         anomaly.marketHealthy !== undefined
             ? `Market Health: ${anomaly.marketHealthy ? "Healthy" : "Unhealthy"}`
@@ -317,16 +327,20 @@ export function renderSignalsList(): void {
     const fragment = document.createDocumentFragment();
 
     for (const signal of filtered) {
-        const signalData = (signal as any).signalData || {};
+        const signalData =
+            (signal as { signalData?: Record<string, unknown> }).signalData ||
+            {};
         const confidence = (
-            ((signalData.confidence || 0) as number) * 100
+            ((signalData["confidence"] as number) || 0) * 100
         ).toFixed(0);
         const timeAgo = formatSignalTime(signal.time);
 
         // Determine classification display
         const classification =
-            (signal as any).signal_classification ||
-            (signal as any).signalClassification ||
+            (signal as { signal_classification?: string })
+                .signal_classification ||
+            (signal as { signalClassification?: string })
+                .signalClassification ||
             "";
         const classificationBadge =
             classification === "reversal"
@@ -397,11 +411,11 @@ export function renderSignalsList(): void {
         targets.className = "signal-targets";
 
         const tpSpan = document.createElement("span");
-        const takeProfit = (signal as any).takeProfit;
+        const takeProfit = (signal as { takeProfit?: number }).takeProfit;
         tpSpan.textContent = `TP: $${takeProfit && typeof takeProfit === "number" ? takeProfit.toFixed(2) : "N/A"}`;
 
         const slSpan = document.createElement("span");
-        const stopLoss = (signal as any).stopLoss;
+        const stopLoss = (signal as { stopLoss?: number }).stopLoss;
         slSpan.textContent = `SL: $${stopLoss && typeof stopLoss === "number" ? stopLoss.toFixed(2) : "N/A"}`;
 
         targets.appendChild(tpSpan);

@@ -197,6 +197,8 @@ export interface Signal {
     }>;
     finalPrice?: number;
     confirmedAt?: number;
+    takeProfit?: number;
+    stopLoss?: number;
 }
 
 export interface Anomaly {
