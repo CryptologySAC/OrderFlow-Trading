@@ -1,4 +1,7 @@
 import { anomalyList, anomalyFilters, signalsList, signalFilters, } from "./state.js";
+let latestBadgeElem = null;
+let badgeTimeout = null;
+const BADGE_TIMEOUT_MS = 4000;
 function getAnomalyIcon(type) {
     switch (type) {
         case "flash_crash":
@@ -166,10 +169,10 @@ export function renderAnomalyList() {
         row.title = getAnomalySummary(anomaly);
         const iconSpan = document.createElement("span");
         iconSpan.className = "anomaly-icon";
-        iconSpan.textContent = getAnomalyIcon(anomaly.type || "unknown");
+        iconSpan.textContent = getAnomalyIcon(anomaly.type || "");
         const labelSpan = document.createElement("span");
         labelSpan.className = "anomaly-label";
-        labelSpan.textContent = getAnomalyLabel(anomaly.type || "unknown");
+        labelSpan.textContent = getAnomalyLabel(anomaly.type || "");
         const priceSpan = document.createElement("span");
         priceSpan.className = "anomaly-price";
         priceSpan.textContent = anomaly.affectedPriceRange
@@ -191,26 +194,26 @@ export function renderAnomalyList() {
     listElem.appendChild(fragment);
 }
 export function showAnomalyBadge(anomaly) {
-    const existingBadge = document.querySelector(".anomaly-badge");
-    if (existingBadge)
-        existingBadge.remove();
+    if (latestBadgeElem)
+        latestBadgeElem.remove();
     const badge = document.createElement("div");
     badge.className = `anomaly-badge ${anomaly.severity}`;
-    badge.innerHTML = `${getAnomalyIcon(anomaly.type || "unknown")} ${getAnomalyLabel(anomaly.type || "unknown")} @ ${anomaly.price?.toFixed(2) || "N/A"}`;
+    badge.innerHTML = `${getAnomalyIcon(anomaly.type || "")} ${getAnomalyLabel(anomaly.type || "")} @ ${anomaly.price?.toFixed(2) || "N/A"}`;
     document.body.appendChild(badge);
-    setTimeout(() => {
+    latestBadgeElem = badge;
+    if (badgeTimeout)
+        clearTimeout(badgeTimeout);
+    badgeTimeout = setTimeout(() => {
         badge.remove();
-    }, 4000);
+        latestBadgeElem = null;
+    }, BADGE_TIMEOUT_MS);
 }
 export function showSignalBundleBadge(signals) {
     if (!Array.isArray(signals) || signals.length === 0)
         return;
     const top = signals[0];
-    if (!top)
-        return;
-    const existingBadge = document.querySelector(".anomaly-badge");
-    if (existingBadge)
-        existingBadge.remove();
+    if (latestBadgeElem)
+        latestBadgeElem.remove();
     const badge = document.createElement("div");
     badge.className = "anomaly-badge";
     let color = "#757575";
@@ -221,11 +224,15 @@ export function showSignalBundleBadge(signals) {
         color = "#fb8c00";
     }
     badge.style.background = color;
-    badge.innerHTML = `${(top.side || "UNKNOWN").toUpperCase()} @ ${top.price.toFixed(2)} (${((top.confidence || 0) * 100).toFixed(0)}%)`;
+    badge.innerHTML = `${top.side.toUpperCase()} @ ${top.price.toFixed(2)} (${((top.confidence || 0) * 100).toFixed(0)}%)`;
     document.body.appendChild(badge);
-    setTimeout(() => {
+    latestBadgeElem = badge;
+    if (badgeTimeout)
+        clearTimeout(badgeTimeout);
+    badgeTimeout = setTimeout(() => {
         badge.remove();
-    }, 4000);
+        latestBadgeElem = null;
+    }, BADGE_TIMEOUT_MS);
 }
 function formatSignalTime(timestamp) {
     const s = Math.floor((Date.now() - timestamp) / 1000);
@@ -238,18 +245,23 @@ function formatSignalTime(timestamp) {
     return `${h}h ${m % 60}m ago`;
 }
 function getSignalSummary(signal) {
-    const confidence = ((signal.signalData?.confidence || 0) * 100).toFixed(1);
-    const meta = signal.signalData?.meta || {};
-    const anomaly = signal.signalData?.anomalyCheck || {};
+    const signalData = signal.signalData || {};
+    const confidence = ((signalData["confidence"] || 0) * 100).toFixed(1);
+    const meta = signalData["meta"] || {};
+    const anomaly = signalData["anomalyCheck"] || {};
+    const takeProfit = signal.takeProfit;
+    const stopLoss = signal.stopLoss;
     return [
-        `Signal: ${signal.type} (${signal.side || "unknown"})`,
+        `Signal: ${signal.type} (${signal.side})`,
         `Price: $${signal.price.toFixed(2)}`,
         `Confidence: ${confidence}%`,
-        `Take Profit: $${signal.takeProfit?.toFixed(2) || "N/A"}`,
-        `Stop Loss: $${signal.stopLoss?.toFixed(2) || "N/A"}`,
-        meta.volume ? `Volume: ${meta.volume.toFixed(2)}` : "",
-        meta.absorptionRatio
-            ? `Absorption: ${(meta.absorptionRatio * 100).toFixed(1)}%`
+        `Take Profit: $${takeProfit?.toFixed(2) || "N/A"}`,
+        `Stop Loss: $${stopLoss?.toFixed(2) || "N/A"}`,
+        meta["volume"] && typeof meta["volume"] === "number"
+            ? `Volume: ${meta["volume"].toFixed(2)}`
+            : "",
+        meta["absorptionRatio"] && typeof meta["absorptionRatio"] === "number"
+            ? `Absorption: ${(meta["absorptionRatio"] * 100).toFixed(1)}%`
             : "",
         anomaly.marketHealthy !== undefined
             ? `Market Health: ${anomaly.marketHealthy ? "Healthy" : "Unhealthy"}`
@@ -263,16 +275,20 @@ export function renderSignalsList() {
     const listElem = document.getElementById("signalsList");
     if (!listElem)
         return;
-    const filtered = signalsList.filter((signal) => signalFilters.has(signal.side || "unknown"));
+    const filtered = signalsList.filter((signal) => signalFilters.has(signal.side));
     while (listElem.firstChild) {
         listElem.removeChild(listElem.firstChild);
     }
     const fragment = document.createDocumentFragment();
     for (const signal of filtered) {
-        const confidence = ((signal.signalData?.confidence || 0) * 100).toFixed(0);
+        const signalData = signal.signalData ||
+            {};
+        const confidence = ((signalData["confidence"] || 0) * 100).toFixed(0);
         const timeAgo = formatSignalTime(signal.time);
-        const classification = signal.signal_classification ||
-            signal.signalClassification ||
+        const classification = signal
+            .signal_classification ||
+            signal
+                .signalClassification ||
             "";
         const classificationBadge = classification === "reversal"
             ? "⚡ REVERSAL"
@@ -285,7 +301,7 @@ export function renderSignalsList() {
                 ? "signal-trend"
                 : "";
         const row = document.createElement("div");
-        row.className = `signal-row signal-${signal.side || "unknown"} ${signalClass}`;
+        row.className = `signal-row signal-${signal.side} ${signalClass}`;
         row.setAttribute("data-signal-id", signal.id);
         row.title = getSignalSummary(signal);
         const header = document.createElement("div");
@@ -301,8 +317,8 @@ export function renderSignalsList() {
             classBadge.textContent = classificationBadge;
         }
         const sideSpan = document.createElement("span");
-        sideSpan.className = `signal-side ${signal.side || "unknown"}`;
-        sideSpan.textContent = (signal.side || "UNKNOWN").toUpperCase();
+        sideSpan.className = `signal-side ${signal.side}`;
+        sideSpan.textContent = signal.side.toUpperCase();
         const timeSpan = document.createElement("span");
         timeSpan.className = "signal-time";
         timeSpan.textContent = timeAgo;
@@ -324,9 +340,11 @@ export function renderSignalsList() {
         const targets = document.createElement("div");
         targets.className = "signal-targets";
         const tpSpan = document.createElement("span");
-        tpSpan.textContent = `TP: $${signal.takeProfit?.toFixed(2) || "N/A"}`;
+        const takeProfit = signal.takeProfit;
+        tpSpan.textContent = `TP: $${takeProfit && typeof takeProfit === "number" ? takeProfit.toFixed(2) : "N/A"}`;
         const slSpan = document.createElement("span");
-        slSpan.textContent = `SL: $${signal.stopLoss?.toFixed(2) || "N/A"}`;
+        const stopLoss = signal.stopLoss;
+        slSpan.textContent = `SL: $${stopLoss && typeof stopLoss === "number" ? stopLoss.toFixed(2) : "N/A"}`;
         targets.appendChild(tpSpan);
         targets.appendChild(slSpan);
         row.appendChild(header);
