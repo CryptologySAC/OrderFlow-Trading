@@ -53,16 +53,16 @@ interface TooltipItem<T extends "line" | "bar" | "scatter"> {
     raw: T extends "scatter"
         ? ChartDataPoint
         : T extends "line"
-        ? RSIDataPoint
-        : unknown;
+          ? RSIDataPoint
+          : unknown;
 }
 
 interface ScriptableContext<T extends "line" | "bar" | "scatter"> {
     raw: T extends "scatter"
         ? ChartDataPoint
         : T extends "line"
-        ? RSIDataPoint
-        : unknown;
+          ? RSIDataPoint
+          : unknown;
     chart: ChartInstance;
 }
 
@@ -284,8 +284,7 @@ export function isValidTrade(trade: unknown): trade is Trade {
         typeof t["time"] === "number" &&
         typeof t["price"] === "number" &&
         typeof t["quantity"] === "number" &&
-        (
-            orderType === "BUY" ||
+        (orderType === "BUY" ||
             orderType === "SELL" ||
             orderType === "buy" ||
             orderType === "sell")
@@ -318,14 +317,14 @@ function getTradePointRadius(context: ScriptableContext<"scatter">): number {
     return q > 1000
         ? 50
         : q > 500
-        ? 40
-        : q > 200
-        ? 25
-        : q > 100
-        ? 10
-        : q > 50
-        ? 5
-        : 2;
+          ? 40
+          : q > 200
+            ? 25
+            : q > 100
+              ? 10
+              : q > 50
+                ? 5
+                : 2;
 }
 
 /**
@@ -435,7 +434,11 @@ export function initializeTradesChart(
                     pan: {
                         enabled: true,
                         mode: "x",
-                        onPanComplete: ({ chart }: { chart: ChartInstance }) => {
+                        onPanComplete: ({
+                            chart,
+                        }: {
+                            chart: ChartInstance;
+                        }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
@@ -460,7 +463,11 @@ export function initializeTradesChart(
                             enabled: true,
                         },
                         mode: "x",
-                        onZoomComplete: ({ chart }: { chart: ChartInstance }) => {
+                        onZoomComplete: ({
+                            chart,
+                        }: {
+                            chart: ChartInstance;
+                        }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
@@ -634,7 +641,11 @@ export function initializeRSIChart(
                         pan: {
                             enabled: true,
                             mode: "x",
-                            onPanComplete: ({ chart }: { chart: ChartInstance }) => {
+                            onPanComplete: ({
+                                chart,
+                            }: {
+                                chart: ChartInstance;
+                            }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
@@ -660,7 +671,11 @@ export function initializeRSIChart(
                                 enabled: true,
                             },
                             mode: "x",
-                            onZoomComplete: ({ chart }: { chart: ChartInstance }) => {
+                            onZoomComplete: ({
+                                chart,
+                            }: {
+                                chart: ChartInstance;
+                            }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
@@ -897,7 +912,7 @@ export function initializeOrderBookChart(
                             const price: number = parseFloat(priceStr);
 
                             // Find the corresponding price level
-                            const level: OrderBookLevel | undefined = 
+                            const level: OrderBookLevel | undefined =
                                 orderBookData.priceLevels.find(
                                     (l: OrderBookLevel) =>
                                         Math.abs(l.price - price) < 0.001
@@ -922,7 +937,7 @@ export function initializeOrderBookChart(
                                 const depletionPercent: string = (
                                     level.depletionRatio * 100
                                 ).toFixed(1);
-                                const depletionVelocity: string = 
+                                const depletionVelocity: string =
                                     level.depletionVelocity
                                         ? level.depletionVelocity.toFixed(1)
                                         : "0.0";
@@ -1155,7 +1170,7 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
     const askData: (number | null)[] = [];
     const bidData: (number | null)[] = [];
 
-    // Backend sends data already configured with proper binSize (1-tick) 
+    // Backend sends data already configured with proper binSize (1-tick)
     // Just display it directly without any local processing
     const priceLevels: OrderBookLevel[] = data.priceLevels || [];
     const currentTime: number = Date.now();
@@ -1215,7 +1230,8 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
 
     // Get current theme for depletion colors
     const currentTheme: string = getCurrentTheme();
-    const actualTheme: string = currentTheme === "system" ? getSystemTheme() : currentTheme;
+    const actualTheme: string =
+        currentTheme === "system" ? getSystemTheme() : currentTheme;
 
     // Build chart data with depletion information
     const askColors: string[] = [];
@@ -1301,10 +1317,10 @@ export function addAnomalyChartLabel(anomaly: Anomaly): void {
             anomaly.severity === "critical"
                 ? "rgba(229,57,53,0.8)"
                 : anomaly.severity === "high"
-                ? "rgba(255,179,0,0.85)"
-                : anomaly.severity === "medium"
-                ? "rgba(255,241,118,0.5)"
-                : "rgba(33,150,243,0.5)",
+                  ? "rgba(255,179,0,0.85)"
+                  : anomaly.severity === "medium"
+                    ? "rgba(255,241,118,0.5)"
+                    : "rgba(33,150,243,0.5)",
         color: "#fff",
         font: { size: 18, weight: "bold" },
         padding: 6,
@@ -1349,8 +1365,7 @@ export function handleSupportResistanceLevel(levelData: {
 /**
  * Add support/resistance level as translucent bar on chart
  */
-function addSupportResistanceToChart(level: SupportResistanceLevel):
-void {
+function addSupportResistanceToChart(level: SupportResistanceLevel): void {
     if (!tradesChart) return;
 
     if (!tradesChart.options.plugins) tradesChart.options.plugins = {};
@@ -1440,8 +1455,7 @@ void {
 /**
  * Remove support/resistance level from chart
  */
-function removeSupportResistanceLevel(levelId: string):
-void {
+function removeSupportResistanceLevel(levelId: string): void {
     if (!tradesChart) return;
 
     const annotations = tradesChart.options.plugins?.annotation?.annotations;
@@ -1590,8 +1604,8 @@ export function handleZoneSignal(signalData: {
             expectedDirection === "up"
                 ? "buy"
                 : expectedDirection === "down"
-                ? "sell"
-                : "buy",
+                  ? "sell"
+                  : "buy",
         confidence: confidence,
         zone: zone,
     };
@@ -1626,8 +1640,7 @@ function createZoneBox(zone: ZoneData): void {
 /**
  * Update an existing zone box
  */
-function updateZoneBox(zone: ZoneData):
-void {
+function updateZoneBox(zone: ZoneData): void {
     (activeZones as Map<string, ZoneData>).set(zone.id, zone);
 
     // Update the chart annotation
@@ -1670,8 +1683,7 @@ void {
 /**
  * Mark zone as completed (change visual style)
  */
-function completeZoneBox(zone: ZoneData):
-void {
+function completeZoneBox(zone: ZoneData): void {
     (activeZones as Map<string, ZoneData>).set(zone.id, zone);
 
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
@@ -1716,8 +1728,7 @@ void {
 /**
  * Remove zone box from chart
  */
-function removeZoneBox(zoneId: string):
-void {
+function removeZoneBox(zoneId: string): void {
     (activeZones as Map<string, ZoneData>).delete(zoneId);
 
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
@@ -1732,8 +1743,7 @@ void {
 /**
  * Add zone as chart annotation
  */
-function addZoneToChart(zone: ZoneData):
-void {
+function addZoneToChart(zone: ZoneData): void {
     if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
     console.log("Adding zone to chart:", zone.type, zone.id, zone.priceRange);
     const tradesChartOptions = tradesChart.options as ChartOptions;
@@ -1944,8 +1954,7 @@ function getZoneLabel(zone: ZoneData): string {
 /**
  * Show zone tooltip on hover
  */
-function showZoneTooltip(zone: ZoneData, event: MouseEvent):
-void {
+function showZoneTooltip(zone: ZoneData, event: MouseEvent): void {
     const tooltip: HTMLDivElement = document.createElement("div");
     tooltip.id = "zoneTooltip";
     tooltip.style.position = "fixed";
