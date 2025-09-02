@@ -749,7 +749,7 @@ export function safeUpdateRSIChart(rsiData: RSIDataPoint[]): boolean {
         rsiChart.data.datasets[0]
     ) {
         // Update data directly (backlog loading handles data replacement)
-        rsiChart.data.datasets[0].data = rsiData as ChartDataPoint[];
+        rsiChart.data.datasets[0].data = rsiData as RSIDataPoint[];
 
         // Update chart
         rsiChart.update("none");
@@ -1409,12 +1409,6 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         borderWidth: 1,
         drawTime: "beforeDatasetsDraw",
         z: 1,
-        enter: (_context: unknown, _event: MouseEvent) => {
-            // Handle mouse enter
-        },
-        leave: () => {
-            // Handle mouse leave
-        },
     };
 
     // Only add borderDash if it has a value

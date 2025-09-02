@@ -281,6 +281,11 @@ export interface ZoneData {
     executed?: number;
     tradeCount?: number;
     isActive?: boolean;
+    stealthType?:
+        | "reserve_order"
+        | "stealth_liquidity"
+        | "algorithmic_hidden"
+        | "institutional_stealth";
 }
 
 // =============================================================================
