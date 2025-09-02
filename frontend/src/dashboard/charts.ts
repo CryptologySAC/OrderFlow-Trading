@@ -471,7 +471,7 @@ export function initializeTradesChart(
         },
     });
 
-    setTradesChart(chart as any);
+    setTradesChart(chart as ChartInstance);
 
     // Initialize time annotations for specific time ranges
     if (activeRange !== null) {
@@ -517,7 +517,7 @@ export function initializeRSIChart(
     }
 
     try {
-        const chart: ChartInstance = new (window as any).Chart(ctx, {
+        const chart = new (window as any).Chart(ctx, {
             type: "line",
             data: {
                 datasets: [
