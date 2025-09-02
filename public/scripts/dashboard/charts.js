@@ -5,6 +5,58 @@ const PADDING_PERCENTAGE = 0.05;
 const MAX_LABEL_LENGTH = 250;
 const TRUNCATED_LABEL_LENGTH = 245;
 const PRICE_DEVIATION_THRESHOLD = 0.02;
+const TRADE_OPACITY_HIGH = 0.6;
+const TRADE_OPACITY_MEDIUM_HIGH = 0.5;
+const TRADE_OPACITY_MEDIUM = 0.4;
+const TRADE_OPACITY_LOW = 0.3;
+const TRADE_OPACITY_MINIMAL = 0.2;
+const TRADE_QUANTITY_HIGH = 500;
+const TRADE_QUANTITY_MEDIUM_HIGH = 200;
+const TRADE_QUANTITY_MEDIUM = 100;
+const TRADE_QUANTITY_LOW = 15;
+const POINT_RADIUS_LARGEST = 50;
+const POINT_RADIUS_LARGE = 40;
+const POINT_RADIUS_MEDIUM = 25;
+const POINT_RADIUS_SMALL = 10;
+const POINT_RADIUS_TINY = 5;
+const POINT_RADIUS_MINIMAL = 2;
+const RSI_OVERBOUGHT = 70;
+const RSI_OVERSOLD = 30;
+const COLOR_ALPHA_FULL = 1;
+const COLOR_ALPHA_MEDIUM = 0.5;
+const COLOR_ALPHA_STRONG = 0.8;
+const COLOR_ALPHA_MAX = 0.9;
+const VOLUME_NORMALIZER_DARK = 1500;
+const VOLUME_NORMALIZER_LIGHT = 2000;
+const VOLUME_OPACITY_MIN = 0.3;
+const VOLUME_OPACITY_LOW = 0.4;
+const VOLUME_OPACITY_MEDIUM = 0.6;
+const VOLUME_OPACITY_HIGH = 0.8;
+const VOLUME_OPACITY_MAX = 0.9;
+const DEPLETION_RATIO_LOW = 0.3;
+const DEPLETION_RATIO_MEDIUM = 0.7;
+const ZONE_ALPHA_MIN = 0.2;
+const ZONE_ALPHA_MAX = 0.5;
+const ZONE_DURATION_MAX_HOURS = 4;
+const ZONE_DURATION_MAX_MS = ZONE_DURATION_MAX_HOURS * 60 * 60 * 1000;
+const ZONE_BASE_THICKNESS_PERCENT = 0.0008;
+const ZONE_STRENGTH_MULTIPLIER_BASE = 1;
+const ZONE_TOUCH_MULTIPLIER_MAX = 1;
+const ZONE_TOUCH_COUNT_NORMALIZER = 10;
+const ZONE_ALPHA_MULTIPLIER = 1.5;
+const ZONE_ALPHA_MULTIPLIER_MAX = 0.8;
+const BREACH_THRESHOLD_MULTIPLIER = 2;
+const CLEANUP_TIME_HOURS = 2;
+const CLEANUP_TIME_MS = CLEANUP_TIME_HOURS * 60 * 60 * 1000;
+const ZONE_ALPHA_MIN_PERCENT = 0.15;
+const ZONE_ALPHA_MAX_PERCENT = 0.4;
+const COLOR_RED_FULL = 255;
+const COLOR_RED_MEDIUM = 80;
+const COLOR_RED_LOW = 0;
+const COLOR_GREEN_FULL = 255;
+const COLOR_GREEN_MEDIUM = 128;
+const ORDER_BOOK_VOLUME_NORMALIZER_DARK = 1500;
+const ORDER_BOOK_VOLUME_NORMALIZER_LIGHT = 2000;
 let isSyncing = false;
 let chartUpdateScheduled = false;
 let supportResistanceLevels = [];
@@ -27,8 +79,9 @@ export function scheduleOrderBookUpdate() {
 export function updateYAxisBounds() {
     if (!tradesChart || trades.length === 0)
         return;
-    const xMin = tradesChart.options.scales.x.min;
-    const xMax = tradesChart.options.scales.x.max;
+    const chartOptions = tradesChart.options;
+    const xMin = chartOptions.scales.x.min;
+    const xMax = chartOptions.scales.x.max;
     let yMin = Infinity;
     let yMax = -Infinity;
     let visibleCount = 0;
@@ -50,16 +103,20 @@ export function updateYAxisBounds() {
     if (visibleCount === 0)
         return;
     const padding = (yMax - yMin) * PADDING_PERCENTAGE;
-    const scalesY = tradesChart.options.scales.y;
-    scalesY.suggestedMin = yMin - padding;
-    scalesY.suggestedMax = yMax + padding;
-    delete scalesY.min;
-    delete scalesY.max;
+    const tradesChartOptions = tradesChart.options;
+    const yScale = tradesChartOptions.scales.y;
+    yScale.suggestedMin = yMin - padding;
+    yScale.suggestedMax = yMax + padding;
+    delete yScale.min;
+    delete yScale.max;
 }
 export function updateTimeAnnotations(latestTime, activeRange) {
     if (!tradesChart)
         return;
-    const annotations = tradesChart.options.plugins.annotation.annotations;
+    const chartOptions = tradesChart.options;
+    const annotations = chartOptions.plugins?.annotation?.annotations;
+    if (!annotations)
+        return;
     const min = latestTime - activeRange;
     const max = latestTime + PADDING_TIME;
     Object.keys(annotations).forEach((key) => {
@@ -85,32 +142,19 @@ export function updateTimeAnnotations(latestTime, activeRange) {
 export function updateRSITimeAnnotations(latestTime, activeRange) {
     if (!rsiChart)
         return;
-    const annotations = rsiChart.options.plugins.annotation.annotations;
+    const rsiChartOptions = rsiChart.options;
+    const annotations = rsiChartOptions.plugins?.annotation?.annotations;
+    if (!annotations)
+        return;
     const newAnnotations = {};
     if (annotations["overboughtLine"]) {
         newAnnotations["overboughtLine"] = {
-            type: annotations["overboughtLine"].type,
-            yMin: annotations["overboughtLine"].yMin,
-            yMax: annotations["overboughtLine"].yMax,
-            borderColor: annotations["overboughtLine"].borderColor,
-            borderWidth: annotations["overboughtLine"].borderWidth,
-            borderDash: annotations["overboughtLine"].borderDash,
-            drawTime: annotations["overboughtLine"].drawTime,
-            label: annotations["overboughtLine"]
-                .label,
+            ...annotations["overboughtLine"],
         };
     }
     if (annotations["oversoldLine"]) {
         newAnnotations["oversoldLine"] = {
-            type: annotations["oversoldLine"].type,
-            yMin: annotations["oversoldLine"].yMin,
-            yMax: annotations["oversoldLine"].yMax,
-            borderColor: annotations["oversoldLine"].borderColor,
-            borderWidth: annotations["oversoldLine"].borderWidth,
-            borderDash: annotations["oversoldLine"].borderDash,
-            drawTime: annotations["oversoldLine"].drawTime,
-            label: annotations["oversoldLine"]
-                .label,
+            ...annotations["oversoldLine"],
         };
     }
     const min = latestTime - activeRange;
@@ -127,7 +171,9 @@ export function updateRSITimeAnnotations(latestTime, activeRange) {
         };
         time += FIFTEEN_MINUTES;
     }
-    rsiChart.options.plugins.annotation.annotations = newAnnotations;
+    if (rsiChart.options.plugins?.annotation) {
+        rsiChart.options.plugins.annotation.annotations = newAnnotations;
+    }
 }
 export function createTrade(x, y, quantity, orderType) {
     return {
@@ -167,7 +213,15 @@ function getTradeBackgroundColor(context) {
         return "rgba(0, 0, 0, 0)";
     const isBuy = trade.orderType === "BUY";
     const q = trade.quantity || 0;
-    const opacity = q > 500 ? 0.6 : q > 200 ? 0.5 : q > 100 ? 0.4 : q > 15 ? 0.3 : 0.2;
+    const opacity = q > TRADE_QUANTITY_HIGH
+        ? TRADE_OPACITY_HIGH
+        : q > TRADE_QUANTITY_MEDIUM_HIGH
+            ? TRADE_OPACITY_MEDIUM_HIGH
+            : q > TRADE_QUANTITY_MEDIUM
+                ? TRADE_OPACITY_MEDIUM
+                : q > TRADE_QUANTITY_LOW
+                    ? TRADE_OPACITY_LOW
+                    : TRADE_OPACITY_MINIMAL;
     return isBuy
         ? `rgba(0, 255, 30, ${opacity})`
         : `rgba(255, 0, 90, ${opacity})`;
@@ -175,16 +229,16 @@ function getTradeBackgroundColor(context) {
 function getTradePointRadius(context) {
     const q = context.raw?.quantity || 0;
     return q > 1000
-        ? 50
-        : q > 500
-            ? 40
-            : q > 200
-                ? 25
-                : q > 100
-                    ? 10
+        ? POINT_RADIUS_LARGEST
+        : q > TRADE_QUANTITY_HIGH
+            ? POINT_RADIUS_LARGE
+            : q > TRADE_QUANTITY_MEDIUM_HIGH
+                ? POINT_RADIUS_MEDIUM
+                : q > TRADE_QUANTITY_MEDIUM
+                    ? POINT_RADIUS_SMALL
                     : q > 50
-                        ? 5
-                        : 2;
+                        ? POINT_RADIUS_TINY
+                        : POINT_RADIUS_MINIMAL;
 }
 export function initializeTradesChart(ctx) {
     if (tradesChart)
@@ -265,9 +319,9 @@ export function initializeTradesChart(ctx) {
                             drawTime: "afterDatasetsDraw",
                             label: {
                                 display: true,
-                                content: (ctx) => ctx.chart.options.plugins.annotation
-                                    .annotations.lastPriceLine
-                                    .yMin?.toFixed(2) || "",
+                                content: (ctx) => ctx.chart.options.plugins?.annotation
+                                    ?.annotations?.["lastPriceLine"]
+                                    ?.yMin?.toFixed(2) || "",
                                 position: "end",
                                 xAdjust: -2,
                                 yAdjust: 0,
@@ -283,15 +337,19 @@ export function initializeTradesChart(ctx) {
                     pan: {
                         enabled: true,
                         mode: "x",
-                        onPanComplete: ({ chart }) => {
+                        onPanComplete: ({ chart, }) => {
                             if (isSyncing)
                                 return;
                             isSyncing = true;
                             if (rsiChart) {
-                                rsiChart.options.scales.x.min =
-                                    chart.scales.x.min;
-                                rsiChart.options.scales.x.max =
-                                    chart.scales.x.max;
+                                const rsiChartOptions = rsiChart.options;
+                                const chartOptions = chart.options;
+                                rsiChartOptions.scales.x.min =
+                                    chartOptions.scales.x.min ??
+                                        Date.now() - 90 * 60000;
+                                rsiChartOptions.scales.x.max =
+                                    chartOptions.scales.x.max ??
+                                        Date.now() + PADDING_TIME;
                                 rsiChart.update("none");
                             }
                             isSyncing = false;
@@ -305,16 +363,21 @@ export function initializeTradesChart(ctx) {
                             enabled: true,
                         },
                         mode: "x",
-                        onZoomComplete: ({ chart }) => {
+                        onZoomComplete: ({ chart, }) => {
                             if (isSyncing)
                                 return;
                             isSyncing = true;
                             if (rsiChart) {
-                                rsiChart.options.scales.x.min =
-                                    chart.scales.x.min;
-                                rsiChart.options.scales.x.max =
-                                    chart.scales.x.max;
-                                rsiChart.update("none");
+                                if (rsiChart.options.scales?.x &&
+                                    chart.options.scales?.x) {
+                                    rsiChart.options.scales.x.min =
+                                        chart.options.scales.x.min ??
+                                            Date.now() - 90 * 60000;
+                                    rsiChart.options.scales.x.max =
+                                        chart.options.scales.x.max ??
+                                            Date.now() + PADDING_TIME;
+                                    rsiChart.update("none");
+                                }
                             }
                             isSyncing = false;
                         },
@@ -348,8 +411,8 @@ export function initializeRSIChart(ctx) {
         initialMax = now + PADDING_TIME;
     }
     if (typeof window.Chart.Annotation !== "undefined" &&
-        !window.Chart.registry.plugins.get("annotation")) {
-        window.Chart.register(window.Chart.Annotation);
+        !window.Chart.registry?.plugins?.get?.("annotation")) {
+        window.Chart.register?.(window.Chart.Annotation);
     }
     try {
         const chart = new window.Chart(ctx, {
@@ -457,16 +520,21 @@ export function initializeRSIChart(ctx) {
                         pan: {
                             enabled: true,
                             mode: "x",
-                            onPanComplete: ({ chart }) => {
+                            onPanComplete: ({ chart, }) => {
                                 if (isSyncing)
                                     return;
                                 isSyncing = true;
                                 if (tradesChart) {
-                                    tradesChart.options.scales.x.min =
-                                        chart.scales.x.min;
-                                    tradesChart.options.scales.x.max =
-                                        chart.scales.x.max;
-                                    tradesChart.update("none");
+                                    if (tradesChart.options.scales?.x &&
+                                        chart.options.scales?.x) {
+                                        tradesChart.options.scales.x.min =
+                                            chart.options.scales.x.min ??
+                                                Date.now() - 90 * 60000;
+                                        tradesChart.options.scales.x.max =
+                                            chart.options.scales.x.max ??
+                                                Date.now() + PADDING_TIME;
+                                        tradesChart.update("none");
+                                    }
                                 }
                                 isSyncing = false;
                             },
@@ -479,16 +547,21 @@ export function initializeRSIChart(ctx) {
                                 enabled: true,
                             },
                             mode: "x",
-                            onZoomComplete: ({ chart }) => {
+                            onZoomComplete: ({ chart, }) => {
                                 if (isSyncing)
                                     return;
                                 isSyncing = true;
                                 if (tradesChart) {
-                                    tradesChart.options.scales.x.min =
-                                        chart.scales.x.min;
-                                    tradesChart.options.scales.x.max =
-                                        chart.scales.x.max;
-                                    tradesChart.update("none");
+                                    if (tradesChart.options.scales?.x &&
+                                        chart.options.scales?.x) {
+                                        tradesChart.options.scales.x.min =
+                                            chart.options.scales.x.min ??
+                                                Date.now() - 90 * 60000;
+                                        tradesChart.options.scales.x.max =
+                                            chart.options.scales.x.max ??
+                                                Date.now() + PADDING_TIME;
+                                        tradesChart.update("none");
+                                    }
                                 }
                                 isSyncing = false;
                             },
@@ -543,9 +616,9 @@ function getRSIColor(context) {
     if (!data || typeof data.rsi !== "number")
         return "rgba(102, 102, 102, 1)";
     const rsi = data.rsi;
-    if (rsi >= 70)
+    if (rsi >= RSI_OVERBOUGHT)
         return "rgba(255, 0, 0, 1)";
-    if (rsi <= 30)
+    if (rsi <= RSI_OVERSOLD)
         return "rgba(0, 255, 0, 1)";
     return "rgba(102, 102, 102, 1)";
 }
@@ -554,9 +627,9 @@ function getRSIBackgroundColor(context) {
     if (!data || typeof data.rsi !== "number")
         return "rgba(102, 102, 102, 0.1)";
     const rsi = data.rsi;
-    if (rsi >= 70)
+    if (rsi >= RSI_OVERBOUGHT)
         return "rgba(255, 0, 0, 0.1)";
-    if (rsi <= 30)
+    if (rsi <= RSI_OVERSOLD)
         return "rgba(0, 255, 0, 0.1)";
     return "rgba(102, 102, 102, 0.1)";
 }
@@ -686,14 +759,14 @@ export function initializeOrderBookChart(ctx) {
                                 if (level.depletionRatio >= 0.7) {
                                     tooltipText += " 🔥 HIGH";
                                 }
-                                else if (level.depletionRatio >= 0.3) {
+                                else if (level.depletionRatio >= DEPLETION_RATIO_LOW) {
                                     tooltipText += " ⚠️ MEDIUM";
                                 }
                             }
                             return tooltipText;
                         },
                         title: function (context) {
-                            const label = context[0].label || "";
+                            const label = context[0]?.label || "";
                             const priceStr = label.split("_")[0] ?? "";
                             return `Price: ${priceStr}`;
                         },
@@ -712,25 +785,29 @@ function getDepletionColor(volume, depletionRatio, side, theme) {
         ? getDepletionVisualizationEnabled()
         : true;
     const baseColors = {
-        ask: theme === "dark" ? [255, 80, 80] : [255, 0, 0],
-        bid: theme === "dark" ? [80, 255, 80] : [0, 128, 0],
+        ask: theme === "dark"
+            ? [COLOR_RED_FULL, COLOR_RED_MEDIUM, COLOR_RED_MEDIUM]
+            : [COLOR_RED_FULL, COLOR_RED_LOW, COLOR_RED_LOW],
+        bid: theme === "dark"
+            ? [COLOR_RED_MEDIUM, COLOR_GREEN_FULL, COLOR_RED_MEDIUM]
+            : [COLOR_RED_LOW, COLOR_GREEN_MEDIUM, COLOR_RED_LOW],
     };
     const [r, g, b] = baseColors[side] || [0, 0, 0];
     let baseOpacity = theme === "dark"
-        ? Math.min(volume / 1500, 0.9)
-        : Math.min(volume / 2000, 1);
+        ? Math.min(volume / VOLUME_NORMALIZER_DARK, VOLUME_OPACITY_MAX)
+        : Math.min(volume / VOLUME_NORMALIZER_LIGHT, COLOR_ALPHA_FULL);
     if (depletionEnabled && depletionRatio > 0) {
-        if (depletionRatio < 0.3) {
-            baseOpacity = Math.max(baseOpacity, 0.4);
+        if (depletionRatio < DEPLETION_RATIO_LOW) {
+            baseOpacity = Math.max(baseOpacity, VOLUME_OPACITY_LOW);
         }
-        else if (depletionRatio < 0.7) {
-            baseOpacity = Math.max(baseOpacity, 0.6);
+        else if (depletionRatio < DEPLETION_RATIO_MEDIUM) {
+            baseOpacity = Math.max(baseOpacity, VOLUME_OPACITY_MEDIUM);
         }
         else {
-            baseOpacity = Math.max(baseOpacity, 0.8);
+            baseOpacity = Math.max(baseOpacity, VOLUME_OPACITY_HIGH);
         }
     }
-    return `rgba(${r}, ${g}, ${b}, ${Math.max(baseOpacity, 0.3)})`;
+    return `rgba(${r}, ${g}, ${b}, ${Math.max(baseOpacity, VOLUME_OPACITY_MIN)})`;
 }
 function updateOrderBookBorderColors(theme) {
     if (!orderBookChart)
@@ -738,15 +815,19 @@ function updateOrderBookBorderColors(theme) {
     const datasets = orderBookChart.data.datasets;
     if (!datasets || datasets.length < 2)
         return;
-    const borderOpacity = theme === "dark" ? 0.8 : 0.5;
-    datasets[0].borderColor =
-        theme === "dark"
-            ? `rgba(255, 120, 120, ${borderOpacity})`
-            : `rgba(255, 0, 0, ${borderOpacity})`;
-    datasets[1].borderColor =
-        theme === "dark"
-            ? `rgba(120, 255, 120, ${borderOpacity})`
-            : `rgba(0, 128, 0, ${borderOpacity})`;
+    const borderOpacity = theme === "dark" ? COLOR_ALPHA_STRONG : COLOR_ALPHA_MEDIUM;
+    if (datasets[0]) {
+        datasets[0].borderColor =
+            theme === "dark"
+                ? `rgba(255, 120, 120, ${borderOpacity})`
+                : `rgba(255, 0, 0, ${borderOpacity})`;
+    }
+    if (datasets[1]) {
+        datasets[1].borderColor =
+            theme === "dark"
+                ? `rgba(120, 255, 120, ${borderOpacity})`
+                : `rgba(0, 128, 0, ${borderOpacity})`;
+    }
 }
 export function updateOrderBookBarColors(theme) {
     if (!orderBookChart || !orderBookData)
@@ -758,28 +839,32 @@ export function updateOrderBookBarColors(theme) {
     const bidColors = [];
     orderBookData.priceLevels.forEach((level) => {
         const askOpacity = theme === "dark"
-            ? Math.min(level.ask / 1500, 0.9)
-            : Math.min(level.ask / 2000, 1);
+            ? Math.min((level.ask ?? 0) / ORDER_BOOK_VOLUME_NORMALIZER_DARK, COLOR_ALPHA_MAX)
+            : Math.min((level.ask ?? 0) / ORDER_BOOK_VOLUME_NORMALIZER_LIGHT, COLOR_ALPHA_FULL);
         const askColor = level.ask
             ? theme === "dark"
-                ? `rgba(255, 80, 80, ${Math.max(askOpacity, 0.3)})`
-                : `rgba(255, 0, 0, ${askOpacity})`
+                ? `rgba(${COLOR_RED_FULL}, ${COLOR_RED_MEDIUM}, ${COLOR_RED_MEDIUM}, ${Math.max(askOpacity, VOLUME_OPACITY_MIN)})`
+                : `rgba(${COLOR_RED_FULL}, ${COLOR_RED_LOW}, ${COLOR_RED_LOW}, ${askOpacity})`
             : "rgba(0, 0, 0, 0)";
         const bidOpacity = theme === "dark"
-            ? Math.min(level.bid / 1500, 0.9)
-            : Math.min(level.bid / 2000, 1);
+            ? Math.min((level.bid ?? 0) / ORDER_BOOK_VOLUME_NORMALIZER_DARK, COLOR_ALPHA_MAX)
+            : Math.min((level.bid ?? 0) / ORDER_BOOK_VOLUME_NORMALIZER_LIGHT, COLOR_ALPHA_FULL);
         const bidColor = level.bid
             ? theme === "dark"
-                ? `rgba(80, 255, 80, ${Math.max(bidOpacity, 0.3)})`
-                : `rgba(0, 128, 0, ${bidOpacity})`
+                ? `rgba(${COLOR_RED_MEDIUM}, ${COLOR_GREEN_FULL}, ${COLOR_RED_MEDIUM}, ${Math.max(bidOpacity, VOLUME_OPACITY_MIN)})`
+                : `rgba(${COLOR_RED_LOW}, ${COLOR_GREEN_MEDIUM}, ${COLOR_RED_LOW}, ${bidOpacity})`
             : "rgba(0, 0, 0, 0)";
         askColors.push(askColor);
         bidColors.push("rgba(0, 0, 0, 0)");
         askColors.push("rgba(0, 0, 0, 0)");
         bidColors.push(bidColor);
     });
-    datasets[0].backgroundColor = askColors;
-    datasets[1].backgroundColor = bidColors;
+    if (datasets[0]) {
+        datasets[0].backgroundColor = askColors;
+    }
+    if (datasets[1]) {
+        datasets[1].backgroundColor = bidColors;
+    }
     updateOrderBookBorderColors(theme);
 }
 function validateDepletionLevel(level, midPrice, currentTime) {
@@ -885,7 +970,8 @@ export function updateOrderBookDisplay(data) {
     });
     if (orderBookChart?.data && orderBookChart.data.datasets.length >= 2) {
         const chart = orderBookChart;
-        chart.data.labels = depletionLabels;
+        chart.data.labels =
+            depletionLabels;
         chart.data.datasets[0].data = askData;
         chart.data.datasets[1].data = bidData;
         chart.data.datasets[0].backgroundColor = askColors;
@@ -898,12 +984,16 @@ export function addAnomalyChartLabel(anomaly) {
     if (!tradesChart)
         return;
     const now = anomaly.timestamp || anomaly.detectedAt || Date.now();
-    tradesChart.options.plugins.annotation.annotations =
-        tradesChart.options.plugins.annotation.annotations || {};
-    tradesChart.options.plugins.annotation.annotations[`anomaly.${now}`] = {
+    if (!tradesChart.options.plugins)
+        tradesChart.options.plugins = {};
+    if (!tradesChart.options.plugins.annotation) {
+        tradesChart.options.plugins.annotation = { annotations: {} };
+    }
+    const annotations = tradesChart.options.plugins.annotation.annotations;
+    annotations[`anomaly.${now}`] = {
         type: "label",
-        xValue: anomaly.timestamp || anomaly.detectedAt,
-        yValue: anomaly.price,
+        xValue: anomaly.timestamp ?? anomaly.detectedAt ?? now,
+        yValue: anomaly.price ?? 0,
         content: `${getAnomalyIcon(anomaly.type)}`,
         backgroundColor: anomaly.severity === "critical"
             ? "rgba(229,57,53,0.8)"
@@ -916,7 +1006,6 @@ export function addAnomalyChartLabel(anomaly) {
         font: { size: 18, weight: "bold" },
         padding: 6,
         borderRadius: 6,
-        id: `anomaly.${now}`,
     };
     tradesChart.update("none");
 }
@@ -941,18 +1030,24 @@ export function handleSupportResistanceLevel(levelData) {
 function addSupportResistanceToChart(level) {
     if (!tradesChart)
         return;
+    if (!tradesChart.options.plugins)
+        tradesChart.options.plugins = {};
+    if (!tradesChart.options.plugins.annotation) {
+        tradesChart.options.plugins.annotation = { annotations: {} };
+    }
     const annotations = tradesChart.options.plugins.annotation.annotations;
     const levelId = `sr_level_${level.id}`;
     const isSupport = level.type === "support";
     const baseColor = isSupport ? "34, 197, 94" : "239, 68, 68";
-    const alpha = Math.max(0.2, Math.min(0.5, level.strength));
+    const alpha = Math.max(ZONE_ALPHA_MIN, Math.min(ZONE_ALPHA_MAX, level.strength));
     const now = Date.now();
     const startTime = level.firstDetected;
-    const maxValidDuration = 4 * 60 * 60 * 1000;
+    const maxValidDuration = ZONE_DURATION_MAX_MS;
     const endTime = Math.min(now + maxValidDuration, level.lastTouched + maxValidDuration);
-    const baseThickness = level.price * 0.0008;
-    const strengthMultiplier = 1 + level.strength * 2;
-    const touchMultiplier = 1 + Math.min(level.touchCount / 10, 1);
+    const baseThickness = level.price * ZONE_BASE_THICKNESS_PERCENT;
+    const strengthMultiplier = ZONE_STRENGTH_MULTIPLIER_BASE + level.strength * 2;
+    const touchMultiplier = ZONE_STRENGTH_MULTIPLIER_BASE +
+        Math.min(level.touchCount / ZONE_TOUCH_COUNT_NORMALIZER, ZONE_TOUCH_MULTIPLIER_MAX);
     const zoneHeight = baseThickness * strengthMultiplier * touchMultiplier;
     const annotation = {
         type: "box",
@@ -961,14 +1056,10 @@ function addSupportResistanceToChart(level) {
         yMin: level.price - zoneHeight / 2,
         yMax: level.price + zoneHeight / 2,
         backgroundColor: `rgba(${baseColor}, ${alpha})`,
-        borderColor: `rgba(${baseColor}, ${Math.min(alpha * 1.5, 0.8)})`,
+        borderColor: `rgba(${baseColor}, ${Math.min(alpha * ZONE_ALPHA_MULTIPLIER, ZONE_ALPHA_MULTIPLIER_MAX)})`,
         borderWidth: 1,
         drawTime: "beforeDatasetsDraw",
         z: 1,
-        enter: (_context, _event) => {
-        },
-        leave: () => {
-        },
     };
     if (level.roleReversals?.length) {
         annotation.borderDash = [5, 5];
@@ -980,7 +1071,7 @@ function addSupportResistanceToChart(level) {
         xValue: startTime,
         yValue: level.price,
         content: `${isSupport ? "SUPPORT" : "RESISTANCE"} ${level.price.toFixed(2)}`,
-        backgroundColor: `rgba(${baseColor}, 0.9)`,
+        backgroundColor: `rgba(${baseColor}, ${COLOR_ALPHA_MAX})`,
         color: "white",
         font: {
             size: 9,
@@ -1002,22 +1093,25 @@ function addSupportResistanceToChart(level) {
 function removeSupportResistanceLevel(levelId) {
     if (!tradesChart)
         return;
-    const annotations = tradesChart.options.plugins.annotation.annotations;
+    const annotations = tradesChart.options.plugins?.annotation?.annotations;
+    if (!annotations)
+        return;
     const barId = `sr_level_${levelId}`;
     const labelId = `sr_label_${levelId}`;
     delete annotations[barId];
     delete annotations[labelId];
     tradesChart.update("none");
 }
-export function checkSupportResistanceBreaches(tradePrice, _tradeTime) {
+export function checkSupportResistanceBreaches(tradePrice) {
     if (!supportResistanceLevels.length)
         return;
     supportResistanceLevels = supportResistanceLevels.filter((level) => {
         const zoneHeight = level.price *
-            0.0008 *
-            (1 + level.strength * 2) *
-            (1 + Math.min(level.touchCount / 10, 1));
-        const breachThreshold = zoneHeight * 2;
+            ZONE_BASE_THICKNESS_PERCENT *
+            (ZONE_STRENGTH_MULTIPLIER_BASE + level.strength * 2) *
+            (ZONE_STRENGTH_MULTIPLIER_BASE +
+                Math.min(level.touchCount / ZONE_TOUCH_COUNT_NORMALIZER, ZONE_TOUCH_MULTIPLIER_MAX));
+        const breachThreshold = zoneHeight * BREACH_THRESHOLD_MULTIPLIER;
         let isBreached = false;
         if (level.type === "support") {
             isBreached = tradePrice < level.price - breachThreshold;
@@ -1039,7 +1133,7 @@ export function checkSupportResistanceBreaches(tradePrice, _tradeTime) {
     });
 }
 export function cleanupOldSupportResistanceLevels() {
-    const cutoffTime = Date.now() - 2 * 60 * 60 * 1000;
+    const cutoffTime = Date.now() - CLEANUP_TIME_MS;
     supportResistanceLevels = supportResistanceLevels.filter((level) => {
         if (level.lastTouched < cutoffTime) {
             removeSupportResistanceLevel(level.id);
@@ -1096,7 +1190,7 @@ export function handleZoneSignal(signalData) {
 function createZoneBox(zone) {
     activeZones.set(zone.id, zone);
     if (activeZones.size > maxActiveZones) {
-        const oldestZoneId = activeZones.keys().next().value;
+        const oldestZoneId = activeZones.keys().next().value ?? "";
         removeZoneBox(oldestZoneId);
     }
     addZoneToChart(zone);
@@ -1104,8 +1198,8 @@ function createZoneBox(zone) {
 function updateZoneBox(zone) {
     activeZones.set(zone.id, zone);
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        const annotation = tradesChart.options.plugins
-            .annotation.annotations[`zone_${zone.id}`];
+        const tradesChartOptions = tradesChart.options;
+        const annotation = tradesChartOptions.plugins?.annotation?.annotations[`zone_${zone.id}`];
         if (annotation) {
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
                 const price = zone.priceRange.center ??
@@ -1123,7 +1217,9 @@ function updateZoneBox(zone) {
                 annotation.backgroundColor = getZoneColor(zone);
                 annotation.borderColor = getZoneBorderColor(zone);
             }
-            annotation.label.content = getZoneLabel(zone);
+            if (annotation.label) {
+                annotation.label.content = getZoneLabel(zone);
+            }
             tradesChart.update("none");
         }
         else {
@@ -1134,8 +1230,8 @@ function updateZoneBox(zone) {
 function completeZoneBox(zone) {
     activeZones.set(zone.id, zone);
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        const annotation = tradesChart.options.plugins
-            .annotation.annotations[`zone_${zone.id}`];
+        const tradesChartOptions = tradesChart.options;
+        const annotation = tradesChartOptions.plugins?.annotation?.annotations[`zone_${zone.id}`];
         if (annotation) {
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
                 annotation.borderColor = getCompletedZoneBorderColor(zone);
@@ -1152,7 +1248,9 @@ function completeZoneBox(zone) {
                 annotation.borderWidth = 2;
                 annotation.borderDash = [5, 5];
             }
-            annotation.label.content = getZoneLabel(zone) + " ✓";
+            if (annotation.label) {
+                annotation.label.content = getZoneLabel(zone) + " ✓";
+            }
             tradesChart.update("none");
             setTimeout(() => {
                 removeZoneBox(zone.id);
@@ -1163,7 +1261,8 @@ function completeZoneBox(zone) {
 function removeZoneBox(zoneId) {
     activeZones.delete(zoneId);
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        delete tradesChart.options.plugins.annotation.annotations[`zone_${zoneId}`];
+        const tradesChartOptions = tradesChart.options;
+        delete tradesChartOptions.plugins?.annotation?.annotations[`zone_${zoneId}`];
         tradesChart.update("none");
     }
 }
@@ -1171,6 +1270,7 @@ function addZoneToChart(zone) {
     if (!tradesChart?.options?.plugins?.annotation?.annotations)
         return;
     console.log("Adding zone to chart:", zone.type, zone.id, zone.priceRange);
+    const tradesChartOptions = tradesChart.options;
     let zoneAnnotation;
     if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
         const price = zone.priceRange.center ??
@@ -1240,11 +1340,14 @@ function addZoneToChart(zone) {
             },
         };
     }
-    tradesChart.options.plugins.annotation.annotations[`zone_${zone.id}`] = zoneAnnotation;
+    if (tradesChartOptions.plugins?.annotation?.annotations) {
+        tradesChartOptions.plugins.annotation.annotations[`zone_${zone.id}`] =
+            zoneAnnotation;
+    }
     tradesChart.update("none");
 }
 function getZoneColor(zone) {
-    const alpha = Math.max(0.15, zone.strength * 0.4);
+    const alpha = Math.max(ZONE_ALPHA_MIN_PERCENT, zone.strength * ZONE_ALPHA_MAX_PERCENT);
     switch (zone.type) {
         case "accumulation":
             return `rgba(34, 197, 94, ${alpha})`;
@@ -1344,18 +1447,18 @@ function getZoneLabel(zone) {
 function showZoneTooltip(zone, event) {
     const tooltip = document.createElement("div");
     tooltip.id = "zoneTooltip";
-    tooltip.style.cssText = "position: fixed;";
-    ("background: rgba(0, 0, 0, 0.9);");
-    ("color: white;");
-    ("padding: 12px;");
-    ("border-radius: 6px;");
-    ("font-size: 12px;");
-    ("font-family: monospace;");
-    ("pointer-events: none;");
-    ("z-index: 10000;");
-    ("max-width: 300px;");
-    ("line-height: 1.4;");
-    ("box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3)");
+    tooltip.style.position = "fixed";
+    tooltip.style.background = "rgba(0, 0, 0, 0.9)";
+    tooltip.style.color = "white";
+    tooltip.style.padding = "12px";
+    tooltip.style.borderRadius = "6px";
+    tooltip.style.fontSize = "12px";
+    tooltip.style.fontFamily = "monospace";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.zIndex = "10000";
+    tooltip.style.maxWidth = "300px";
+    tooltip.style.lineHeight = "1.4";
+    tooltip.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.3)";
     const duration = Math.round((Date.now() - (zone.startTime ?? Date.now())) / 60000);
     const volumeFormatted = zone.totalVolume?.toLocaleString() || "N/A";
     let zoneColor;
@@ -1378,7 +1481,8 @@ function showZoneTooltip(zone, event) {
         default:
             zoneColor = "#6b7280";
     }
-    let tooltipContent = `<div style=\"font-weight: bold; margin-bottom: 6px; color: ${zoneColor}">\n            ${getZoneLabel(zone)} ZONE
+    let tooltipContent = `<div style="font-weight: bold; margin-bottom: 6px; color: ${zoneColor};">
+            ${getZoneLabel(zone)} ZONE
         </div>
         <div>Price Range: ${zone.priceRange.min.toFixed(4)} - ${zone.priceRange.max.toFixed(4)}</div>`;
     if (zone.priceRange.center) {
@@ -1393,7 +1497,7 @@ function showZoneTooltip(zone, event) {
     tooltipContent += `<div>Duration: ${duration}m</div>`;
     if (zone.type === "iceberg") {
         tooltipContent += `
-            <div style=\"margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;\">
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
                 <div>Refills: ${zone.refillCount || "N/A"}</div>
                 <div>Volume: ${volumeFormatted}</div>
                 <div>Avg Size: ${zone.averagePieceSize?.toFixed(2) || "N/A"}</div>
@@ -1402,7 +1506,7 @@ function showZoneTooltip(zone, event) {
     }
     else if (zone.type === "spoofing") {
         tooltipContent += `
-            <div style=\"margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;\">
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
                 <div>Type: ${zone.spoofType || "N/A"}</div>
                 <div>Wall Size: ${zone.wallSize?.toFixed(2) || "N/A"}</div>
                 <div>Canceled: ${zone.canceled?.toFixed(2) || "N/A"}</div>
@@ -1412,7 +1516,7 @@ function showZoneTooltip(zone, event) {
     }
     else if (zone.type === "hidden_liquidity") {
         tooltipContent += `
-            <div style=\"margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;\">
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
                 <div>Stealth Type: ${zone.stealthType || "N/A"}</div>
                 <div>Stealth Score: ${((zone.stealthScore ?? 0) * 100).toFixed(1) + "%"}</div>
                 <div>Trades: ${zone.tradeCount || "N/A"}</div>
@@ -1420,18 +1524,27 @@ function showZoneTooltip(zone, event) {
                 <div>Side: ${zone.side?.toUpperCase() || "N/A"}</div>
             </div>`;
     }
-    else if (zone.totalVolume) {
-        tooltipContent += `<div>Volume: ${volumeFormatted}</div>`;
-    }
     tooltip.innerHTML = tooltipContent;
-    tooltip.style.left = `${event.clientX + 10}px`;
-    tooltip.style.top = `${event.clientY - 10}px`;
     document.body.appendChild(tooltip);
+    tooltip.style.left = `${event.clientX + 15}px`;
+    tooltip.style.top = `${event.clientY + 15}px`;
 }
 function hideZoneTooltip() {
     const tooltip = document.getElementById("zoneTooltip");
     if (tooltip) {
         tooltip.remove();
+    }
+}
+function getAnomalyIcon(type) {
+    switch (type) {
+        case "volume_anomaly":
+            return "📊";
+        case "price_anomaly":
+            return "💹";
+        case "liquidity_anomaly":
+            return "💧";
+        default:
+            return "❓";
     }
 }
 export function cleanupOldZones() {
@@ -1440,35 +1553,5 @@ export function cleanupOldZones() {
         if (!zone.isActive && zone.endTime && zone.endTime < cutoffTime) {
             removeZoneBox(zoneId);
         }
-    }
-}
-function getAnomalyIcon(type) {
-    switch (type) {
-        case "flash_crash":
-            return "⚡";
-        case "api_gap":
-            return "🔌";
-        case "liquidity_void":
-            return "💧";
-        case "extreme_volatility":
-            return "🌊";
-        case "spoofing":
-            return "👻";
-        case "layering":
-            return "📚";
-        case "ghost_liquidity":
-            return "👤";
-        case "orderbook_imbalance":
-            return "⚖️";
-        case "whale_activity":
-            return "🐋";
-        case "coordinated_activity":
-            return "🤝";
-        case "algorithmic_activity":
-            return "🤖";
-        case "toxic_flow":
-            return "☠️";
-        default:
-            return "⚠️";
     }
 }

@@ -385,7 +385,7 @@ function handleMessage(message) {
                 }
                 updateUnifiedTimeRange(trade.time);
                 updateYAxisBounds();
-                checkSupportResistanceBreaches(trade.price, trade.time);
+                checkSupportResistanceBreaches(trade.price);
                 scheduleTradesChartUpdate();
             }
             break;

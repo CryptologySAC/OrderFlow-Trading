@@ -519,8 +519,8 @@ export function initializeTradesChart(
                                 content: (ctx: ScriptableContext<"scatter">) =>
                                     (
                                         ctx.chart.options.plugins?.annotation
-                                            ?.annotations.lastPriceLine
-                                            .yMin as number
+                                            ?.annotations?.["lastPriceLine"]
+                                            ?.yMin as number
                                     )?.toFixed(2) || "",
                                 position: "end",
                                 xAdjust: -2,
@@ -550,9 +550,11 @@ export function initializeTradesChart(
                                 const chartOptions =
                                     chart.options as ChartOptions;
                                 rsiChartOptions.scales.x.min =
-                                    chartOptions.scales.x.min;
+                                    chartOptions.scales.x.min ??
+                                    Date.now() - 90 * 60000;
                                 rsiChartOptions.scales.x.max =
-                                    chartOptions.scales.x.max;
+                                    chartOptions.scales.x.max ??
+                                    Date.now() + PADDING_TIME;
                                 rsiChart.update("none");
                             }
                             isSyncing = false;
@@ -579,9 +581,11 @@ export function initializeTradesChart(
                                     chart.options.scales?.x
                                 ) {
                                     rsiChart.options.scales.x.min =
-                                        chart.options.scales.x.min;
+                                        chart.options.scales.x.min ??
+                                        Date.now() - 90 * 60000;
                                     rsiChart.options.scales.x.max =
-                                        chart.options.scales.x.max;
+                                        chart.options.scales.x.max ??
+                                        Date.now() + PADDING_TIME;
                                     rsiChart.update("none");
                                 }
                             }
@@ -757,9 +761,11 @@ export function initializeRSIChart(
                                         chart.options.scales?.x
                                     ) {
                                         tradesChart.options.scales.x.min =
-                                            chart.options.scales.x.min;
+                                            chart.options.scales.x.min ??
+                                            Date.now() - 90 * 60000;
                                         tradesChart.options.scales.x.max =
-                                            chart.options.scales.x.max;
+                                            chart.options.scales.x.max ??
+                                            Date.now() + PADDING_TIME;
                                         tradesChart.update("none");
                                     }
                                 }
@@ -787,9 +793,11 @@ export function initializeRSIChart(
                                         chart.options.scales?.x
                                     ) {
                                         tradesChart.options.scales.x.min =
-                                            chart.options.scales.x.min;
+                                            chart.options.scales.x.min ??
+                                            Date.now() - 90 * 60000;
                                         tradesChart.options.scales.x.max =
-                                            chart.options.scales.x.max;
+                                            chart.options.scales.x.max ??
+                                            Date.now() + PADDING_TIME;
                                         tradesChart.update("none");
                                     }
                                 }
@@ -852,7 +860,7 @@ export function safeUpdateRSIChart(rsiData: RSIDataPoint[]): boolean {
         rsiChart.data.datasets[0]
     ) {
         // Update data directly (backlog loading handles data replacement)
-        rsiChart.data.datasets[0].data = rsiData as RSIDataPoint[];
+        rsiChart.data.datasets[0].data = rsiData as unknown as ChartDataPoint[];
 
         // Update chart
         rsiChart.update("none");
@@ -1140,14 +1148,18 @@ function updateOrderBookBorderColors(theme: string): void {
         theme === "dark" ? COLOR_ALPHA_STRONG : COLOR_ALPHA_MEDIUM;
 
     // Enhanced border colors for depletion visualization
-    datasets[0].borderColor =
-        theme === "dark"
-            ? `rgba(255, 120, 120, ${borderOpacity})`
-            : `rgba(255, 0, 0, ${borderOpacity})`;
-    datasets[1].borderColor =
-        theme === "dark"
-            ? `rgba(120, 255, 120, ${borderOpacity})`
-            : `rgba(0, 128, 0, ${borderOpacity})`;
+    if (datasets[0]) {
+        datasets[0].borderColor =
+            theme === "dark"
+                ? `rgba(255, 120, 120, ${borderOpacity})`
+                : `rgba(255, 0, 0, ${borderOpacity})`;
+    }
+    if (datasets[1]) {
+        datasets[1].borderColor =
+            theme === "dark"
+                ? `rgba(120, 255, 120, ${borderOpacity})`
+                : `rgba(0, 128, 0, ${borderOpacity})`;
+    }
 }
 
 export function updateOrderBookBarColors(theme: string): void {
@@ -1207,8 +1219,12 @@ export function updateOrderBookBarColors(theme: string): void {
     });
 
     // Update the chart datasets
-    datasets[0].backgroundColor = askColors; // Asks
-    datasets[1].backgroundColor = bidColors; // Bids
+    if (datasets[0]) {
+        datasets[0].backgroundColor = askColors; // Asks
+    }
+    if (datasets[1]) {
+        datasets[1].backgroundColor = bidColors; // Bids
+    }
 
     // Update border colors for better definition in dark mode
     updateOrderBookBorderColors(theme);
@@ -1407,7 +1423,8 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
 
     if (orderBookChart?.data && orderBookChart.data.datasets.length >= 2) {
         const chart = orderBookChart;
-        (chart.data as { labels: string[] }).labels = depletionLabels; // Use labels with depletion info
+        (chart.data as unknown as { labels: string[] }).labels =
+            depletionLabels; // Use labels with depletion info
         (chart.data.datasets[0] as ChartDataset).data = askData;
         (chart.data.datasets[1] as ChartDataset).data = bidData;
 
@@ -1433,8 +1450,8 @@ export function addAnomalyChartLabel(anomaly: Anomaly): void {
 
     annotations[`anomaly.${now}`] = {
         type: "label",
-        xValue: anomaly.timestamp || anomaly.detectedAt,
-        yValue: anomaly.price,
+        xValue: anomaly.timestamp ?? anomaly.detectedAt ?? now,
+        yValue: anomaly.price ?? 0,
         content: `${getAnomalyIcon(anomaly.type)}`,
         backgroundColor:
             anomaly.severity === "critical"
@@ -1755,9 +1772,8 @@ function createZoneBox(zone: ZoneData): void {
 
     // Limit number of active zones
     if ((activeZones as Map<string, ZoneData>).size > maxActiveZones) {
-        const oldestZoneId: string = (activeZones as Map<string, ZoneData>)
-            .keys()
-            .next().value;
+        const oldestZoneId: string =
+            (activeZones as Map<string, ZoneData>).keys().next().value ?? "";
         removeZoneBox(oldestZoneId);
     }
 
