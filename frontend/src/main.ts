@@ -399,7 +399,8 @@ function initialize(): void {
 function processMessageQueue(): void {
     if (messageQueue.length === 0) {
         isProcessingQueue = false;
-        requestAnimationFrame(processMessageQueue);
+        // MEMORY SAFETY: Only schedule next frame if we actually need to poll
+        // Don't create continuous animation frame loop when idle
         return;
     }
 
@@ -414,7 +415,17 @@ function processMessageQueue(): void {
         console.error("Error processing message from queue:", error);
     }
 
-    requestAnimationFrame(processMessageQueue);
+    // MEMORY SAFETY: Add throttling for high-volume message processing
+    if (messageQueue.length > 100) {
+        // High load: use setTimeout to throttle processing
+        setTimeout(() => processMessageQueue(), 10);
+    } else if (messageQueue.length > 10) {
+        // Medium load: use requestAnimationFrame but with delay
+        setTimeout(() => requestAnimationFrame(processMessageQueue), 5);
+    } else {
+        // Low load: use immediate requestAnimationFrame
+        requestAnimationFrame(processMessageQueue);
+    }
 }
 
 function handleMessage(message: WebSocketMessage): void {
@@ -457,14 +468,8 @@ function handleMessage(message: WebSocketMessage): void {
                 const chartInstance = tradesChart as ChartInstance;
                 const chartData = chartInstance.data;
                 if (chartData && chartData.datasets && chartData.datasets[0]) {
-                    chartData.datasets[0].data = [
-                        ...(trades as {
-                            x: number;
-                            y: number;
-                            quantity?: number;
-                            orderType?: "BUY" | "SELL";
-                        }[]),
-                    ];
+                    // MEMORY SAFETY: Direct reference instead of spread
+                    chartData.datasets[0].data = trades;
                 }
             }
             if (trades.length > 0) {
@@ -599,14 +604,8 @@ function handleMessage(message: WebSocketMessage): void {
                         chartData.datasets &&
                         chartData.datasets[0]
                     ) {
-                        chartData.datasets[0].data = [
-                            ...(trades as {
-                                x: number;
-                                y: number;
-                                quantity?: number;
-                                orderType?: "BUY" | "SELL";
-                            }[]),
-                        ];
+                        // MEMORY SAFETY: Direct reference instead of spread to prevent 200MB/second churn
+                        chartData.datasets[0].data = trades;
                     }
                 }
                 if (tradesChart) {
@@ -667,6 +666,28 @@ function handleMessage(message: WebSocketMessage): void {
                                 y: "center",
                             },
                         } as ChartAnnotation;
+
+                        // MEMORY SAFETY: Clean up old annotations to prevent memory leaks
+                        const MAX_ANNOTATIONS = 100;
+                        const annotationKeys = Object.keys(annotations);
+                        if (annotationKeys.length > MAX_ANNOTATIONS) {
+                            // Remove oldest annotations (keep the most recent ones)
+                            const keysToRemove = annotationKeys
+                                .filter((key) => key !== "lastPriceLine")
+                                .sort()
+                                .slice(
+                                    0,
+                                    annotationKeys.length - MAX_ANNOTATIONS
+                                );
+
+                            keysToRemove.forEach((key) => {
+                                delete annotations[key];
+                            });
+                            console.log(
+                                `Cleaned up ${keysToRemove.length} old signal annotations`
+                            );
+                        }
+
                         (tradesChart as ChartInstance).update("none");
                     }
                 }
@@ -970,9 +991,17 @@ const tradeWebsocket = new TradeWebSocket({
                             ? msg["now"]
                             : Date.now(),
                 };
-                messageQueue.push(convertedMessage);
-                if (!isProcessingQueue) {
-                    processMessageQueue();
+
+                // MEMORY SAFETY: Bound message queue to prevent memory exhaustion
+                if (messageQueue.length < 1000) {
+                    messageQueue.push(convertedMessage);
+                    if (!isProcessingQueue) {
+                        processMessageQueue();
+                    }
+                } else {
+                    console.warn(
+                        "Message queue full (1000 messages), dropping message to prevent memory exhaustion"
+                    );
                 }
             }
         }

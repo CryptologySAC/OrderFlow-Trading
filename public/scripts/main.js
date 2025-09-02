@@ -209,7 +209,6 @@ function initialize() {
 function processMessageQueue() {
     if (messageQueue.length === 0) {
         isProcessingQueue = false;
-        requestAnimationFrame(processMessageQueue);
         return;
     }
     isProcessingQueue = true;
@@ -222,7 +221,15 @@ function processMessageQueue() {
     catch (error) {
         console.error("Error processing message from queue:", error);
     }
-    requestAnimationFrame(processMessageQueue);
+    if (messageQueue.length > 100) {
+        setTimeout(() => processMessageQueue(), 10);
+    }
+    else if (messageQueue.length > 10) {
+        setTimeout(() => requestAnimationFrame(processMessageQueue), 5);
+    }
+    else {
+        requestAnimationFrame(processMessageQueue);
+    }
 }
 function handleMessage(message) {
     if (!message) {
@@ -252,9 +259,7 @@ function handleMessage(message) {
                 const chartInstance = tradesChart;
                 const chartData = chartInstance.data;
                 if (chartData && chartData.datasets && chartData.datasets[0]) {
-                    chartData.datasets[0].data = [
-                        ...trades,
-                    ];
+                    chartData.datasets[0].data = trades;
                 }
             }
             if (trades.length > 0) {
@@ -364,9 +369,7 @@ function handleMessage(message) {
                     if (chartData &&
                         chartData.datasets &&
                         chartData.datasets[0]) {
-                        chartData.datasets[0].data = [
-                            ...trades,
-                        ];
+                        chartData.datasets[0].data = trades;
                     }
                 }
                 if (tradesChart) {
@@ -424,6 +427,18 @@ function handleMessage(message) {
                                 y: "center",
                             },
                         };
+                        const MAX_ANNOTATIONS = 100;
+                        const annotationKeys = Object.keys(annotations);
+                        if (annotationKeys.length > MAX_ANNOTATIONS) {
+                            const keysToRemove = annotationKeys
+                                .filter((key) => key !== "lastPriceLine")
+                                .sort()
+                                .slice(0, annotationKeys.length - MAX_ANNOTATIONS);
+                            keysToRemove.forEach((key) => {
+                                delete annotations[key];
+                            });
+                            console.log(`Cleaned up ${keysToRemove.length} old signal annotations`);
+                        }
                         tradesChart.update("none");
                     }
                 }
@@ -681,9 +696,14 @@ const tradeWebsocket = new TradeWebSocket({
                         ? msg["now"]
                         : Date.now(),
                 };
-                messageQueue.push(convertedMessage);
-                if (!isProcessingQueue) {
-                    processMessageQueue();
+                if (messageQueue.length < 1000) {
+                    messageQueue.push(convertedMessage);
+                    if (!isProcessingQueue) {
+                        processMessageQueue();
+                    }
+                }
+                else {
+                    console.warn("Message queue full (1000 messages), dropping message to prevent memory exhaustion");
                 }
             }
         }
