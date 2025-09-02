@@ -20,7 +20,7 @@ import {
     tradesChart,
     PADDING_TIME,
     MAX_RSI_DATA,
-} from "./dashboard/state.js";
+} from "./state.js";
 import {
     initializeTradesChart,
     initializeRSIChart,
@@ -38,13 +38,13 @@ import {
     handleZoneSignal,
     updateOrderBookDisplay,
     safeUpdateRSIChart,
-} from "./dashboard/charts.js";
+} from "./charts.js";
 import {
     renderAnomalyList,
     renderSignalsList,
     updateTradeDelayIndicator,
     showSignalBundleBadge,
-} from "./dashboard/render.js";
+} from "./render.js";
 import {
     restoreColumnWidths,
     restoreAnomalyFilters,
@@ -52,8 +52,8 @@ import {
     restoreVerticalLayout,
     resetAllSettings,
     saveAnomalyFilters,
-} from "./dashboard/persistence.js";
-import { setupColumnResizing, setRange } from "./dashboard/ui.js";
+} from "./persistence.js";
+import { setupColumnResizing, setRange } from "./ui.js";
 import {
     getCurrentTheme,
     getSystemTheme,
@@ -63,28 +63,28 @@ import {
     updateThemeToggleButton,
     toggleDepletionVisualization,
     updateDepletionToggleButton,
-} from "./dashboard/theme.js";
-import { TradeWebSocket } from "./websocket.js";
+} from "./theme.js";
+import { TradeWebSocket } from "../websocket.js";
 import type {
     WebSocketMessage,
     TradeData,
     RSIDataPoint,
     ZoneUpdateEvent,
     ZoneSignalEvent,
-} from "./dashboard/types.js";
+} from "./types.js";
 import type {
     Signal,
     OrderBookData,
     SupportResistanceLevel,
     ZoneData,
-} from "./frontend-types.js";
-import { isValidTradeData } from "./dashboard/types.js";
+} from "../frontend-types.js";
+import { isValidTradeData } from "./types.js";
 import type {
     ChartAnnotation,
     ChartInstance,
     ChartDataPoint,
     Anomaly,
-} from "./frontend-types.js";
+} from "../frontend-types.js";
 
 // ============================================================================
 // GLOBAL UTILITIES
