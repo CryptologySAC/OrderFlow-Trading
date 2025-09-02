@@ -27,8 +27,6 @@ import type {
     ChartInstance,
     ChartDataPoint,
     ChartOptions,
-    ChartScale,
-    ChartDataset,
     Anomaly,
     Trade,
     OrderBookLevel,
@@ -37,6 +35,7 @@ import type {
     SupportResistanceLevel,
     ZoneData,
     RSIDataPoint,
+    ChartDataset,
 } from "../frontend-types.js";
 
 // Define zone types locally
@@ -48,6 +47,24 @@ type ZoneUpdateType =
     | "zone_completed"
     | "zone_invalidated";
 type ZoneSignalType = "completion" | "invalidation" | "consumption";
+
+// Chart.js specific types for contexts and tooltips
+interface TooltipItem<T extends "line" | "bar" | "scatter"> {
+    raw: T extends "scatter"
+        ? ChartDataPoint
+        : T extends "line"
+        ? RSIDataPoint
+        : unknown;
+}
+
+interface ScriptableContext<T extends "line" | "bar" | "scatter"> {
+    raw: T extends "scatter"
+        ? ChartDataPoint
+        : T extends "line"
+        ? RSIDataPoint
+        : unknown;
+    chart: ChartInstance;
+}
 
 // Magic number constants
 const PADDING_PERCENTAGE = 0.05;
@@ -139,9 +156,9 @@ export function updateTimeAnnotations(
 ): void {
     if (!tradesChart) return;
     const chartOptions = tradesChart.options as ChartOptions;
-    const annotations: Record<string, ChartAnnotation> = (
-        chartOptions.plugins?.annotation as any
-    ).annotations;
+    const annotations = chartOptions.plugins?.annotation?.annotations;
+    if (!annotations) return;
+
     const min: number = latestTime - activeRange;
     const max: number = latestTime + PADDING_TIME;
 
@@ -176,9 +193,8 @@ export function updateRSITimeAnnotations(
 ): void {
     if (!rsiChart) return;
     const rsiChartOptions = rsiChart.options as ChartOptions;
-    const annotations: Record<string, ChartAnnotation> = (
-        rsiChartOptions.plugins?.annotation as any
-    ).annotations;
+    const annotations = rsiChartOptions.plugins?.annotation?.annotations;
+    if (!annotations) return;
 
     // Create a completely new annotations object to avoid circular references
     const newAnnotations: Record<string, ChartAnnotation> = {};
@@ -186,29 +202,13 @@ export function updateRSITimeAnnotations(
     // Preserve existing overbought/oversold lines with deep copies
     if (annotations["overboughtLine"]) {
         newAnnotations["overboughtLine"] = {
-            type: annotations["overboughtLine"].type,
-            yMin: annotations["overboughtLine"].yMin,
-            yMax: annotations["overboughtLine"].yMax,
-            borderColor: annotations["overboughtLine"].borderColor,
-            borderWidth: annotations["overboughtLine"].borderWidth,
-            borderDash: annotations["overboughtLine"].borderDash,
-            drawTime: annotations["overboughtLine"].drawTime,
-            label: annotations["overboughtLine"]
-                .label as ChartAnnotation["label"],
+            ...annotations["overboughtLine"],
         } as ChartAnnotation;
     }
 
     if (annotations["oversoldLine"]) {
         newAnnotations["oversoldLine"] = {
-            type: annotations["oversoldLine"].type,
-            yMin: annotations["oversoldLine"].yMin,
-            yMax: annotations["oversoldLine"].yMax,
-            borderColor: annotations["oversoldLine"].borderColor,
-            borderWidth: annotations["oversoldLine"].borderWidth,
-            borderDash: annotations["oversoldLine"].borderDash,
-            drawTime: annotations["oversoldLine"].drawTime,
-            label: annotations["oversoldLine"]
-                .label as ChartAnnotation["label"],
+            ...annotations["oversoldLine"],
         } as ChartAnnotation;
     }
 
@@ -229,7 +229,9 @@ export function updateRSITimeAnnotations(
     }
 
     // Replace the entire annotations object
-    (rsiChart.options.plugins as any).annotation.annotations = newAnnotations;
+    if (rsiChart.options.plugins?.annotation) {
+        rsiChart.options.plugins.annotation.annotations = newAnnotations;
+    }
 }
 
 export function createTrade(
@@ -282,7 +284,8 @@ export function isValidTrade(trade: unknown): trade is Trade {
         typeof t["time"] === "number" &&
         typeof t["price"] === "number" &&
         typeof t["quantity"] === "number" &&
-        (orderType === "BUY" ||
+        (
+            orderType === "BUY" ||
             orderType === "SELL" ||
             orderType === "buy" ||
             orderType === "sell")
@@ -292,8 +295,10 @@ export function isValidTrade(trade: unknown): trade is Trade {
 /**
  * Gets the background color for a trade based on type and quantity.
  */
-function getTradeBackgroundColor(context: any): string {
-    const trade: ChartDataPoint = context.raw;
+function getTradeBackgroundColor(
+    context: ScriptableContext<"scatter">
+): string {
+    const trade = context.raw;
     if (!trade) return "rgba(0, 0, 0, 0)";
 
     const isBuy: boolean = trade.orderType === "BUY";
@@ -308,19 +313,19 @@ function getTradeBackgroundColor(context: any): string {
 /**
  * Gets the point radius for a trade based on quantity.
  */
-function getTradePointRadius(context: any): number {
+function getTradePointRadius(context: ScriptableContext<"scatter">): number {
     const q: number = context.raw?.quantity || 0;
     return q > 1000
         ? 50
         : q > 500
-          ? 40
-          : q > 200
-            ? 25
-            : q > 100
-              ? 10
-              : q > 50
-                ? 5
-                : 2;
+        ? 40
+        : q > 200
+        ? 25
+        : q > 100
+        ? 10
+        : q > 50
+        ? 5
+        : 2;
 }
 
 /**
@@ -390,8 +395,8 @@ export function initializeTradesChart(
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: (context: any) => {
-                            const t: ChartDataPoint = context.raw;
+                        label: (context: TooltipItem<"scatter">) => {
+                            const t = context.raw;
                             return t
                                 ? `Price: ${t.y.toFixed(2)}, Qty: ${t.quantity}, Type: ${t.orderType}`
                                 : "";
@@ -409,10 +414,10 @@ export function initializeTradesChart(
                             drawTime: "afterDatasetsDraw",
                             label: {
                                 display: true,
-                                content: (ctx: any) =>
+                                content: (ctx: ScriptableContext<"scatter">) =>
                                     (
-                                        ctx.chart.options.plugins.annotation
-                                            .annotations.lastPriceLine
+                                        ctx.chart.options.plugins?.annotation
+                                            ?.annotations.lastPriceLine
                                             .yMin as number
                                     )?.toFixed(2) || "",
                                 position: "end",
@@ -430,7 +435,7 @@ export function initializeTradesChart(
                     pan: {
                         enabled: true,
                         mode: "x",
-                        onPanComplete: ({ chart }: any) => {
+                        onPanComplete: ({ chart }: { chart: ChartInstance }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
@@ -455,15 +460,20 @@ export function initializeTradesChart(
                             enabled: true,
                         },
                         mode: "x",
-                        onZoomComplete: ({ chart }: any) => {
+                        onZoomComplete: ({ chart }: { chart: ChartInstance }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
-                                rsiChart.options.scales.x.min =
-                                    chart.scales.x.min;
-                                rsiChart.options.scales.x.max =
-                                    chart.scales.x.max;
-                                rsiChart.update("none");
+                                if (
+                                    rsiChart.options.scales?.x &&
+                                    chart.options.scales?.x
+                                ) {
+                                    rsiChart.options.scales.x.min =
+                                        chart.options.scales.x.min;
+                                    rsiChart.options.scales.x.max =
+                                        chart.options.scales.x.max;
+                                    rsiChart.update("none");
+                                }
                             }
                             isSyncing = false;
                         },
@@ -572,8 +582,8 @@ export function initializeRSIChart(
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: (context: any) => {
-                                const data: RSIDataPoint = context.raw;
+                            label: (context: TooltipItem<"line">) => {
+                                const data = context.raw;
                                 return data
                                     ? `RSI: ${data.rsi.toFixed(1)}`
                                     : "";
@@ -624,15 +634,20 @@ export function initializeRSIChart(
                         pan: {
                             enabled: true,
                             mode: "x",
-                            onPanComplete: ({ chart }: any) => {
+                            onPanComplete: ({ chart }: { chart: ChartInstance }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
-                                    tradesChart.options.scales.x.min =
-                                        chart.scales.x.min;
-                                    tradesChart.options.scales.x.max =
-                                        chart.scales.x.max;
-                                    tradesChart.update("none");
+                                    if (
+                                        tradesChart.options.scales?.x &&
+                                        chart.options.scales?.x
+                                    ) {
+                                        tradesChart.options.scales.x.min =
+                                            chart.options.scales.x.min;
+                                        tradesChart.options.scales.x.max =
+                                            chart.options.scales.x.max;
+                                        tradesChart.update("none");
+                                    }
                                 }
                                 isSyncing = false;
                             },
@@ -645,15 +660,20 @@ export function initializeRSIChart(
                                 enabled: true,
                             },
                             mode: "x",
-                            onZoomComplete: ({ chart }: any) => {
+                            onZoomComplete: ({ chart }: { chart: ChartInstance }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
-                                    tradesChart.options.scales.x.min =
-                                        chart.scales.x.min;
-                                    tradesChart.options.scales.x.max =
-                                        chart.scales.x.max;
-                                    tradesChart.update("none");
+                                    if (
+                                        tradesChart.options.scales?.x &&
+                                        chart.options.scales?.x
+                                    ) {
+                                        tradesChart.options.scales.x.min =
+                                            chart.options.scales.x.min;
+                                        tradesChart.options.scales.x.max =
+                                            chart.options.scales.x.max;
+                                        tradesChart.update("none");
+                                    }
                                 }
                                 isSyncing = false;
                             },
@@ -714,7 +734,7 @@ export function safeUpdateRSIChart(rsiData: RSIDataPoint[]): boolean {
         rsiChart.data.datasets[0]
     ) {
         // Update data directly (backlog loading handles data replacement)
-        rsiChart.data.datasets[0].data = rsiData as any;
+        rsiChart.data.datasets[0].data = rsiData as ChartDataPoint[];
 
         // Update chart
         rsiChart.update("none");
@@ -728,8 +748,8 @@ export function safeUpdateRSIChart(rsiData: RSIDataPoint[]): boolean {
 /**
  * Gets the color for RSI line based on current value
  */
-function getRSIColor(context: any): string {
-    const data: RSIDataPoint = context.raw;
+function getRSIColor(context: ScriptableContext<"line">): string {
+    const data = context.raw;
     if (!data || typeof data.rsi !== "number") return "rgba(102, 102, 102, 1)";
 
     const rsi: number = data.rsi;
@@ -741,8 +761,8 @@ function getRSIColor(context: any): string {
 /**
  * Gets the background color for RSI chart area
  */
-function getRSIBackgroundColor(context: any): string {
-    const data: RSIDataPoint = context.raw;
+function getRSIBackgroundColor(context: ScriptableContext<"line">): string {
+    const data = context.raw;
     if (!data || typeof data.rsi !== "number")
         return "rgba(102, 102, 102, 0.1)";
 
@@ -869,15 +889,15 @@ export function initializeOrderBookChart(
                 },
                 tooltip: {
                     callbacks: {
-                        label: function (context: any) {
-                            const label: string = context.label || "";
+                        label: function (context: TooltipItem<"bar">) {
+                            const label: string = (context as any).label || "";
                             const isAsk: boolean = label.includes("_ask");
                             const isBid: boolean = label.includes("_bid");
                             const priceStr: string = label.split("_")[0] ?? "";
                             const price: number = parseFloat(priceStr);
 
                             // Find the corresponding price level
-                            const level: OrderBookLevel | undefined =
+                            const level: OrderBookLevel | undefined = 
                                 orderBookData.priceLevels.find(
                                     (l: OrderBookLevel) =>
                                         Math.abs(l.price - price) < 0.001
@@ -902,7 +922,7 @@ export function initializeOrderBookChart(
                                 const depletionPercent: string = (
                                     level.depletionRatio * 100
                                 ).toFixed(1);
-                                const depletionVelocity: string =
+                                const depletionVelocity: string = 
                                     level.depletionVelocity
                                         ? level.depletionVelocity.toFixed(1)
                                         : "0.0";
@@ -919,8 +939,9 @@ export function initializeOrderBookChart(
 
                             return tooltipText;
                         },
-                        title: function (context: any) {
-                            const label: string = context[0].label || "";
+                        title: function (context: TooltipItem<"bar">[]) {
+                            const label: string =
+                                (context[0] as any).label || "";
                             const priceStr: string = label.split("_")[0] ?? "";
                             return `Price: ${priceStr}`;
                         },
@@ -987,7 +1008,7 @@ function getDepletionColor(
 function updateOrderBookBorderColors(theme: string): void {
     if (!orderBookChart) return;
 
-    const datasets: any[] = orderBookChart.data.datasets;
+    const datasets = orderBookChart.data.datasets as ChartDataset[];
     if (!datasets || datasets.length < 2) return;
 
     const borderOpacity: number = theme === "dark" ? 0.8 : 0.5;
@@ -1006,7 +1027,7 @@ function updateOrderBookBorderColors(theme: string): void {
 export function updateOrderBookBarColors(theme: string): void {
     if (!orderBookChart || !orderBookData) return;
 
-    const datasets: any[] = orderBookChart.data.datasets;
+    const datasets = orderBookChart.data.datasets as ChartDataset[];
     if (!datasets || datasets.length < 2) return;
 
     // Enhanced colors for better visibility in dark mode
@@ -1017,8 +1038,8 @@ export function updateOrderBookBarColors(theme: string): void {
         // Ask colors (red) - enhanced opacity for dark mode
         const askOpacity: number =
             theme === "dark"
-                ? Math.min(level.ask / 1500, 0.9) // Higher max opacity in dark mode
-                : Math.min(level.ask / 2000, 1);
+                ? Math.min((level.ask ?? 0) / 1500, 0.9) // Higher max opacity in dark mode
+                : Math.min((level.ask ?? 0) / 2000, 1);
 
         const askColor: string = level.ask
             ? theme === "dark"
@@ -1029,8 +1050,8 @@ export function updateOrderBookBarColors(theme: string): void {
         // Bid colors (green) - enhanced opacity for dark mode
         const bidOpacity: number =
             theme === "dark"
-                ? Math.min(level.bid / 1500, 0.9) // Higher max opacity in dark mode
-                : Math.min(level.bid / 2000, 1);
+                ? Math.min((level.bid ?? 0) / 1500, 0.9) // Higher max opacity in dark mode
+                : Math.min((level.bid ?? 0) / 2000, 1);
 
         const bidColor: string = level.bid
             ? theme === "dark"
@@ -1134,7 +1155,7 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
     const askData: (number | null)[] = [];
     const bidData: (number | null)[] = [];
 
-    // Backend sends data already configured with proper binSize (1-tick)
+    // Backend sends data already configured with proper binSize (1-tick) 
     // Just display it directly without any local processing
     const priceLevels: OrderBookLevel[] = data.priceLevels || [];
     const currentTime: number = Date.now();
@@ -1194,8 +1215,8 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
 
     // Get current theme for depletion colors
     const currentTheme: string = getCurrentTheme();
-    const actualTheme: string =
-        currentTheme === "system" ? getSystemTheme() : currentTheme;
+    const actualTheme:
+        = currentTheme === "system" ? getSystemTheme() : currentTheme;
 
     // Build chart data with depletion information
     const askColors: string[] = [];
@@ -1248,13 +1269,13 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
 
     if (orderBookChart?.data && orderBookChart.data.datasets.length >= 2) {
         const chart = orderBookChart;
-        (chart.data as any).labels = depletionLabels; // Use labels with depletion info
-        chart.data.datasets[0]!.data = askData as any;
-        chart.data.datasets[1]!.data = bidData as any;
+        (chart.data as { labels: string[] }).labels = depletionLabels; // Use labels with depletion info
+        (chart.data.datasets[0] as ChartDataset).data = askData as any;
+        (chart.data.datasets[1] as ChartDataset).data = bidData as any;
 
         // Apply depletion-aware colors
-        chart.data.datasets[0]!.backgroundColor = askColors;
-        chart.data.datasets[1]!.backgroundColor = bidColors;
+        (chart.data.datasets[0] as ChartDataset).backgroundColor = askColors;
+        (chart.data.datasets[1] as ChartDataset).backgroundColor = bidColors;
     }
 
     // Update border colors for better visibility
@@ -1266,11 +1287,13 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
 export function addAnomalyChartLabel(anomaly: Anomaly): void {
     if (!tradesChart) return;
     const now: number = anomaly.timestamp || anomaly.detectedAt || Date.now();
-    (tradesChart.options.plugins as any).annotation.annotations =
-        (tradesChart.options.plugins as any).annotation.annotations || {};
-    (tradesChart.options.plugins as any).annotation.annotations[
-        `anomaly.${now}`
-    ] = {
+    if (!tradesChart.options.plugins) tradesChart.options.plugins = {};
+    if (!tradesChart.options.plugins.annotation) {
+        tradesChart.options.plugins.annotation = { annotations: {} };
+    }
+    const annotations = tradesChart.options.plugins.annotation.annotations;
+
+    annotations[`anomaly.${now}`] = {
         type: "label",
         xValue: anomaly.timestamp || anomaly.detectedAt,
         yValue: anomaly.price,
@@ -1279,15 +1302,14 @@ export function addAnomalyChartLabel(anomaly: Anomaly): void {
             anomaly.severity === "critical"
                 ? "rgba(229,57,53,0.8)"
                 : anomaly.severity === "high"
-                  ? "rgba(255,179,0,0.85)"
-                  : anomaly.severity === "medium"
-                    ? "rgba(255,241,118,0.5)"
-                    : "rgba(33,150,243,0.5)",
+                ? "rgba(255,179,0,0.85)"
+                : anomaly.severity === "medium"
+                ? "rgba(255,241,118,0.5)"
+                : "rgba(33,150,243,0.5)",
         color: "#fff",
         font: { size: 18, weight: "bold" },
         padding: 6,
         borderRadius: 6,
-        id: `anomaly.${now}`,
     };
     tradesChart.update("none");
 }
@@ -1328,12 +1350,15 @@ export function handleSupportResistanceLevel(levelData: {
 /**
  * Add support/resistance level as translucent bar on chart
  */
-function addSupportResistanceToChart(level: SupportResistanceLevel): void {
+function addSupportResistanceToChart(level: SupportResistanceLevel):
+void {
     if (!tradesChart) return;
 
-    const annotations: Record<string, ChartAnnotation> = (
-        tradesChart.options.plugins as any
-    ).annotation.annotations;
+    if (!tradesChart.options.plugins) tradesChart.options.plugins = {};
+    if (!tradesChart.options.plugins.annotation) {
+        tradesChart.options.plugins.annotation = { annotations: {} };
+    }
+    const annotations = tradesChart.options.plugins.annotation.annotations;
     const levelId: string = `sr_level_${level.id}`;
 
     // Determine color based on type and strength
@@ -1359,7 +1384,7 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         baseThickness * strengthMultiplier * touchMultiplier;
 
     // Add the time-bounded zone box
-    const annotation: any = {
+    const annotation: ChartAnnotation = {
         type: "box",
         xMin: startTime,
         xMax: endTime,
@@ -1370,7 +1395,7 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         borderWidth: 1,
         drawTime: "beforeDatasetsDraw",
         z: 1,
-        enter: (_context: any, _event: MouseEvent) => {
+        enter: (_context: unknown, _event: MouseEvent) => {
             // Handle mouse enter
         },
         leave: () => {
@@ -1416,12 +1441,13 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
 /**
  * Remove support/resistance level from chart
  */
-function removeSupportResistanceLevel(levelId: string): void {
+function removeSupportResistanceLevel(levelId: string):
+void {
     if (!tradesChart) return;
 
-    const annotations: Record<string, ChartAnnotation> = (
-        tradesChart.options.plugins as any
-    ).annotation.annotations;
+    const annotations = tradesChart.options.plugins?.annotation?.annotations;
+    if (!annotations) return;
+
     const barId: string = `sr_level_${levelId}`;
     const labelId: string = `sr_label_${levelId}`;
 
@@ -1556,7 +1582,7 @@ export function handleZoneSignal(signalData: {
     // Create a normalized signal for the signals list
     const normalizedSignal: Signal = {
         id: `zone_${zone.id}_${Date.now()}`,
-        type: `${zone.type}_zone_${signalData.signalType}` as any,
+        type: `${zone.type}_zone_${signalData.signalType}`,
         price:
             zone.priceRange.center ??
             (zone.priceRange.min + zone.priceRange.max) / 2,
@@ -1565,8 +1591,8 @@ export function handleZoneSignal(signalData: {
             expectedDirection === "up"
                 ? "buy"
                 : expectedDirection === "down"
-                  ? "sell"
-                  : "buy",
+                ? "sell"
+                : "buy",
         confidence: confidence,
         zone: zone,
     };
@@ -1584,11 +1610,13 @@ export function handleZoneSignal(signalData: {
  */
 function createZoneBox(zone: ZoneData): void {
     // Store zone data
-    (activeZones as any).set(zone.id, zone);
+    (activeZones as Map<string, ZoneData>).set(zone.id, zone);
 
     // Limit number of active zones
-    if ((activeZones as any).size > maxActiveZones) {
-        const oldestZoneId: string = (activeZones as any).keys().next().value;
+    if ((activeZones as Map<string, ZoneData>).size > maxActiveZones) {
+        const oldestZoneId: string = (activeZones as Map<string, ZoneData>)
+            .keys()
+            .next().value;
         removeZoneBox(oldestZoneId);
     }
 
@@ -1599,13 +1627,14 @@ function createZoneBox(zone: ZoneData): void {
 /**
  * Update an existing zone box
  */
-function updateZoneBox(zone: ZoneData): void {
-    (activeZones as any).set(zone.id, zone);
+function updateZoneBox(zone: ZoneData):
+void {
+    (activeZones as Map<string, ZoneData>).set(zone.id, zone);
 
     // Update the chart annotation
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
         const tradesChartOptions = tradesChart.options as ChartOptions;
-        const annotation: ChartAnnotation = (
+        const annotation: ChartAnnotation | undefined = (
             tradesChartOptions.plugins?.annotation as any
         ).annotations[`zone_${zone.id}`];
         if (annotation) {
@@ -1627,7 +1656,9 @@ function updateZoneBox(zone: ZoneData): void {
                 annotation.backgroundColor = getZoneColor(zone);
                 annotation.borderColor = getZoneBorderColor(zone);
             }
-            annotation.label!.content = getZoneLabel(zone);
+            if (annotation.label) {
+                annotation.label.content = getZoneLabel(zone);
+            }
 
             tradesChart.update("none");
         } else {
@@ -1640,12 +1671,13 @@ function updateZoneBox(zone: ZoneData): void {
 /**
  * Mark zone as completed (change visual style)
  */
-function completeZoneBox(zone: ZoneData): void {
-    (activeZones as any).set(zone.id, zone);
+function completeZoneBox(zone: ZoneData):
+void {
+    (activeZones as Map<string, ZoneData>).set(zone.id, zone);
 
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
         const tradesChartOptions = tradesChart.options as ChartOptions;
-        const annotation: ChartAnnotation = (
+        const annotation: ChartAnnotation | undefined = (
             tradesChartOptions.plugins?.annotation as any
         ).annotations[`zone_${zone.id}`];
         if (annotation) {
@@ -1665,7 +1697,9 @@ function completeZoneBox(zone: ZoneData): void {
                 annotation.borderWidth = 2;
                 annotation.borderDash = [5, 5];
             }
-            annotation.label!.content = getZoneLabel(zone) + " ✓";
+            if (annotation.label) {
+                annotation.label.content = getZoneLabel(zone) + " ✓";
+            }
 
             tradesChart.update("none");
 
@@ -1683,8 +1717,9 @@ function completeZoneBox(zone: ZoneData): void {
 /**
  * Remove zone box from chart
  */
-function removeZoneBox(zoneId: string): void {
-    (activeZones as any).delete(zoneId);
+function removeZoneBox(zoneId: string):
+void {
+    (activeZones as Map<string, ZoneData>).delete(zoneId);
 
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
         const tradesChartOptions = tradesChart.options as ChartOptions;
@@ -1698,7 +1733,8 @@ function removeZoneBox(zoneId: string): void {
 /**
  * Add zone as chart annotation
  */
-function addZoneToChart(zone: ZoneData): void {
+function addZoneToChart(zone: ZoneData):
+void {
     if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
     console.log("Adding zone to chart:", zone.type, zone.id, zone.priceRange);
     const tradesChartOptions = tradesChart.options as ChartOptions;
@@ -1712,7 +1748,7 @@ function addZoneToChart(zone: ZoneData): void {
         // Calculate actual end time for iceberg orders based on zone duration
         const endTime: number = zone.endTime || Date.now() + 5 * 60 * 1000;
 
-        const zoneAnnotationBase = {
+        const zoneAnnotationBase: ChartAnnotation = {
             type: "line",
             xMin: zone.startTime ?? Date.now(),
             xMax: endTime,
@@ -1733,7 +1769,7 @@ function addZoneToChart(zone: ZoneData): void {
                 padding: 4,
                 borderRadius: 3,
             },
-            enter: (_ctx: any, event: MouseEvent) => {
+            enter: (_ctx: unknown, event: MouseEvent) => {
                 showZoneTooltip(zone, event);
             },
             leave: () => {
@@ -1743,7 +1779,7 @@ function addZoneToChart(zone: ZoneData): void {
 
         // Add borderDash only if it's defined
         if (zone.type === "iceberg") {
-            (zoneAnnotationBase as any).borderDash = [8, 4];
+            zoneAnnotationBase.borderDash = [8, 4];
         }
 
         zoneAnnotation = zoneAnnotationBase;
@@ -1770,7 +1806,7 @@ function addZoneToChart(zone: ZoneData): void {
                 padding: 4,
                 borderRadius: 3,
             },
-            enter: (_ctx: any, event: MouseEvent) => {
+            enter: (_ctx: unknown, event: MouseEvent) => {
                 showZoneTooltip(zone, event);
             },
             leave: () => {
@@ -1909,21 +1945,22 @@ function getZoneLabel(zone: ZoneData): string {
 /**
  * Show zone tooltip on hover
  */
-function showZoneTooltip(zone: ZoneData, event: MouseEvent): void {
+function showZoneTooltip(zone: ZoneData, event: MouseEvent):
+void {
     const tooltip: HTMLDivElement = document.createElement("div");
     tooltip.id = "zoneTooltip";
-    tooltip.style.cssText = "position: fixed;";
-    ("background: rgba(0, 0, 0, 0.9);");
-    ("color: white;");
-    ("padding: 12px;");
-    ("border-radius: 6px;");
-    ("font-size: 12px;");
-    ("font-family: monospace;");
-    ("pointer-events: none;");
-    ("z-index: 10000;");
-    ("max-width: 300px;");
-    ("line-height: 1.4;");
-    ("box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3)");
+    tooltip.style.position = "fixed";
+    tooltip.style.background = "rgba(0, 0, 0, 0.9)";
+    tooltip.style.color = "white";
+    tooltip.style.padding = "12px";
+    tooltip.style.borderRadius = "6px";
+    tooltip.style.fontSize = "12px";
+    tooltip.style.fontFamily = "monospace";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.zIndex = "10000";
+    tooltip.style.maxWidth = "300px";
+    tooltip.style.lineHeight = "1.4";
+    tooltip.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.3)";
 
     const duration: number = Math.round(
         (Date.now() - (zone.startTime ?? Date.now())) / 60000
@@ -1952,7 +1989,8 @@ function showZoneTooltip(zone: ZoneData, event: MouseEvent): void {
             zoneColor = "#6b7280";
     }
 
-    let tooltipContent: string = `<div style=\"font-weight: bold; margin-bottom: 6px; color: ${zoneColor}">\n            ${getZoneLabel(zone)} ZONE
+    let tooltipContent: string = `<div style="font-weight: bold; margin-bottom: 6px; color: ${zoneColor};">
+            ${getZoneLabel(zone)} ZONE
         </div>
         <div>Price Range: ${zone.priceRange.min.toFixed(4)} - ${zone.priceRange.max.toFixed(4)}</div>`;
 
@@ -1975,46 +2013,41 @@ function showZoneTooltip(zone: ZoneData, event: MouseEvent): void {
     // Add type-specific details
     if (zone.type === "iceberg") {
         tooltipContent += `
-            <div style=\"margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;\">
-                <div>Refills: ${(zone as any).refillCount || "N/A"}</div>
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
+                <div>Refills: ${zone.refillCount || "N/A"}</div>
                 <div>Volume: ${volumeFormatted}</div>
-                <div>Avg Size: ${(zone as any).averagePieceSize?.toFixed(2) || "N/A"}</div>
-                <div>Side: ${(zone as any).side?.toUpperCase() || "N/A"}</div>
+                <div>Avg Size: ${zone.averagePieceSize?.toFixed(2) || "N/A"}</div>
+                <div>Side: ${zone.side?.toUpperCase() || "N/A"}</div>
             </div>`;
     } else if (zone.type === "spoofing") {
         tooltipContent += `
-            <div style=\"margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;\">
-                <div>Type: ${(zone as any).spoofType || "N/A"}</div>
-                <div>Wall Size: ${(zone as any).wallSize?.toFixed(2) || "N/A"}</div>
-                <div>Canceled: ${(zone as any).canceled?.toFixed(2) || "N/A"}</div>
-                <div>Executed: ${(zone as any).executed?.toFixed(2) || "N/A"}</div>
-                <div>Side: ${(zone as any).side?.toUpperCase() || "N/A"}</div>
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
+                <div>Type: ${zone.spoofType || "N/A"}</div>
+                <div>Wall Size: ${zone.wallSize?.toFixed(2) || "N/A"}</div>
+                <div>Canceled: ${zone.canceled?.toFixed(2) || "N/A"}</div>
+                <div>Executed: ${zone.executed?.toFixed(2) || "N/A"}</div>
+                <div>Side: ${zone.side?.toUpperCase() || "N/A"}</div>
             </div>`;
     } else if (zone.type === "hidden_liquidity") {
         tooltipContent += `
-            <div style=\"margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;\">
-                <div>Stealth Type: ${(zone as any).stealthType || "N/A"}</div>
-                <div>Stealth Score: ${(((zone as any).stealthScore ?? 0) * 100).toFixed(1) + "%"}</div>
-                <div>Trades: ${(zone as any).tradeCount || "N/A"}</div>
+            <div style="margin-top: 6px; border-top: 1px solid #333; padding-top: 6px;">
+                <div>Stealth Type: ${zone.stealthType || "N/A"}</div>
+                <div>Stealth Score: ${((zone.stealthScore ?? 0) * 100).toFixed(1) + "%"}</div>
+                <div>Trades: ${zone.tradeCount || "N/A"}</div>
                 <div>Volume: ${volumeFormatted}</div>
-                <div>Side: ${(zone as any).side?.toUpperCase() || "N/A"}</div>
+                <div>Side: ${zone.side?.toUpperCase() || "N/A"}</div>
             </div>`;
-    } else if (zone.totalVolume) {
-        // Default volume display for accumulation/distribution
-        tooltipContent += `<div>Volume: ${volumeFormatted}</div>`;
     }
 
     tooltip.innerHTML = tooltipContent;
 
-    tooltip.style.left = `${event.clientX + 10}px`;
-    tooltip.style.top = `${event.clientY - 10}px`;
-
     document.body.appendChild(tooltip);
+
+    // Position tooltip
+    tooltip.style.left = `${event.clientX + 15}px`;
+    tooltip.style.top = `${event.clientY + 15}px`;
 }
 
-/**
- * Hide zone tooltip
- */
 function hideZoneTooltip(): void {
     const tooltip: HTMLElement | null = document.getElementById("zoneTooltip");
     if (tooltip) {
@@ -2022,49 +2055,28 @@ function hideZoneTooltip(): void {
     }
 }
 
-/**
- * Cleanup old completed zones
- */
-export function cleanupOldZones(): void {
-    const cutoffTime: number = Date.now() - 60 * 60 * 1000; // 1 hour
-
-    for (const [zoneId, zone] of activeZones as any) {
-        if (!zone.isActive && zone.endTime && zone.endTime < cutoffTime) {
-            removeZoneBox(zoneId);
-        }
+function getAnomalyIcon(type: string | undefined): string {
+    switch (type) {
+        case "volume_anomaly":
+            return "📊";
+        case "price_anomaly":
+            return "💹";
+        case "liquidity_anomaly":
+            return "💧";
+        default:
+            return "❓";
     }
 }
 
 /**
- * Get anomaly icon based on type
+ * Cleanup old completed zones
  */
-function getAnomalyIcon(type?: string): string {
-    switch (type) {
-        case "flash_crash":
-            return "⚡";
-        case "api_gap":
-            return "🔌";
-        case "liquidity_void":
-            return "💧";
-        case "extreme_volatility":
-            return "🌊";
-        case "spoofing":
-            return "👻";
-        case "layering":
-            return "📚";
-        case "ghost_liquidity":
-            return "👤";
-        case "orderbook_imbalance":
-            return "⚖️";
-        case "whale_activity":
-            return "🐋";
-        case "coordinated_activity":
-            return "🤝";
-        case "algorithmic_activity":
-            return "🤖";
-        case "toxic_flow":
-            return "☠️";
-        default:
-            return "⚠️";
+export function cleanupOldZones() {
+    const cutoffTime = Date.now() - 60 * 60 * 1000; // 1 hour
+
+    for (const [zoneId, zone] of activeZones) {
+        if (!zone.isActive && zone.endTime && zone.endTime < cutoffTime) {
+            removeZoneBox(zoneId);
+        }
     }
 }
