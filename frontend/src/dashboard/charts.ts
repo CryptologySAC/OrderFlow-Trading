@@ -138,9 +138,10 @@ export function updateTimeAnnotations(
     activeRange: number
 ): void {
     if (!tradesChart) return;
+    const chartOptions = tradesChart.options as ChartOptions;
     const annotations: Record<string, ChartAnnotation> = (
-        tradesChart.options.plugins as any
-    ).annotation.annotations;
+        chartOptions.plugins?.annotation as any
+    ).annotations;
     const min: number = latestTime - activeRange;
     const max: number = latestTime + PADDING_TIME;
 
@@ -174,9 +175,10 @@ export function updateRSITimeAnnotations(
     activeRange: number
 ): void {
     if (!rsiChart) return;
+    const rsiChartOptions = rsiChart.options as ChartOptions;
     const annotations: Record<string, ChartAnnotation> = (
-        rsiChart.options.plugins as any
-    ).annotation.annotations;
+        rsiChartOptions.plugins?.annotation as any
+    ).annotations;
 
     // Create a completely new annotations object to avoid circular references
     const newAnnotations: Record<string, ChartAnnotation> = {};
@@ -341,7 +343,7 @@ export function initializeTradesChart(
         initialMax = now + PADDING_TIME;
     }
 
-    const chart: ChartInstance = new (window as any).Chart(ctx, {
+    const chart = new (window as any).Chart(ctx, {
         type: "scatter",
         data: {
             datasets: [
@@ -661,7 +663,7 @@ export function initializeRSIChart(
             },
         });
 
-        setRsiChart(chart as any);
+        setRsiChart(chart);
 
         // Initialize time annotations
         if (activeRange !== null) {
@@ -927,7 +929,7 @@ export function initializeOrderBookChart(
             },
         },
     });
-    setOrderBookChart(chart as any);
+    setOrderBookChart(chart);
     return chart;
 }
 
@@ -1602,8 +1604,10 @@ function updateZoneBox(zone: ZoneData): void {
 
     // Update the chart annotation
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        const annotation: ChartAnnotation = (tradesChart.options.plugins as any)
-            .annotation.annotations[`zone_${zone.id}`];
+        const tradesChartOptions = tradesChart.options as ChartOptions;
+        const annotation: ChartAnnotation = (
+            tradesChartOptions.plugins?.annotation as any
+        ).annotations[`zone_${zone.id}`];
         if (annotation) {
             // Update zone properties
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
@@ -1640,8 +1644,10 @@ function completeZoneBox(zone: ZoneData): void {
     (activeZones as any).set(zone.id, zone);
 
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        const annotation: ChartAnnotation = (tradesChart.options.plugins as any)
-            .annotation.annotations[`zone_${zone.id}`];
+        const tradesChartOptions = tradesChart.options as ChartOptions;
+        const annotation: ChartAnnotation = (
+            tradesChartOptions.plugins?.annotation as any
+        ).annotations[`zone_${zone.id}`];
         if (annotation) {
             // Change to completed zone style
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
@@ -1681,7 +1687,8 @@ function removeZoneBox(zoneId: string): void {
     (activeZones as any).delete(zoneId);
 
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        delete (tradesChart.options.plugins as any).annotation.annotations[
+        const tradesChartOptions = tradesChart.options as ChartOptions;
+        delete (tradesChartOptions.plugins?.annotation as any).annotations[
             `zone_${zoneId}`
         ];
         tradesChart.update("none");
@@ -1694,6 +1701,7 @@ function removeZoneBox(zoneId: string): void {
 function addZoneToChart(zone: ZoneData): void {
     if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
     console.log("Adding zone to chart:", zone.type, zone.id, zone.priceRange);
+    const tradesChartOptions = tradesChart.options as ChartOptions;
     let zoneAnnotation: ChartAnnotation;
 
     if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
@@ -1771,7 +1779,7 @@ function addZoneToChart(zone: ZoneData): void {
         };
     }
 
-    (tradesChart.options.plugins as any).annotation.annotations[
+    (tradesChartOptions.plugins?.annotation as any).annotations[
         `zone_${zone.id}`
     ] = zoneAnnotation;
     tradesChart.update("none");
