@@ -77,22 +77,12 @@ import type {
     ZoneUpdateEvent,
     ZoneSignalEvent,
 } from "./dashboard/types.js";
+import { isValidTradeData } from "./dashboard/types.js";
 import type { ChartAnnotation, ChartInstance } from "./frontend-types.js";
 
 // ============================================================================
 // TYPE GUARDS (NO UNKNOWN PARAMETERS)
 // ============================================================================
-
-function isValidTradeData(data: TradeData): boolean {
-    return (
-        typeof data.time === "number" &&
-        typeof data.price === "number" &&
-        typeof data.quantity === "number" &&
-        (data.orderType === "BUY" || data.orderType === "SELL") &&
-        typeof data.symbol === "string" &&
-        typeof data.tradeId === "number"
-    );
-}
 
 function isValidSignalData(data: Signal): boolean {
     return (
@@ -847,12 +837,19 @@ const tradeWebsocket = new TradeWebSocket({
             trades.length = 0;
             for (const trade of backLog) {
                 if (isValidTradeData(trade)) {
+                    // TypeScript knows trade is valid after isValidTradeData check
+                    const tradeObj = trade as unknown as {
+                        time: number;
+                        price: number;
+                        quantity: number;
+                        orderType: "BUY" | "SELL";
+                    };
                     trades.push(
                         createTrade(
-                            trade["time"],
-                            trade["price"],
-                            trade["quantity"],
-                            trade["orderType"]
+                            tradeObj.time,
+                            tradeObj.price,
+                            tradeObj.quantity,
+                            tradeObj.orderType
                         )
                     );
                 }
@@ -1043,7 +1040,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Trade cleanup every 30 minutes
     setInterval(
         () => {
-            const cutoffTime = Date.now() - 90 * 60 * 1000;
+            const TRADE_RETENTION_MINUTES = 90;
+            const cutoffTime = Date.now() - TRADE_RETENTION_MINUTES * 60 * 1000;
             const originalLength = trades.length;
             let tradesToRemoveCount = trades.findIndex(
                 (t) => (t as { x: number }).x >= cutoffTime

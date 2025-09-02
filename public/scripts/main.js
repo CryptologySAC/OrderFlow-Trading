@@ -5,14 +5,7 @@ import { restoreColumnWidths, restoreAnomalyFilters, restoreTimeRange, restoreVe
 import { setupColumnResizing, setRange } from "./dashboard/ui.js";
 import { getCurrentTheme, getSystemTheme, updateChartTheme, restoreTheme, toggleTheme, updateThemeToggleButton, toggleDepletionVisualization, updateDepletionToggleButton, } from "./dashboard/theme.js";
 import { TradeWebSocket } from "./websocket.js";
-function isValidTradeData(data) {
-    return (typeof data.time === "number" &&
-        typeof data.price === "number" &&
-        typeof data.quantity === "number" &&
-        (data.orderType === "BUY" || data.orderType === "SELL") &&
-        typeof data.symbol === "string" &&
-        typeof data.tradeId === "number");
-}
+import { isValidTradeData } from "./dashboard/types.js";
 function isValidSignalData(data) {
     return (typeof data.id === "string" &&
         typeof data.type === "string" &&
@@ -592,7 +585,8 @@ const tradeWebsocket = new TradeWebSocket({
             trades.length = 0;
             for (const trade of backLog) {
                 if (isValidTradeData(trade)) {
-                    trades.push(createTrade(trade.time, trade.price, trade.quantity, trade.orderType));
+                    const tradeObj = trade;
+                    trades.push(createTrade(tradeObj.time, tradeObj.price, tradeObj.quantity, tradeObj.orderType));
                 }
             }
             if (tradesChart) {
@@ -736,7 +730,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }, true);
     }
     setInterval(() => {
-        const cutoffTime = Date.now() - 90 * 60 * 1000;
+        const TRADE_RETENTION_MINUTES = 90;
+        const cutoffTime = Date.now() - TRADE_RETENTION_MINUTES * 60 * 1000;
         const originalLength = trades.length;
         let tradesToRemoveCount = trades.findIndex((t) => t.x >= cutoffTime);
         if (tradesToRemoveCount === -1 && originalLength > 0) {

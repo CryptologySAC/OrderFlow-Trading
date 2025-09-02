@@ -1,7 +1,7 @@
 export enum MessageType {
     // Client to Server
     PING = "ping",
-    BACKLOG_REQUEST = "backlog",
+    BACKLOG_REQUEST = "backlog_request",
 
     // Server to Client
     PONG = "pong",
@@ -58,7 +58,7 @@ export interface SignalMessage extends BaseMessage {
 // Stats update message
 export interface StatsMessage extends BaseMessage {
     type: MessageType.STATS;
-    data: any; // Define a more specific type if the stats structure is known
+    data: Record<string, unknown>; // Define a more specific type if the stats structure is known
 }
 
 // Anomaly message
@@ -67,7 +67,7 @@ export interface AnomalyMessage extends BaseMessage {
     data: {
         detector: string;
         message: string;
-        details?: any;
+        details?: Record<string, unknown>;
         timestamp: number;
     };
 }
@@ -148,25 +148,25 @@ export interface SignalBundleMessage extends BaseMessage {
 // Runtime config message
 export interface RuntimeConfigMessage extends BaseMessage {
     type: MessageType.RUNTIMECONFIG;
-    data: any;
+    data: Record<string, unknown>;
 }
 
 // Support resistance level message
 export interface SupportResistanceLevelMessage extends BaseMessage {
     type: MessageType.SUPPORTRESISTANCELEVEL;
-    data: any;
+    data: Record<string, unknown>;
 }
 
 // Zone update message
 export interface ZoneUpdateMessage extends BaseMessage {
     type: MessageType.ZONEUPDATE;
-    data: any;
+    data: Record<string, unknown>;
 }
 
 // Zone signal message
 export interface ZoneSignalMessage extends BaseMessage {
     type: MessageType.ZONESIGNAL;
-    data: any;
+    data: Record<string, unknown>;
 }
 
 // --- Client-side Messages ---

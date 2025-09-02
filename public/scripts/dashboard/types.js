@@ -114,8 +114,10 @@ export function isValidAnomalyData(data) {
         !!validSeverities.includes(anomaly["severity"]) &&
         typeof anomaly["affectedPriceRange"] === "object" &&
         anomaly["affectedPriceRange"] &&
-        typeof anomaly["affectedPriceRange"].min === "number" &&
-        typeof anomaly["affectedPriceRange"].max === "number" &&
+        typeof anomaly["affectedPriceRange"]
+            .min === "number" &&
+        typeof anomaly["affectedPriceRange"]
+            .max === "number" &&
         !!validActions.includes(anomaly["recommendedAction"]) &&
         typeof anomaly["details"] === "object");
 }

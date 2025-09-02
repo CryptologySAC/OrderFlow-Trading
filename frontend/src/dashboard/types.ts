@@ -818,8 +818,10 @@ export function isValidAnomalyData(data: unknown): data is MarketAnomaly {
         !!validSeverities.includes(anomaly["severity"] as AnomalySeverity) &&
         typeof anomaly["affectedPriceRange"] === "object" &&
         anomaly["affectedPriceRange"] &&
-        typeof (anomaly["affectedPriceRange"] as any).min === "number" &&
-        typeof (anomaly["affectedPriceRange"] as any).max === "number" &&
+        typeof (anomaly["affectedPriceRange"] as { min: unknown; max: unknown })
+            .min === "number" &&
+        typeof (anomaly["affectedPriceRange"] as { min: unknown; max: unknown })
+            .max === "number" &&
         !!validActions.includes(
             anomaly["recommendedAction"] as RecommendedAction
         ) &&
@@ -857,7 +859,7 @@ export function isValidZoneUpdateData(data: unknown): data is ZoneUpdateEvent {
         !!validTypes.includes(update["updateType"] as ZoneUpdateType) &&
         typeof update["zone"] === "object" &&
         update["zone"] &&
-        typeof (update["zone"] as any).id === "string" &&
+        typeof (update["zone"] as { id: unknown }).id === "string" &&
         typeof update["significance"] === "number" &&
         typeof update["detectorId"] === "string" &&
         typeof update["timestamp"] === "number"

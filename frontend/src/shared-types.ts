@@ -112,6 +112,9 @@ export interface ZoneData {
 }
 
 // Extended message types for additional messages not in backend union
-export type ExtendedWebSocketMessage = WebSocketMessage & {
-    type: WebSocketMessage["type"] | "signal_bundle" | "runtimeConfig";
-};
+export type ExtendedWebSocketMessage =
+    | WebSocketMessage
+    | {
+          type: "signal_bundle" | "runtimeConfig";
+          data: Record<string, unknown>;
+      };
