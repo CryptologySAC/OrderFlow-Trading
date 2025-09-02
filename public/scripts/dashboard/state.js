@@ -6,6 +6,7 @@ export const PING_INTERVAL_MS = 10000;
 export const PONG_WAIT_MS = 5000;
 export const PADDING_TIME = 300000;
 export const FIFTEEN_MINUTES = 15 * 60 * 1000;
+export const NINETHY_MINUTES = 90 * 60 * 1000;
 export const TRADE_TIMEOUT_MS = 10000;
 export const GRID_SIZE = 25;
 export const ITEM_MARGIN = 20;
@@ -68,7 +69,7 @@ if (typeof window !== "undefined" &&
     dedupTolerance = window.runtimeConfig.dedupTolerance;
 }
 export const trades = [];
-export let activeRange = 90 * 60000;
+export let activeRange = NINETHY_MINUTES;
 export function setActiveRange(range) {
     activeRange = range;
 }

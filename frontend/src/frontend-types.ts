@@ -11,7 +11,7 @@ export interface ChartDataPoint {
     x: number;
     y: number;
     quantity?: number;
-    orderType?: "buy" | "sell";
+    orderType?: "BUY" | "SELL";
 }
 
 export interface ChartAnnotation {
@@ -28,6 +28,7 @@ export interface ChartAnnotation {
     font?: {
         size?: number;
         family?: string;
+        weight?: string;
     };
     borderRadius?: number;
     padding?: number;
@@ -48,10 +49,16 @@ export interface ChartAnnotation {
         font?: {
             size?: number;
             family?: string;
+            weight?: string;
         };
         padding?: number;
+        borderRadius?: number;
     };
     z?: number;
+    xAdjust?: number;
+    yAdjust?: number;
+    enter?: (context: unknown, event: MouseEvent) => void;
+    leave?: () => void;
 }
 
 export interface ChartScale {
@@ -152,6 +159,7 @@ export interface OrderBookLevel {
     depletionVelocity?: number;
     originalBidVolume?: number;
     originalAskVolume?: number;
+    timestamp?: number;
 }
 
 export interface OrderBookData {
@@ -178,6 +186,7 @@ export interface Signal {
     time: number;
     confidence?: number;
     detector?: string;
+    zone?: ZoneData;
     originalSignals?: Array<{
         type: string;
         metadata?: {
@@ -224,23 +233,53 @@ export interface SignalBundle {
 // =============================================================================
 
 export interface SupportResistanceLevel {
+    id: string;
     price: number;
     type: "support" | "resistance";
     strength: number;
+    touchCount: number;
+    firstDetected: number;
+    lastTouched: number;
+    volumeAtLevel: number;
     timestamp: number;
     zoneId?: string;
+    roleReversals?: Array<{
+        timestamp: number;
+        previousType: "support" | "resistance";
+        newType: "support" | "resistance";
+    }>;
 }
 
 export interface ZoneData {
     id: string;
-    type: "accumulation" | "distribution";
+    type:
+        | "accumulation"
+        | "distribution"
+        | "hidden_liquidity"
+        | "iceberg"
+        | "spoofing";
     priceRange: {
         min: number;
         max: number;
+        center?: number;
     };
     volume: number;
     timestamp: number;
     strength: number;
+    startTime?: number;
+    endTime?: number;
+    completion?: number;
+    confidence?: number;
+    totalVolume?: number;
+    stealthScore?: number;
+    refillCount?: number;
+    averagePieceSize?: number;
+    side?: string;
+    spoofType?: string;
+    wallSize?: number;
+    canceled?: number;
+    executed?: number;
+    tradeCount?: number;
 }
 
 // =============================================================================

@@ -69,13 +69,16 @@ import { TradeWebSocket } from "./websocket.js";
 import type {
     WebSocketMessage,
     TradeData,
-    OrderBookData,
-    Signal,
     RSIDataPoint,
-    SupportResistanceLevel,
     ZoneUpdateEvent,
     ZoneSignalEvent,
 } from "./dashboard/types.js";
+import type {
+    Signal,
+    OrderBookData,
+    SupportResistanceLevel,
+    ZoneData,
+} from "./frontend-types.js";
 import { isValidTradeData } from "./dashboard/types.js";
 import type {
     ChartAnnotation,
@@ -180,6 +183,14 @@ let unifiedMax = 0;
 
 let orderBookData: OrderBookData = {
     priceLevels: [],
+    bestBid: 0,
+    bestAsk: 0,
+    spread: 0,
+    midPrice: 0,
+    totalBidVolume: 0,
+    totalAskVolume: 0,
+    imbalance: 0,
+    timestamp: 0,
 };
 
 // let supportResistanceLevels: SupportResistanceLevel[] = []; // Not used in main.ts
@@ -223,7 +234,7 @@ function createTrade(
     time: number,
     price: number,
     quantity: number,
-    orderType: "buy" | "sell"
+    orderType: "BUY" | "SELL"
 ): ChartDataPoint {
     return {
         x: time,
@@ -447,7 +458,7 @@ function handleMessage(message: WebSocketMessage): void {
                             x: number;
                             y: number;
                             quantity?: number;
-                            orderType?: "buy" | "sell";
+                            orderType?: "BUY" | "SELL";
                         }[]),
                     ];
                 }
@@ -589,7 +600,7 @@ function handleMessage(message: WebSocketMessage): void {
                                 x: number;
                                 y: number;
                                 quantity?: number;
-                                orderType?: "buy" | "sell";
+                                orderType?: "BUY" | "SELL";
                             }[]),
                         ];
                     }
@@ -618,7 +629,7 @@ function handleMessage(message: WebSocketMessage): void {
             break;
 
         case "signal":
-            const signal = message.data as Signal;
+            const signal: Signal = message.data as Signal;
             if (isValidSignalData(signal)) {
                 const label = buildSignalLabel(signal);
                 const id = signal.id;
@@ -783,21 +794,62 @@ function handleMessage(message: WebSocketMessage): void {
         case "supportResistanceLevel":
             const level = message.data as SupportResistanceLevel;
             if (isValidSupportResistanceData(level)) {
-                handleSupportResistanceLevel(level);
+                handleSupportResistanceLevel({ data: level });
             }
             break;
 
         case "zoneUpdate":
             const zoneUpdate = message.data as ZoneUpdateEvent;
             if (isValidZoneUpdateData(zoneUpdate)) {
-                handleZoneUpdate(zoneUpdate);
+                // Transform ZoneVisualizationData to ZoneData
+                const zoneData: ZoneData = {
+                    id: zoneUpdate.zone.id,
+                    type: zoneUpdate.zone.type,
+                    priceRange: {
+                        min: zoneUpdate.zone.priceRange.min,
+                        max: zoneUpdate.zone.priceRange.max,
+                        center: zoneUpdate.zone.priceRange.center,
+                    },
+                    volume: zoneUpdate.zone.volume,
+                    timestamp: zoneUpdate.zone.lastUpdate,
+                    strength: zoneUpdate.zone.strength,
+                    startTime: zoneUpdate.zone.startTime,
+                    confidence: zoneUpdate.zone.confidence,
+                };
+                handleZoneUpdate({
+                    updateType: zoneUpdate.updateType,
+                    zone: zoneData,
+                    significance: zoneUpdate.significance,
+                });
             }
             break;
 
         case "zoneSignal":
             const zoneSignal = message.data as ZoneSignalEvent;
             if (isValidZoneSignalData(zoneSignal)) {
-                handleZoneSignal(zoneSignal);
+                // Transform ZoneVisualizationData to ZoneData
+                const zoneData: ZoneData = {
+                    id: zoneSignal.zone.id,
+                    type: zoneSignal.zone.type,
+                    priceRange: {
+                        min: zoneSignal.zone.priceRange.min,
+                        max: zoneSignal.zone.priceRange.max,
+                        center: zoneSignal.zone.priceRange.center,
+                    },
+                    volume: zoneSignal.zone.volume,
+                    timestamp: zoneSignal.zone.lastUpdate,
+                    strength: zoneSignal.zone.strength,
+                    startTime: zoneSignal.zone.startTime,
+                    confidence: zoneSignal.zone.confidence,
+                };
+                handleZoneSignal({
+                    signalType: zoneSignal.signalType,
+                    zone: zoneData,
+                    actionType: zoneSignal.actionType,
+                    confidence: zoneSignal.confidence,
+                    urgency: "medium", // Default urgency since it's not provided in ZoneSignalEvent
+                    expectedDirection: zoneSignal.expectedDirection,
+                });
             }
             break;
 
@@ -846,7 +898,7 @@ const tradeWebsocket = new TradeWebSocket({
                         time: number;
                         price: number;
                         quantity: number;
-                        orderType: "buy" | "sell";
+                        orderType: "BUY" | "SELL";
                     };
                     trades.push(
                         createTrade(
@@ -867,7 +919,7 @@ const tradeWebsocket = new TradeWebSocket({
                             x: number;
                             y: number;
                             quantity?: number;
-                            orderType?: "buy" | "sell";
+                            orderType?: "BUY" | "SELL";
                         }[]),
                     ];
                 }
@@ -1074,7 +1126,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             x: number;
                             y: number;
                             quantity?: number;
-                            orderType?: "buy" | "sell";
+                            orderType?: "BUY" | "SELL";
                         }[];
                         scheduleTradesChartUpdate();
                     }

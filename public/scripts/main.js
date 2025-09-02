@@ -69,6 +69,14 @@ let unifiedMin = 0;
 let unifiedMax = 0;
 let orderBookData = {
     priceLevels: [],
+    bestBid: 0,
+    bestAsk: 0,
+    spread: 0,
+    midPrice: 0,
+    totalBidVolume: 0,
+    totalAskVolume: 0,
+    imbalance: 0,
+    timestamp: 0,
 };
 const messageQueue = [];
 let isProcessingQueue = false;
@@ -539,19 +547,58 @@ function handleMessage(message) {
         case "supportResistanceLevel":
             const level = message.data;
             if (isValidSupportResistanceData(level)) {
-                handleSupportResistanceLevel(level);
+                handleSupportResistanceLevel({ data: level });
             }
             break;
         case "zoneUpdate":
             const zoneUpdate = message.data;
             if (isValidZoneUpdateData(zoneUpdate)) {
-                handleZoneUpdate(zoneUpdate);
+                const zoneData = {
+                    id: zoneUpdate.zone.id,
+                    type: zoneUpdate.zone.type,
+                    priceRange: {
+                        min: zoneUpdate.zone.priceRange.min,
+                        max: zoneUpdate.zone.priceRange.max,
+                        center: zoneUpdate.zone.priceRange.center,
+                    },
+                    volume: zoneUpdate.zone.volume,
+                    timestamp: zoneUpdate.zone.lastUpdate,
+                    strength: zoneUpdate.zone.strength,
+                    startTime: zoneUpdate.zone.startTime,
+                    confidence: zoneUpdate.zone.confidence,
+                };
+                handleZoneUpdate({
+                    updateType: zoneUpdate.updateType,
+                    zone: zoneData,
+                    significance: zoneUpdate.significance,
+                });
             }
             break;
         case "zoneSignal":
             const zoneSignal = message.data;
             if (isValidZoneSignalData(zoneSignal)) {
-                handleZoneSignal(zoneSignal);
+                const zoneData = {
+                    id: zoneSignal.zone.id,
+                    type: zoneSignal.zone.type,
+                    priceRange: {
+                        min: zoneSignal.zone.priceRange.min,
+                        max: zoneSignal.zone.priceRange.max,
+                        center: zoneSignal.zone.priceRange.center,
+                    },
+                    volume: zoneSignal.zone.volume,
+                    timestamp: zoneSignal.zone.lastUpdate,
+                    strength: zoneSignal.zone.strength,
+                    startTime: zoneSignal.zone.startTime,
+                    confidence: zoneSignal.zone.confidence,
+                };
+                handleZoneSignal({
+                    signalType: zoneSignal.signalType,
+                    zone: zoneData,
+                    actionType: zoneSignal.actionType,
+                    confidence: zoneSignal.confidence,
+                    urgency: "medium",
+                    expectedDirection: zoneSignal.expectedDirection,
+                });
             }
             break;
         case "error":
