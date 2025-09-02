@@ -26,6 +26,9 @@ import type {
     ChartAnnotation,
     ChartInstance,
     ChartDataPoint,
+    ChartOptions,
+    ChartScale,
+    ChartDataset,
     Anomaly,
     Trade,
     OrderBookLevel,
@@ -91,8 +94,9 @@ export function scheduleOrderBookUpdate(): void {
 export function updateYAxisBounds(): void {
     if (!tradesChart || trades.length === 0) return;
 
-    const xMin: number = tradesChart.options.scales.x.min as number;
-    const xMax: number = tradesChart.options.scales.x.max as number;
+    const chartOptions = tradesChart.options as ChartOptions;
+    const xMin: number = chartOptions.scales.x.min as number;
+    const xMax: number = chartOptions.scales.x.max as number;
 
     // PERFORMANCE OPTIMIZATION: Use single pass through trades array
     // Instead of filter + map + spread, do everything in one loop
@@ -118,11 +122,12 @@ export function updateYAxisBounds(): void {
     if (visibleCount === 0) return;
 
     const padding: number = (yMax - yMin) * PADDING_PERCENTAGE;
-    const scalesY = tradesChart.options.scales.y as any;
-    scalesY.suggestedMin = yMin - padding;
-    scalesY.suggestedMax = yMax + padding;
-    delete scalesY.min;
-    delete scalesY.max;
+    const tradesChartOptions = tradesChart.options as ChartOptions;
+    const yScale = tradesChartOptions.scales.y;
+    yScale.suggestedMin = yMin - padding;
+    yScale.suggestedMax = yMax + padding;
+    delete yScale.min;
+    delete yScale.max;
 }
 
 /**
@@ -427,10 +432,14 @@ export function initializeTradesChart(
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
-                                rsiChart.options.scales.x.min =
-                                    chart.scales.x.min;
-                                rsiChart.options.scales.x.max =
-                                    chart.scales.x.max;
+                                const rsiChartOptions =
+                                    rsiChart.options as ChartOptions;
+                                const chartOptions =
+                                    chart.options as ChartOptions;
+                                rsiChartOptions.scales.x.min =
+                                    chartOptions.scales.x.min;
+                                rsiChartOptions.scales.x.max =
+                                    chartOptions.scales.x.max;
                                 rsiChart.update("none");
                             }
                             isSyncing = false;
