@@ -1215,8 +1215,7 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
 
     // Get current theme for depletion colors
     const currentTheme: string = getCurrentTheme();
-    const actualTheme:
-        = currentTheme === "system" ? getSystemTheme() : currentTheme;
+    const actualTheme: string = currentTheme === "system" ? getSystemTheme() : currentTheme;
 
     // Build chart data with depletion information
     const askColors: string[] = [];

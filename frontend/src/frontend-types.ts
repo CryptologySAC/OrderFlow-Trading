@@ -280,6 +280,7 @@ export interface ZoneData {
     canceled?: number;
     executed?: number;
     tradeCount?: number;
+    isActive?: boolean;
 }
 
 // =============================================================================
