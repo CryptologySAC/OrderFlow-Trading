@@ -99,7 +99,6 @@ const RSI_OVERSOLD = 30;
 
 // Color alpha constants
 const COLOR_ALPHA_FULL = 1;
-const COLOR_ALPHA_LIGHT = 0.1;
 const COLOR_ALPHA_MEDIUM = 0.5;
 const COLOR_ALPHA_STRONG = 0.8;
 const COLOR_ALPHA_MAX = 0.9;
@@ -124,7 +123,6 @@ const ZONE_DURATION_MAX_HOURS = 4;
 const ZONE_DURATION_MAX_MS = ZONE_DURATION_MAX_HOURS * 60 * 60 * 1000;
 const ZONE_BASE_THICKNESS_PERCENT = 0.0008; // 0.08%
 const ZONE_STRENGTH_MULTIPLIER_BASE = 1;
-const ZONE_STRENGTH_MULTIPLIER_MAX = 3;
 const ZONE_TOUCH_MULTIPLIER_MAX = 1;
 const ZONE_TOUCH_COUNT_NORMALIZER = 10;
 const ZONE_ALPHA_MULTIPLIER = 1.5;
@@ -147,8 +145,6 @@ const COLOR_RED_MEDIUM = 80;
 const COLOR_RED_LOW = 0;
 const COLOR_GREEN_FULL = 255;
 const COLOR_GREEN_MEDIUM = 128;
-const COLOR_GREEN_LOW = 0;
-const COLOR_BLUE_MEDIUM = 128;
 
 // Order book volume normalizers
 const ORDER_BOOK_VOLUME_NORMALIZER_DARK = 1500;
@@ -1587,10 +1583,7 @@ function removeSupportResistanceLevel(levelId: string): void {
 /**
  * Check if a trade price breaches any support/resistance zones and invalidate them
  */
-export function checkSupportResistanceBreaches(
-    tradePrice: number,
-    _tradeTime: number
-): void {
+export function checkSupportResistanceBreaches(tradePrice: number): void {
     if (!supportResistanceLevels.length) return;
 
     supportResistanceLevels = supportResistanceLevels.filter(

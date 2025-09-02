@@ -623,7 +623,7 @@ function handleMessage(message: WebSocketMessage): void {
                 }
                 updateUnifiedTimeRange(trade.time);
                 updateYAxisBounds();
-                checkSupportResistanceBreaches(trade.price, trade.time);
+                checkSupportResistanceBreaches(trade.price);
                 scheduleTradesChartUpdate();
             }
             break;
