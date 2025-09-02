@@ -1817,9 +1817,10 @@ function completeZoneBox(zone: ZoneData): void {
 
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
         const tradesChartOptions = tradesChart.options as ChartOptions;
-        const annotation: ChartAnnotation | undefined = (
-            tradesChartOptions.plugins?.annotation as any
-        ).annotations[`zone_${zone.id}`];
+        const annotation: ChartAnnotation | undefined =
+            tradesChartOptions.plugins?.annotation?.annotations[
+                `zone_${zone.id}`
+            ];
         if (annotation) {
             // Change to completed zone style
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
@@ -1862,7 +1863,7 @@ function removeZoneBox(zoneId: string): void {
 
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
         const tradesChartOptions = tradesChart.options as ChartOptions;
-        delete (tradesChartOptions.plugins?.annotation as any).annotations[
+        delete tradesChartOptions.plugins?.annotation?.annotations[
             `zone_${zoneId}`
         ];
         tradesChart.update("none");
@@ -1953,9 +1954,10 @@ function addZoneToChart(zone: ZoneData): void {
         };
     }
 
-    (tradesChartOptions.plugins?.annotation as any).annotations[
-        `zone_${zone.id}`
-    ] = zoneAnnotation;
+    if (tradesChartOptions.plugins?.annotation?.annotations) {
+        tradesChartOptions.plugins.annotation.annotations[`zone_${zone.id}`] =
+            zoneAnnotation;
+    }
     tradesChart.update("none");
 }
 
