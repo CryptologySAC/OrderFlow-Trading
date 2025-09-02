@@ -79,7 +79,7 @@ export class ObjectPool<T> {
  */
 export class ArrayPool<T> {
     private readonly pools = new Map<number, T[][]>();
-    private readonly releasedArrays = new WeakSet<T[]>();
+    private readonly releasedArrays = new Set<T[]>();
     private readonly maxPoolSize: number;
     private readonly maxArraySize: number;
 
