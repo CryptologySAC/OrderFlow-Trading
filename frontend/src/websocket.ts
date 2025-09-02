@@ -32,7 +32,6 @@ export class TradeWebSocket {
     private onMessage: (message: WebSocketMessage) => void;
     private onBacklog: (data: TradeMessage[]) => void;
     private onReconnectFail: () => void;
-    private onTimeout: () => void;
 
     private ws: WebSocket | null = null;
     private pingInterval: NodeJS.Timeout | null = null;
@@ -49,7 +48,6 @@ export class TradeWebSocket {
         onMessage = () => {},
         onBacklog = () => {},
         onReconnectFail = () => {},
-        onTimeout = () => {},
     }: TradeWebSocketConfig) {
         this.url = url;
         this.maxTrades = maxTrades;
@@ -61,7 +59,6 @@ export class TradeWebSocket {
         this.onMessage = onMessage;
         this.onBacklog = onBacklog;
         this.onReconnectFail = onReconnectFail;
-        this.onTimeout = onTimeout;
     }
 
     connect(): void {
