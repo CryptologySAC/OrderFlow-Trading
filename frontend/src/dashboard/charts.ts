@@ -38,6 +38,22 @@ import type {
     ChartDataset,
 } from "../frontend-types.js";
 
+// Chart.js type declarations
+declare global {
+    interface Window {
+        Chart: {
+            new (ctx: CanvasRenderingContext2D, config: unknown): ChartInstance;
+            Annotation?: unknown;
+            register?(plugin: unknown): void;
+            registry?: {
+                plugins?: {
+                    get?(name: string): unknown;
+                };
+            };
+        };
+    }
+}
+
 // Define zone types locally
 type ZoneUpdateType =
     | "zone_created"
@@ -433,7 +449,7 @@ export function initializeTradesChart(
         initialMax = now + PADDING_TIME;
     }
 
-    const chart = new (window as any).Chart(ctx, {
+    const chart = new window.Chart(ctx, {
         type: "scatter",
         data: {
             datasets: [
@@ -595,7 +611,7 @@ export function initializeRSIChart(
 ): ChartInstance | null {
     if (rsiChart) return rsiChart;
 
-    if (typeof (window as any).Chart === "undefined") {
+    if (typeof window.Chart === "undefined") {
         console.error("Chart.js not loaded - cannot initialize RSI chart");
         throw new Error("Chart.js is not loaded");
     }
@@ -615,14 +631,14 @@ export function initializeRSIChart(
     }
 
     if (
-        typeof (window as any).Chart.Annotation !== "undefined" &&
-        !(window as any).Chart.registry.plugins.get("annotation")
+        typeof window.Chart.Annotation !== "undefined" &&
+        !window.Chart.registry?.plugins?.get?.("annotation")
     ) {
-        (window as any).Chart.register((window as any).Chart.Annotation);
+        window.Chart.register?.(window.Chart.Annotation);
     }
 
     try {
-        const chart = new (window as any).Chart(ctx, {
+        const chart = new window.Chart(ctx, {
             type: "line",
             data: {
                 datasets: [
@@ -880,7 +896,7 @@ export function initializeOrderBookChart(
     ctx: CanvasRenderingContext2D
 ): ChartInstance | null {
     if (orderBookChart) return orderBookChart;
-    if (typeof (window as any).Chart === "undefined") {
+    if (typeof window.Chart === "undefined") {
         throw new Error("Chart.js is not loaded");
     }
 
@@ -910,7 +926,7 @@ export function initializeOrderBookChart(
         bidColors.push("rgba(0, 128, 0, 0.5)"); // Placeholder, will be updated by theme
     });
 
-    const chart: ChartInstance = new (window as any).Chart(ctx, {
+    const chart: ChartInstance = new window.Chart(ctx, {
         type: "bar",
         data: {
             labels: labels,
