@@ -26,7 +26,7 @@ export const PONG_WAIT_MS = 5000;
 export const PADDING_TIME = 300000; // 5 minutes
 export const FIFTEEN_MINUTES = 15 * 60 * 1000; // 15 minutes
 export const TRADE_TIMEOUT_MS = 10000; // 10 seconds
-export const GRID_SIZE = 20; // snapping grid for draggable/resizable elements
+export const GRID_SIZE = 25; // snapping grid for draggable/resizable elements
 export const ITEM_MARGIN = 20; // fixed space between dashboard items
 export const MAX_RSI_DATA = 100;
 
