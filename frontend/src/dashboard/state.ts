@@ -176,6 +176,12 @@ export function setRuntimeConfig(
 ): void {
     if (config && typeof config === "object") {
         try {
+            // Validate config structure before processing
+            if (typeof config !== "object" || config === null) {
+                console.warn("Invalid config received - not an object");
+                return;
+            }
+
             // Safe config merging with circular reference protection
             const safeConfig = safeConfigMerge(
                 (typeof window !== "undefined" ? window.runtimeConfig : {}) ||
@@ -187,16 +193,36 @@ export function setRuntimeConfig(
                 window.runtimeConfig = safeConfig;
             }
 
-            if (typeof safeConfig.dedupTolerance === "number") {
+            // Apply dedupTolerance with validation
+            if (
+                typeof safeConfig.dedupTolerance === "number" &&
+                safeConfig.dedupTolerance >= 0 &&
+                safeConfig.dedupTolerance <= 1
+            ) {
                 dedupTolerance = safeConfig.dedupTolerance;
+                console.log("Updated dedupTolerance:", dedupTolerance);
+            } else if (safeConfig.dedupTolerance !== undefined) {
+                console.warn(
+                    "Invalid dedupTolerance value:",
+                    safeConfig.dedupTolerance
+                );
             }
         } catch (error) {
             console.error("Error processing runtime config:", error);
-            // Fallback to basic config without merging
-            if (typeof config.dedupTolerance === "number") {
+            // Enhanced fallback: only apply dedupTolerance if it's valid
+            if (
+                typeof config.dedupTolerance === "number" &&
+                config.dedupTolerance >= 0 &&
+                config.dedupTolerance <= 1
+            ) {
                 dedupTolerance = config.dedupTolerance;
+                console.log("Applied fallback dedupTolerance:", dedupTolerance);
+            } else {
+                console.warn("Skipping invalid dedupTolerance in fallback");
             }
         }
+    } else {
+        console.warn("Invalid config received:", typeof config);
     }
 }
 
@@ -211,14 +237,14 @@ function safeConfigMerge(
     target: RuntimeConfig,
     source: RuntimeConfig
 ): RuntimeConfig {
-    const visited = new WeakSet<object>();
+    const visited = new WeakMap<object, boolean>();
 
     function isCircular(obj: unknown): boolean {
         if (obj && typeof obj === "object") {
-            if (visited.has(obj)) {
+            if (visited.has(obj as object)) {
                 return true;
             }
-            visited.add(obj);
+            visited.set(obj as object, true);
         }
         return false;
     }

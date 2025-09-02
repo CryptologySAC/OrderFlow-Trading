@@ -1,4 +1,9 @@
-import { tradesChart, orderBookChart, rsiChart, orderBookData, } from "./state.js";
+import {
+    tradesChart,
+    orderBookChart,
+    rsiChart,
+    orderBookData,
+} from "./state.js";
 export function getSystemTheme() {
     return window.matchMedia &&
         window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -16,8 +21,7 @@ export function applyTheme(theme) {
     const body = document.body;
     if (theme === "system") {
         body.removeAttribute("data-theme");
-    }
-    else {
+    } else {
         body.setAttribute("data-theme", theme);
     }
     updateChartTheme(theme === "system" ? getSystemTheme() : theme);
@@ -29,13 +33,11 @@ export function saveTheme(theme) {
     try {
         if (theme === "system") {
             localStorage.removeItem("dashboardTheme");
-        }
-        else {
+        } else {
             localStorage.setItem("dashboardTheme", theme);
         }
         console.log("Theme saved:", theme);
-    }
-    catch (error) {
+    } catch (error) {
         console.warn("Failed to save theme to localStorage:", error);
     }
 }
@@ -45,8 +47,7 @@ export function restoreTheme() {
         applyTheme(savedTheme);
         updateThemeToggleButton();
         console.log("Theme restored:", savedTheme);
-    }
-    catch (error) {
+    } catch (error) {
         console.warn("Failed to restore theme from localStorage:", error);
     }
 }
@@ -72,8 +73,7 @@ export function toggleTheme() {
 }
 export function updateThemeToggleButton() {
     const button = document.getElementById("themeToggle");
-    if (!button)
-        return;
+    if (!button) return;
     const current = getCurrentTheme();
     const icons = {
         system: "🔄",
@@ -90,12 +90,14 @@ export function updateThemeToggleButton() {
 }
 export function updateChartTheme(theme) {
     if (tradesChart) {
-        const gridColor = theme === "dark"
-            ? "rgba(255, 255, 255, 0.25)"
-            : "rgba(102, 102, 102, 0.1)";
-        const annotationColor = theme === "dark"
-            ? "rgba(255, 255, 255, 0.6)"
-            : "rgba(102, 102, 102, 0.4)";
+        const gridColor =
+            theme === "dark"
+                ? "rgba(255, 255, 255, 0.25)"
+                : "rgba(102, 102, 102, 0.1)";
+        const annotationColor =
+            theme === "dark"
+                ? "rgba(255, 255, 255, 0.6)"
+                : "rgba(102, 102, 102, 0.4)";
         const tickColor = theme === "dark" ? "#e0e0e0" : "#666666";
         if (tradesChart.options.scales.x.grid) {
             tradesChart.options.scales.x.grid.color = gridColor;
@@ -124,7 +126,8 @@ export function updateChartTheme(theme) {
             }
         }
         if (tradesChart.options.plugins?.annotation?.annotations) {
-            const annotations = tradesChart.options.plugins.annotation.annotations;
+            const annotations =
+                tradesChart.options.plugins.annotation.annotations;
             Object.keys(annotations).forEach((key) => {
                 if (key.includes("15min") || !isNaN(Number(key))) {
                     annotations[key].borderColor = annotationColor;
@@ -134,9 +137,10 @@ export function updateChartTheme(theme) {
         tradesChart.update("none");
     }
     if (orderBookChart) {
-        const gridColor = theme === "dark"
-            ? "rgba(255, 255, 255, 0.25)"
-            : "rgba(102, 102, 102, 0.1)";
+        const gridColor =
+            theme === "dark"
+                ? "rgba(255, 255, 255, 0.25)"
+                : "rgba(102, 102, 102, 0.1)";
         const tickColor = theme === "dark" ? "#e0e0e0" : "#666666";
         if (orderBookChart.options.scales.x.grid) {
             orderBookChart.options.scales.x.grid.color = gridColor;
@@ -154,12 +158,14 @@ export function updateChartTheme(theme) {
         scheduleOrderBookUpdate();
     }
     if (rsiChart) {
-        const gridColor = theme === "dark"
-            ? "rgba(255, 255, 255, 0.25)"
-            : "rgba(102, 102, 102, 0.1)";
-        const annotationColor = theme === "dark"
-            ? "rgba(255, 255, 255, 0.6)"
-            : "rgba(102, 102, 102, 0.4)";
+        const gridColor =
+            theme === "dark"
+                ? "rgba(255, 255, 255, 0.25)"
+                : "rgba(102, 102, 102, 0.1)";
+        const annotationColor =
+            theme === "dark"
+                ? "rgba(255, 255, 255, 0.6)"
+                : "rgba(102, 102, 102, 0.4)";
         const tickColor = theme === "dark" ? "#e0e0e0" : "#666666";
         if (rsiChart.options.scales.x.grid) {
             rsiChart.options.scales.x.grid.color = gridColor;
@@ -189,8 +195,10 @@ export function getDepletionVisualizationEnabled() {
     return saved !== null ? JSON.parse(saved) : true;
 }
 export function setDepletionVisualizationEnabled(enabled) {
-    const safeStringify = window.safeStringify || JSON.stringify;
-    localStorage.setItem("depletionVisualizationEnabled", safeStringify(enabled));
+    localStorage.setItem(
+        "depletionVisualizationEnabled",
+        JSON.stringify(enabled)
+    );
 }
 export function toggleDepletionVisualization() {
     const currentEnabled = getDepletionVisualizationEnabled();
