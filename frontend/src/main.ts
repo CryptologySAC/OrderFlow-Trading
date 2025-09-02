@@ -627,7 +627,7 @@ function handleMessage(message: WebSocketMessage): void {
                 updateUnifiedTimeRange(trade.time);
                 updateYAxisBounds();
                 checkSupportResistanceBreaches(trade.price);
-                scheduleTradesChartUpdate();
+                // Chart will automatically update when data/annotation changes
             }
             break;
 

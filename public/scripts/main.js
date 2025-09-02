@@ -389,7 +389,6 @@ function handleMessage(message) {
                 updateUnifiedTimeRange(trade.time);
                 updateYAxisBounds();
                 checkSupportResistanceBreaches(trade.price);
-                scheduleTradesChartUpdate();
             }
             break;
         case "signal":
