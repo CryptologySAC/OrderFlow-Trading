@@ -89,7 +89,7 @@ export interface ChartOptions {
 }
 
 export interface ChartDataset {
-    data: ChartDataPoint[];
+    data: ChartDataPoint[] | (number | null)[];
     label?: string;
     backgroundColor?: string | string[];
     borderColor?: string | string[];
@@ -99,6 +99,8 @@ export interface ChartDataset {
     pointHoverRadius?: number;
     showLine?: boolean;
     fill?: boolean;
+    barPercentage?: number;
+    categoryPercentage?: number;
 }
 
 export interface ChartConfiguration {

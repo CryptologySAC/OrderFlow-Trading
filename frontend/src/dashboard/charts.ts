@@ -71,6 +71,7 @@ interface TooltipItem<T extends "line" | "bar" | "scatter"> {
         : T extends "line"
           ? RSIDataPoint
           : unknown;
+    label?: string;
 }
 
 interface ScriptableContext<T extends "line" | "bar" | "scatter"> {
@@ -1007,7 +1008,7 @@ export function initializeOrderBookChart(
                 tooltip: {
                     callbacks: {
                         label: function (context: TooltipItem<"bar">) {
-                            const label: string = (context as any).label || "";
+                            const label: string = context.label || "";
                             const isAsk: boolean = label.includes("_ask");
                             const isBid: boolean = label.includes("_bid");
                             const priceStr: string = label.split("_")[0] ?? "";
@@ -1059,8 +1060,7 @@ export function initializeOrderBookChart(
                             return tooltipText;
                         },
                         title: function (context: TooltipItem<"bar">[]) {
-                            const label: string =
-                                (context[0] as any).label || "";
+                            const label: string = context[0]?.label || "";
                             const priceStr: string = label.split("_")[0] ?? "";
                             return `Price: ${priceStr}`;
                         },
@@ -1408,8 +1408,8 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
     if (orderBookChart?.data && orderBookChart.data.datasets.length >= 2) {
         const chart = orderBookChart;
         (chart.data as { labels: string[] }).labels = depletionLabels; // Use labels with depletion info
-        (chart.data.datasets[0] as ChartDataset).data = askData as any;
-        (chart.data.datasets[1] as ChartDataset).data = bidData as any;
+        (chart.data.datasets[0] as ChartDataset).data = askData;
+        (chart.data.datasets[1] as ChartDataset).data = bidData;
 
         // Apply depletion-aware colors
         (chart.data.datasets[0] as ChartDataset).backgroundColor = askColors;
@@ -1774,9 +1774,10 @@ function updateZoneBox(zone: ZoneData): void {
     // Update the chart annotation
     if (tradesChart?.options?.plugins?.annotation?.annotations) {
         const tradesChartOptions = tradesChart.options as ChartOptions;
-        const annotation: ChartAnnotation | undefined = (
-            tradesChartOptions.plugins?.annotation as any
-        ).annotations[`zone_${zone.id}`];
+        const annotation: ChartAnnotation | undefined =
+            tradesChartOptions.plugins?.annotation?.annotations[
+                `zone_${zone.id}`
+            ];
         if (annotation) {
             // Update zone properties
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
