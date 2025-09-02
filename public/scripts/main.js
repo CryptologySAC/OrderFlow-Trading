@@ -1,4 +1,4 @@
-import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, anomalyFilters, signalFilters, trades, anomalyList, signalsList, rsiData, activeRange, dedupTolerance, rsiChart, tradesChart, PADDING_TIME, MAX_RSI_DATA, setRuntimeConfig, } from "./dashboard/state.js";
+import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, anomalyFilters, signalFilters, trades, anomalyList, signalsList, rsiData, activeRange, dedupTolerance, rsiChart, tradesChart, PADDING_TIME, MAX_RSI_DATA, } from "./dashboard/state.js";
 import { initializeTradesChart, initializeRSIChart, initializeOrderBookChart, cleanupOldSupportResistanceLevels, cleanupOldZones, updateYAxisBounds, updateTimeAnnotations, updateRSITimeAnnotations, scheduleTradesChartUpdate, checkSupportResistanceBreaches, buildSignalLabel, handleSupportResistanceLevel, handleZoneUpdate, handleZoneSignal, updateOrderBookDisplay, safeUpdateRSIChart, } from "./dashboard/charts.js";
 import { renderAnomalyList, renderSignalsList, updateTradeDelayIndicator, showSignalBundleBadge, } from "./dashboard/render.js";
 import { restoreColumnWidths, restoreAnomalyFilters, restoreTimeRange, restoreVerticalLayout, resetAllSettings, saveAnomalyFilters, } from "./dashboard/persistence.js";
@@ -550,12 +550,6 @@ function handleMessage(message) {
             }
             else {
                 console.error("Invalid orderbook data");
-            }
-            break;
-        case "runtimeConfig":
-            const config = message.data;
-            if (config && typeof config === "object") {
-                setRuntimeConfig(config);
             }
             break;
         case "supportResistanceLevel":

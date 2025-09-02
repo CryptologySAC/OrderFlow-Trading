@@ -20,7 +20,6 @@ import {
     tradesChart,
     PADDING_TIME,
     MAX_RSI_DATA,
-    setRuntimeConfig,
 } from "./dashboard/state.js";
 import {
     initializeTradesChart,
@@ -806,13 +805,6 @@ function handleMessage(message: WebSocketMessage): void {
                 updateOrderBookDisplay(orderBookData);
             } else {
                 console.error("Invalid orderbook data");
-            }
-            break;
-
-        case "runtimeConfig":
-            const config = message.data as Record<string, unknown>;
-            if (config && typeof config === "object") {
-                setRuntimeConfig(config);
             }
             break;
 
