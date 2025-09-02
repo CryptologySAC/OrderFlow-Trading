@@ -1,4 +1,4 @@
-import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, anomalyFilters, signalFilters, trades, anomalyList, signalsList, rsiData, activeRange, dedupTolerance, rsiChart, tradesChart, PADDING_TIME, MAX_RSI_DATA, } from "./state.js";
+import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, anomalyFilters, signalFilters, trades, anomalyList, signalsList, rsiData, activeRange, dedupTolerance, rsiChart, tradesChart, PADDING_TIME, MAX_RSI_DATA, setRuntimeConfig, } from "./state.js";
 import { initializeTradesChart, initializeRSIChart, initializeOrderBookChart, cleanupOldSupportResistanceLevels, cleanupOldZones, updateYAxisBounds, updateTimeAnnotations, updateRSITimeAnnotations, scheduleTradesChartUpdate, checkSupportResistanceBreaches, buildSignalLabel, handleSupportResistanceLevel, handleZoneUpdate, handleZoneSignal, updateOrderBookDisplay, safeUpdateRSIChart, } from "./charts.js";
 import { renderAnomalyList, renderSignalsList, updateTradeDelayIndicator, showSignalBundleBadge, } from "./render.js";
 import { restoreColumnWidths, restoreAnomalyFilters, restoreTimeRange, restoreVerticalLayout, resetAllSettings, saveAnomalyFilters, } from "./persistence.js";
@@ -209,6 +209,7 @@ function initialize() {
 function processMessageQueue() {
     if (messageQueue.length === 0) {
         isProcessingQueue = false;
+        requestAnimationFrame(processMessageQueue);
         return;
     }
     isProcessingQueue = true;
@@ -221,15 +222,7 @@ function processMessageQueue() {
     catch (error) {
         console.error("Error processing message from queue:", error);
     }
-    if (messageQueue.length > 100) {
-        setTimeout(() => processMessageQueue(), 10);
-    }
-    else if (messageQueue.length > 10) {
-        setTimeout(() => requestAnimationFrame(processMessageQueue), 5);
-    }
-    else {
-        requestAnimationFrame(processMessageQueue);
-    }
+    requestAnimationFrame(processMessageQueue);
 }
 function handleMessage(message) {
     if (!message) {
@@ -259,7 +252,9 @@ function handleMessage(message) {
                 const chartInstance = tradesChart;
                 const chartData = chartInstance.data;
                 if (chartData && chartData.datasets && chartData.datasets[0]) {
-                    chartData.datasets[0].data = trades;
+                    chartData.datasets[0].data = [
+                        ...trades,
+                    ];
                 }
             }
             if (trades.length > 0) {
@@ -369,7 +364,9 @@ function handleMessage(message) {
                     if (chartData &&
                         chartData.datasets &&
                         chartData.datasets[0]) {
-                        chartData.datasets[0].data = trades;
+                        chartData.datasets[0].data = [
+                            ...trades,
+                        ];
                     }
                 }
                 if (tradesChart) {
@@ -389,6 +386,7 @@ function handleMessage(message) {
                 updateUnifiedTimeRange(trade.time);
                 updateYAxisBounds();
                 checkSupportResistanceBreaches(trade.price);
+                scheduleTradesChartUpdate();
             }
             break;
         case "signal":
@@ -426,18 +424,6 @@ function handleMessage(message) {
                                 y: "center",
                             },
                         };
-                        const MAX_ANNOTATIONS = 100;
-                        const annotationKeys = Object.keys(annotations);
-                        if (annotationKeys.length > MAX_ANNOTATIONS) {
-                            const keysToRemove = annotationKeys
-                                .filter((key) => key !== "lastPriceLine")
-                                .sort()
-                                .slice(0, annotationKeys.length - MAX_ANNOTATIONS);
-                            keysToRemove.forEach((key) => {
-                                delete annotations[key];
-                            });
-                            console.log(`Cleaned up ${keysToRemove.length} old signal annotations`);
-                        }
                         tradesChart.update("none");
                     }
                 }
@@ -550,6 +536,12 @@ function handleMessage(message) {
             }
             else {
                 console.error("Invalid orderbook data");
+            }
+            break;
+        case "runtimeConfig":
+            const config = message.data;
+            if (config && typeof config === "object") {
+                setRuntimeConfig(config);
             }
             break;
         case "supportResistanceLevel":
@@ -689,14 +681,9 @@ const tradeWebsocket = new TradeWebSocket({
                         ? msg["now"]
                         : Date.now(),
                 };
-                if (messageQueue.length < 1000) {
-                    messageQueue.push(convertedMessage);
-                    if (!isProcessingQueue) {
-                        processMessageQueue();
-                    }
-                }
-                else {
-                    console.warn("Message queue full (1000 messages), dropping message to prevent memory exhaustion");
+                messageQueue.push(convertedMessage);
+                if (!isProcessingQueue) {
+                    processMessageQueue();
                 }
             }
         }
