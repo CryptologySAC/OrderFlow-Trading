@@ -693,8 +693,8 @@ export function isValidWebSocketMessage(
     if (!data || typeof data !== "object") return false;
     const msg = data as Record<string, unknown>;
 
-    if (typeof msg.type !== "string") return false;
-    if (typeof msg.now !== "number") return false;
+    if (typeof msg["type"] !== "string") return false;
+    if (typeof msg["now"] !== "number") return false;
 
     // Validate message type
     const validTypes: WebSocketMessageType[] = [
@@ -716,7 +716,7 @@ export function isValidWebSocketMessage(
         "connection_status",
     ];
 
-    return validTypes.includes(msg.type as WebSocketMessageType);
+    return validTypes.includes(msg["type"] as WebSocketMessageType);
 }
 
 export function isValidTradeData(data: unknown): data is TradeData {
@@ -724,12 +724,12 @@ export function isValidTradeData(data: unknown): data is TradeData {
     const trade = data as Record<string, unknown>;
 
     return (
-        typeof trade.time === "number" &&
-        typeof trade.price === "number" &&
-        typeof trade.quantity === "number" &&
-        (trade.orderType === "BUY" || trade.orderType === "SELL") &&
-        typeof trade.symbol === "string" &&
-        typeof trade.tradeId === "number"
+        typeof trade["time"] === "number" &&
+        typeof trade["price"] === "number" &&
+        typeof trade["quantity"] === "number" &&
+        (trade["orderType"] === "BUY" || trade["orderType"] === "SELL") &&
+        typeof trade["symbol"] === "string" &&
+        typeof trade["tradeId"] === "number"
     );
 }
 
@@ -737,15 +737,15 @@ export function isValidOrderBookData(data: unknown): data is OrderBookData {
     if (!data || typeof data !== "object") return false;
     const ob = data as Record<string, unknown>;
 
-    if (!Array.isArray(ob.priceLevels)) return false;
+    if (!Array.isArray(ob["priceLevels"])) return false;
 
-    return ob.priceLevels.every((level: unknown) => {
+    return ob["priceLevels"].every((level: unknown) => {
         if (!level || typeof level !== "object") return false;
         const l = level as Record<string, unknown>;
         return (
-            typeof l.price === "number" &&
-            typeof l.bid === "number" &&
-            typeof l.ask === "number"
+            typeof l["price"] === "number" &&
+            typeof l["bid"] === "number" &&
+            typeof l["ask"] === "number"
         );
     });
 }
@@ -769,12 +769,12 @@ export function isValidSignalData(data: unknown): data is Signal {
     ];
 
     return (
-        typeof signal.id === "string" &&
-        typeof signal.type === "string" &&
-        validTypes.includes(signal.type as SignalType) &&
-        typeof signal.time === "number" &&
-        typeof signal.price === "number" &&
-        (signal.side === "buy" || signal.side === "sell")
+        typeof signal["id"] === "string" &&
+        typeof signal["type"] === "string" &&
+        validTypes.includes(signal["type"] as SignalType) &&
+        typeof signal["time"] === "number" &&
+        typeof signal["price"] === "number" &&
+        (signal["side"] === "buy" || signal["side"] === "sell")
     );
 }
 
@@ -813,17 +813,17 @@ export function isValidAnomalyData(data: unknown): data is MarketAnomaly {
     ];
 
     return !!(
-        typeof anomaly.type === "string" &&
-        typeof anomaly.detectedAt === "number" &&
-        !!validSeverities.includes(anomaly.severity as AnomalySeverity) &&
-        typeof anomaly.affectedPriceRange === "object" &&
-        anomaly.affectedPriceRange &&
-        typeof (anomaly.affectedPriceRange as any).min === "number" &&
-        typeof (anomaly.affectedPriceRange as any).max === "number" &&
+        typeof anomaly["type"] === "string" &&
+        typeof anomaly["detectedAt"] === "number" &&
+        !!validSeverities.includes(anomaly["severity"] as AnomalySeverity) &&
+        typeof anomaly["affectedPriceRange"] === "object" &&
+        anomaly["affectedPriceRange"] &&
+        typeof (anomaly["affectedPriceRange"] as any).min === "number" &&
+        typeof (anomaly["affectedPriceRange"] as any).max === "number" &&
         !!validActions.includes(
-            anomaly.recommendedAction as RecommendedAction
+            anomaly["recommendedAction"] as RecommendedAction
         ) &&
-        typeof anomaly.details === "object"
+        typeof anomaly["details"] === "object"
     );
 }
 
@@ -832,10 +832,10 @@ export function isValidRSIData(data: unknown): data is RSIDataPoint {
     const rsi = data as Record<string, unknown>;
 
     return (
-        typeof rsi.time === "number" &&
-        typeof rsi.rsi === "number" &&
-        rsi.rsi >= 0 &&
-        rsi.rsi <= 100
+        typeof rsi["time"] === "number" &&
+        typeof rsi["rsi"] === "number" &&
+        rsi["rsi"] >= 0 &&
+        rsi["rsi"] <= 100
     );
 }
 
@@ -853,14 +853,14 @@ export function isValidZoneUpdateData(data: unknown): data is ZoneUpdateEvent {
     ];
 
     return !!(
-        typeof update.updateType === "string" &&
-        !!validTypes.includes(update.updateType as ZoneUpdateType) &&
-        typeof update.zone === "object" &&
-        update.zone &&
-        typeof (update.zone as any).id === "string" &&
-        typeof update.significance === "number" &&
-        typeof update.detectorId === "string" &&
-        typeof update.timestamp === "number"
+        typeof update["updateType"] === "string" &&
+        !!validTypes.includes(update["updateType"] as ZoneUpdateType) &&
+        typeof update["zone"] === "object" &&
+        update["zone"] &&
+        typeof (update["zone"] as any).id === "string" &&
+        typeof update["significance"] === "number" &&
+        typeof update["detectorId"] === "string" &&
+        typeof update["timestamp"] === "number"
     );
 }
 
@@ -875,16 +875,16 @@ export function isValidZoneSignalData(data: unknown): data is ZoneSignalEvent {
     ];
 
     return !!(
-        typeof signal.signalType === "string" &&
-        !!validTypes.includes(signal.signalType as ZoneSignalType) &&
-        typeof signal.zone === "object" &&
-        signal.zone &&
-        typeof signal.actionType === "string" &&
-        typeof signal.confidence === "number" &&
-        (signal.expectedDirection === "up" ||
-            signal.expectedDirection === "down") &&
-        typeof signal.detectorId === "string" &&
-        typeof signal.timestamp === "number"
+        typeof signal["signalType"] === "string" &&
+        !!validTypes.includes(signal["signalType"] as ZoneSignalType) &&
+        typeof signal["zone"] === "object" &&
+        signal["zone"] &&
+        typeof signal["actionType"] === "string" &&
+        typeof signal["confidence"] === "number" &&
+        (signal["expectedDirection"] === "up" ||
+            signal["expectedDirection"] === "down") &&
+        typeof signal["detectorId"] === "string" &&
+        typeof signal["timestamp"] === "number"
     );
 }
 
@@ -895,14 +895,14 @@ export function isValidSupportResistanceData(
     const level = data as Record<string, unknown>;
 
     return (
-        typeof level.id === "string" &&
-        typeof level.price === "number" &&
-        (level.type === "support" || level.type === "resistance") &&
-        typeof level.strength === "number" &&
-        typeof level.touchCount === "number" &&
-        typeof level.firstDetected === "number" &&
-        typeof level.lastTouched === "number" &&
-        typeof level.volumeAtLevel === "number"
+        typeof level["id"] === "string" &&
+        typeof level["price"] === "number" &&
+        (level["type"] === "support" || level["type"] === "resistance") &&
+        typeof level["strength"] === "number" &&
+        typeof level["touchCount"] === "number" &&
+        typeof level["firstDetected"] === "number" &&
+        typeof level["lastTouched"] === "number" &&
+        typeof level["volumeAtLevel"] === "number"
     );
 }
 

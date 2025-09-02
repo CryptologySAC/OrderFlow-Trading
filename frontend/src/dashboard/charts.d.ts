@@ -16,26 +16,28 @@ export declare function createTrade(
     y: number,
     quantity: number,
     orderType: string
-): any;
-export declare function buildSignalLabel(signal: any): string;
-export declare function isValidTrade(trade: any): boolean;
+): unknown;
+export declare function buildSignalLabel(signal: unknown): string;
+export declare function isValidTrade(trade: unknown): boolean;
 export declare function initializeTradesChart(
     ctx: CanvasRenderingContext2D
-): any;
-export declare function initializeRSIChart(ctx: CanvasRenderingContext2D): any;
-export declare function safeUpdateRSIChart(rsiData: any[]): boolean;
+): unknown;
+export declare function initializeRSIChart(
+    ctx: CanvasRenderingContext2D
+): unknown;
+export declare function safeUpdateRSIChart(rsiData: unknown[]): boolean;
 export declare function initializeOrderBookChart(
     ctx: CanvasRenderingContext2D
-): any;
+): unknown;
 export declare function updateOrderBookBarColors(theme: string): void;
-export declare function updateOrderBookDisplay(data: any): void;
-export declare function addAnomalyChartLabel(anomaly: any): void;
-export declare function handleSupportResistanceLevel(levelData: any): void;
+export declare function updateOrderBookDisplay(data: unknown): void;
+export declare function addAnomalyChartLabel(anomaly: unknown): void;
+export declare function handleSupportResistanceLevel(levelData: unknown): void;
 export declare function checkSupportResistanceBreaches(
     tradePrice: number,
     tradeTime: number
 ): void;
 export declare function cleanupOldSupportResistanceLevels(): void;
-export declare function handleZoneUpdate(updateData: any): void;
-export declare function handleZoneSignal(signalData: any): void;
+export declare function handleZoneUpdate(updateData: unknown): void;
+export declare function handleZoneSignal(signalData: unknown): void;
 export declare function cleanupOldZones(): void;

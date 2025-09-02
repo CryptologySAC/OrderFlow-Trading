@@ -9,12 +9,11 @@ export class TradeWebSocket {
     onMessage;
     onBacklog;
     onReconnectFail;
-    onTimeout;
     ws = null;
     pingInterval = null;
     pongTimeout = null;
     reconnectAttempts = 0;
-    constructor({ url, maxTrades = 50000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onReconnectFail = () => { }, onTimeout = () => { }, }) {
+    constructor({ url, maxTrades = 50000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onReconnectFail = () => { }, }) {
         this.url = url;
         this.maxTrades = maxTrades;
         this.maxReconnectAttempts = maxReconnectAttempts;
@@ -24,7 +23,6 @@ export class TradeWebSocket {
         this.onMessage = onMessage;
         this.onBacklog = onBacklog;
         this.onReconnectFail = onReconnectFail;
-        this.onTimeout = onTimeout;
     }
     connect() {
         try {
@@ -143,7 +141,11 @@ export class TradeWebSocket {
     sendMessage(message) {
         if (this.ws?.readyState === WebSocket.OPEN) {
             try {
-                this.ws.send(this.safeJsonStringify(message));
+                const safeMessage = this.safeJsonStringify(message);
+                if (!safeMessage) {
+                    return false;
+                }
+                this.ws.send(safeMessage);
                 return true;
             }
             catch (error) {
@@ -155,12 +157,14 @@ export class TradeWebSocket {
         return false;
     }
     isValidMessage(data) {
-        if (typeof data !== "object" ||
-            data === null ||
-            typeof data.type !== "string") {
+        if (typeof data !== "object" || data === null) {
             return false;
         }
-        return Object.values(MessageType).includes(data.type);
+        const obj = data;
+        if (typeof obj["type"] !== "string") {
+            return false;
+        }
+        return Object.values(MessageType).includes(obj["type"]);
     }
     safeJsonParse(str) {
         try {
@@ -176,7 +180,7 @@ export class TradeWebSocket {
         return JSON.stringify(obj, (_key, value) => {
             if (typeof value === "object" && value !== null) {
                 if (cache.has(value)) {
-                    return;
+                    return null;
                 }
                 cache.add(value);
             }

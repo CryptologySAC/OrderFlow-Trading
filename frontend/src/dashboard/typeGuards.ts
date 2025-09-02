@@ -50,21 +50,21 @@ function isBoolean(value: unknown): value is boolean {
 export function isValidTradeData(data: unknown): data is TradeMessage["data"] {
     if (!isObject(data)) return false;
 
-    const trade = data as Record<string, unknown>;
+    const trade = data;
     return (
-        isNumber(trade.id) &&
-        isString(trade.p) &&
-        isString(trade.q) &&
-        isNumber(trade.t) &&
-        isBoolean(trade.m)
+        isNumber(trade["id"]) &&
+        isString(trade["p"]) &&
+        isString(trade["q"]) &&
+        isNumber(trade["t"]) &&
+        isBoolean(trade["m"])
     );
 }
 
 export function isValidTradeMessage(msg: unknown): msg is TradeMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "trade" && isValidTradeData(message.data);
+    const message = msg;
+    return message["type"] === "trade" && isValidTradeData(message["data"]);
 }
 
 // =============================================================================
@@ -76,23 +76,23 @@ export function isValidSignalData(
 ): data is SignalMessage["data"] {
     if (!isObject(data)) return false;
 
-    const signal = data as Record<string, unknown>;
+    const signal = data;
     return (
-        isString(signal.id) &&
-        isString(signal.type) &&
-        isNumber(signal.strength) &&
-        isNumber(signal.price) &&
-        isNumber(signal.timestamp) &&
-        (signal.aggressor === "buy" || signal.aggressor === "sell") &&
-        isString(signal.detector)
+        isString(signal["id"]) &&
+        isString(signal["type"]) &&
+        isNumber(signal["strength"]) &&
+        isNumber(signal["price"]) &&
+        isNumber(signal["timestamp"]) &&
+        (signal["aggressor"] === "buy" || signal["aggressor"] === "sell") &&
+        isString(signal["detector"])
     );
 }
 
 export function isValidSignalMessage(msg: unknown): msg is SignalMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "signal" && isValidSignalData(message.data);
+    const message = msg;
+    return message["type"] === "signal" && isValidSignalData(message["data"]);
 }
 
 // =============================================================================
@@ -104,11 +104,11 @@ export function isValidAnomalyData(
 ): data is AnomalyMessage["data"] {
     if (!isObject(data)) return false;
 
-    const anomaly = data as Record<string, unknown>;
+    const anomaly = data;
     return (
-        isString(anomaly.detector) &&
-        isString(anomaly.message) &&
-        isNumber(anomaly.timestamp)
+        isString(anomaly["detector"]) &&
+        isString(anomaly["message"]) &&
+        isNumber(anomaly["timestamp"])
         // details is optional and can be any object
     );
 }
@@ -116,8 +116,8 @@ export function isValidAnomalyData(
 export function isValidAnomalyMessage(msg: unknown): msg is AnomalyMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "anomaly" && isValidAnomalyData(message.data);
+    const message = msg;
+    return message["type"] === "anomaly" && isValidAnomalyData(message["data"]);
 }
 
 // =============================================================================
@@ -127,11 +127,11 @@ export function isValidAnomalyMessage(msg: unknown): msg is AnomalyMessage {
 export function isValidPriceLevel(level: unknown): level is PriceLevel {
     if (!isObject(level)) return false;
 
-    const priceLevel = level as Record<string, unknown>;
+    const priceLevel = level;
     return (
-        isNumber(priceLevel.price) &&
-        isNumber(priceLevel.bid) &&
-        isNumber(priceLevel.ask)
+        isNumber(priceLevel["price"]) &&
+        isNumber(priceLevel["bid"]) &&
+        isNumber(priceLevel["ask"])
         // Optional fields
     );
 }
@@ -139,32 +139,34 @@ export function isValidPriceLevel(level: unknown): level is PriceLevel {
 export function isValidOrderBookData(data: unknown): data is OrderBookData {
     if (!isObject(data)) return false;
 
-    const orderBook = data as Record<string, unknown>;
+    const orderBook = data;
 
     // Check required fields
     if (
-        !Array.isArray(orderBook.priceLevels) ||
-        !isNumber(orderBook.bestBid) ||
-        !isNumber(orderBook.bestAsk) ||
-        !isNumber(orderBook.spread) ||
-        !isNumber(orderBook.midPrice) ||
-        !isNumber(orderBook.totalBidVolume) ||
-        !isNumber(orderBook.totalAskVolume) ||
-        !isNumber(orderBook.imbalance) ||
-        !isNumber(orderBook.timestamp)
+        !Array.isArray(orderBook["priceLevels"]) ||
+        !isNumber(orderBook["bestBid"]) ||
+        !isNumber(orderBook["bestAsk"]) ||
+        !isNumber(orderBook["spread"]) ||
+        !isNumber(orderBook["midPrice"]) ||
+        !isNumber(orderBook["totalBidVolume"]) ||
+        !isNumber(orderBook["totalAskVolume"]) ||
+        !isNumber(orderBook["imbalance"]) ||
+        !isNumber(orderBook["timestamp"])
     ) {
         return false;
     }
 
     // Validate all price levels
-    return orderBook.priceLevels.every(isValidPriceLevel);
+    return orderBook["priceLevels"].every(isValidPriceLevel);
 }
 
 export function isValidOrderbookMessage(msg: unknown): msg is OrderbookMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "orderbook" && isValidOrderBookData(message.data);
+    const message = msg;
+    return (
+        message["type"] === "orderbook" && isValidOrderBookData(message["data"])
+    );
 }
 
 // =============================================================================
@@ -174,20 +176,20 @@ export function isValidOrderbookMessage(msg: unknown): msg is OrderbookMessage {
 export function isValidRSIData(data: unknown): data is RsiMessage["data"] {
     if (!isObject(data)) return false;
 
-    const rsi = data as Record<string, unknown>;
+    const rsi = data;
     return (
-        isNumber(rsi.time) &&
-        isNumber(rsi.rsi) &&
-        rsi.rsi >= 0 &&
-        rsi.rsi <= 100
+        isNumber(rsi["time"]) &&
+        isNumber(rsi["rsi"]) &&
+        rsi["rsi"] >= 0 &&
+        rsi["rsi"] <= 100
     );
 }
 
 export function isValidRsiMessage(msg: unknown): msg is RsiMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "rsi" && isValidRSIData(message.data);
+    const message = msg;
+    return message["type"] === "rsi" && isValidRSIData(message["data"]);
 }
 
 // =============================================================================
@@ -205,9 +207,10 @@ export function isValidRsiBacklogMessage(
 ): msg is RsiBacklogMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
+    const message = msg;
     return (
-        message.type === "rsi_backlog" && isValidRsiBacklogData(message.data)
+        message["type"] === "rsi_backlog" &&
+        isValidRsiBacklogData(message["data"])
     );
 }
 
@@ -226,10 +229,10 @@ export function isValidSignalBacklogMessage(
 ): msg is SignalBacklogMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
+    const message = msg;
     return (
-        message.type === "signal_backlog" &&
-        isValidSignalBacklogData(message.data)
+        message["type"] === "signal_backlog" &&
+        isValidSignalBacklogData(message["data"])
     );
 }
 
@@ -242,10 +245,10 @@ export function isValidSignalBundleMessage(
 ): msg is SignalBundleMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
+    const message = msg;
     return (
-        message.type === "signal_bundle" &&
-        isValidSignalBacklogData(message.data)
+        message["type"] === "signal_bundle" &&
+        isValidSignalBacklogData(message["data"])
     );
 }
 
@@ -258,8 +261,8 @@ export function isValidRuntimeConfigMessage(
 ): msg is RuntimeConfigMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "runtimeConfig";
+    const message = msg;
+    return message["type"] === "runtimeConfig";
     // data can be any object for runtime config
 }
 
@@ -272,8 +275,8 @@ export function isValidSupportResistanceLevelMessage(
 ): msg is SupportResistanceLevelMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "supportResistanceLevel";
+    const message = msg;
+    return message["type"] === "supportResistanceLevel";
     // data can be any object for support resistance levels
 }
 
@@ -286,8 +289,8 @@ export function isValidZoneUpdateMessage(
 ): msg is ZoneUpdateMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "zoneUpdate";
+    const message = msg;
+    return message["type"] === "zoneUpdate";
     // data can be any object for zone updates
 }
 
@@ -300,8 +303,8 @@ export function isValidZoneSignalMessage(
 ): msg is ZoneSignalMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    return message.type === "zoneSignal";
+    const message = msg;
+    return message["type"] === "zoneSignal";
     // data can be any object for zone signals
 }
 
@@ -320,23 +323,23 @@ export function transformTradeData(wsData: TradeMessage["data"]): {
         time: wsData.t,
         price: parseFloat(wsData.p),
         quantity: parseFloat(wsData.q),
-        orderType: wsData.m ? "sell" : "buy", // m=true means buyer is maker (sell order)
+        orderType: wsData["m"] ? "sell" : "buy", // m=true means buyer is maker (sell order)
     };
 }
 
 // Transform WebSocket signal data to internal signal format
 export function transformSignalData(wsData: SignalMessage["data"]): SignalData {
     return {
-        id: wsData.id,
-        type: wsData.type,
-        side: wsData.aggressor,
-        price: wsData.price,
-        time: wsData.timestamp,
-        confidence: wsData.strength / 100, // Convert 0-100 to 0-1
+        id: wsData["id"],
+        type: wsData["type"],
+        side: wsData["aggressor"],
+        price: wsData["price"],
+        time: wsData["timestamp"],
+        confidence: wsData["strength"] / 100, // Convert 0-100 to 0-1
         signalData: {
-            confidence: wsData.strength / 100,
+            confidence: wsData["strength"] / 100,
             meta: {
-                detector: wsData.detector,
+                detector: wsData["detector"],
             },
         },
     };
@@ -349,10 +352,10 @@ export function transformSignalData(wsData: SignalMessage["data"]): SignalData {
 export function isValidWebSocketMessage(msg: unknown): msg is WebSocketMessage {
     if (!isObject(msg)) return false;
 
-    const message = msg as Record<string, unknown>;
-    if (!isString(message.type)) return false;
+    const message = msg;
+    if (!isString(message["type"])) return false;
 
-    switch (message.type) {
+    switch (message["type"]) {
         case "trade":
             return isValidTradeMessage(msg);
         case "signal":
@@ -394,14 +397,14 @@ export function isValidChartDataPoint(point: unknown): point is {
 } {
     if (!isObject(point)) return false;
 
-    const p = point as Record<string, unknown>;
+    const p = point;
     return (
-        isNumber(p.x) &&
-        isNumber(p.y) &&
-        (p.quantity === undefined || isNumber(p.quantity)) &&
-        (p.orderType === undefined ||
-            p.orderType === "buy" ||
-            p.orderType === "sell")
+        isNumber(p["x"]) &&
+        isNumber(p["y"]) &&
+        (p["quantity"] === undefined || isNumber(p["quantity"])) &&
+        (p["orderType"] === undefined ||
+            p["orderType"] === "buy" ||
+            p["orderType"] === "sell")
     );
 }
 

@@ -26,39 +26,39 @@ export declare const volumeImbalance: HTMLElement | null;
 export declare const orderBookContainer: HTMLElement | null;
 
 // Chart instances - using any to avoid type inference issues
-export declare let tradesChart: any;
-export declare let orderBookChart: any;
-export declare let rsiChart: any;
+export declare let tradesChart: unknown;
+export declare let orderBookChart: unknown;
+export declare let rsiChart: unknown;
 
 // Chart setter functions
-export declare function setTradesChart(chart: any): void;
-export declare function setOrderBookChart(chart: any): void;
-export declare function setRsiChart(chart: any): void;
+export declare function setTradesChart(chart: unknown): void;
+export declare function setOrderBookChart(chart: unknown): void;
+export declare function setRsiChart(chart: unknown): unknown;
 
 // Anomaly management
-export declare let anomalyList: any[];
+export declare let anomalyList: unknown[];
 export declare const anomalySeverityOrder: string[];
 export declare let anomalyFilters: Set<string>;
 
 // Signals management
-export declare let signalsList: any[];
+export declare let signalsList: unknown[];
 export declare let signalFilters: Set<string>;
-export declare let activeSignalTooltip: any;
+export declare let activeSignalTooltip: unknown;
 
 // Support/Resistance levels management
-export declare let supportResistanceLevels: any[];
+export declare let supportResistanceLevels: unknown[];
 export declare let maxSupportResistanceLevels: number;
 
 // Zone management
-export declare let activeZones: Map<string, any>;
+export declare let activeZones: Map<string, unknown>;
 export declare let maxActiveZones: number;
 
 // RSI data management
-export declare let rsiData: any[];
+export declare let rsiData: unknown[];
 
 // Order book display
 export declare let orderBookData: {
-    priceLevels: any[];
+    priceLevels: unknown[];
 };
 
 // Badge display
@@ -67,10 +67,10 @@ export declare let latestBadgeElem: HTMLElement | null;
 
 // Runtime configuration
 export declare let dedupTolerance: number;
-export declare function setRuntimeConfig(config: any): void;
+export declare function setRuntimeConfig(config: unknown): void;
 
 // Trades data
-export declare let trades: any[];
+export declare let trades: unknown[];
 
 // Active time range
 export declare let activeRange: number | null;
