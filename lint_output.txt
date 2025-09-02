@@ -1,0 +1,400 @@
+__mocks__/openai.ts 22ms (unchanged)
+__mocks__/src/alerts/alertManager.ts 3ms (unchanged)
+__mocks__/src/core/config.ts 16ms (unchanged)
+__mocks__/src/indicators/accumulationZoneDetector.ts 5ms (unchanged)
+__mocks__/src/indicators/helpers/traditionalIndicators.ts 3ms (unchanged)
+__mocks__/src/infrastructure/loggerInterface.ts 2ms (unchanged)
+__mocks__/src/infrastructure/metricsCollector.ts 5ms (unchanged)
+__mocks__/src/infrastructure/rateLimiter.ts 2ms (unchanged)
+__mocks__/src/infrastructure/signalLoggerInterface.ts 2ms (unchanged)
+__mocks__/src/market/orderBookState.ts 4ms (unchanged)
+__mocks__/src/market/orderFlowPreprocessor.ts 2ms (unchanged)
+__mocks__/src/multithreading/threadManager.ts 1ms (unchanged)
+__mocks__/src/multithreading/workerLogger.ts 1ms (unchanged)
+__mocks__/src/services/anomalyDetector.ts 1ms (unchanged)
+__mocks__/src/services/hiddenOrderDetector.ts 2ms (unchanged)
+__mocks__/src/services/icebergDetector.ts 1ms (unchanged)
+__mocks__/src/services/spoofingDetector.ts 1ms (unchanged)
+__mocks__/src/trading/zoneManager.ts 9ms (unchanged)
+__mocks__/src/utils/binance.ts 1ms (unchanged)
+__mocks__/src/utils/calculations.ts 1ms (unchanged)
+__mocks__/src/utils/signalValidationLogger.ts 7ms (unchanged)
+__mocks__/ws.ts 2ms (unchanged)
+absorption_near_miss_analyzer.ts 21ms (unchanged)
+analysis/analyze_success_with_price_reconstruction.ts 25ms (unchanged)
+analysis/analyze_threshold_boundaries.ts 17ms (unchanged)
+analysis/analyze_threshold_optimization_binary.ts 38ms (unchanged)
+analysis/analyze_traditional_indicators.ts 15ms (unchanged)
+analysis/shared/correctPhaseDetection.ts 3ms (unchanged)
+analysis/shared/phaseDetection.ts 16ms (unchanged)
+analysis/test_price_phase_detection.ts 4ms (unchanged)
+analyze_absorption_thresholds_CORRECTED.ts 4ms (unchanged)
+analyze_absorption_thresholds.ts 9ms (unchanged)
+analyze_correct_threshold_optimization.ts 10ms (unchanged)
+analyze_exit_timing_patterns.ts 11ms (unchanged)
+analyze_harmless_false_positives.ts 12ms (unchanged)
+analyze_near_misses.ts 3ms (unchanged)
+analyze_optimal_thresholds.ts 14ms (unchanged)
+analyze_signals_from_logs.ts 6ms (unchanged)
+analyze_successful_signals.ts 5ms (unchanged)
+analyze_swing_coverage_with_thresholds.ts 5ms (unchanged)
+analyze_swing_coverage.ts 8ms (unchanged)
+analyze_threshold_optimization_strict.ts 15ms (unchanged)
+analyze_transition_point.ts 2ms (unchanged)
+analyze_volume_anomalies.ts 2ms (unchanged)
+backend/src/alerts/alertManager.ts 3ms (unchanged)
+backend/src/analysis/failureAnalyzer.ts 22ms (unchanged)
+backend/src/analysis/marketContextCollector.ts 13ms (unchanged)
+backend/src/analysis/performanceAnalyzer.ts 30ms (unchanged)
+backend/src/analysis/performanceMonitor.ts 16ms (unchanged)
+backend/src/analysis/signalTracker.ts 12ms (unchanged)
+backend/src/app.ts 0ms (unchanged)
+backend/src/core/config.ts 34ms (unchanged)
+backend/src/core/constants.ts 6ms (unchanged)
+backend/src/core/dependencies.ts 3ms (unchanged)
+backend/src/core/errors.ts 1ms (unchanged)
+backend/src/data/individualTradesManager.ts 6ms (unchanged)
+backend/src/data/microstructureAnalyzer.ts 9ms (unchanged)
+backend/src/index.ts 1ms (unchanged)
+backend/src/indicators/absorptionDetectorEnhanced.ts 16ms (unchanged)
+backend/src/indicators/accumulationZoneDetectorEnhanced.ts 12ms (unchanged)
+backend/src/indicators/base/detectorEnrichedTrade.ts 3ms (unchanged)
+backend/src/indicators/base/detectorUtils.ts 2ms (unchanged)
+backend/src/indicators/deltaCVDDetectorEnhanced.ts 17ms (unchanged)
+backend/src/indicators/distributionDetectorEnhanced.ts 11ms (unchanged)
+backend/src/indicators/exhaustionDetectorEnhanced.ts 11ms (unchanged)
+backend/src/indicators/helpers/absorptionZoneTracker.ts 15ms (unchanged)
+backend/src/indicators/helpers/crossDetectorAnalytics.ts 8ms (unchanged)
+backend/src/indicators/helpers/exhaustionZoneTracker.ts 12ms (unchanged)
+backend/src/indicators/helpers/traditionalIndicators.ts 13ms (unchanged)
+backend/src/indicators/index.ts 1ms (unchanged)
+backend/src/indicators/interfaces/detectorInterfaces.ts 4ms (unchanged)
+backend/src/indicators/interfaces/volumeAnalysisInterface.ts 1ms (unchanged)
+backend/src/indicators/marketRegimeDetector.ts 6ms (unchanged)
+backend/src/indicators/types/absorptionTypes.ts 1ms (unchanged)
+backend/src/indicators/types/deltaCVDTypes.ts 1ms (unchanged)
+backend/src/indicators/types/exhaustionTypes.ts 1ms (unchanged)
+backend/src/indicators/utils/volumeAnalyzer.ts 4ms (unchanged)
+backend/src/infrastructure/apiConnectivityMonitor.ts 7ms (unchanged)
+backend/src/infrastructure/circuitBreaker.ts 3ms (unchanged)
+backend/src/infrastructure/circuitBreakerInterface.ts 0ms (unchanged)
+backend/src/infrastructure/db.ts 1ms (unchanged)
+backend/src/infrastructure/loggerInterface.ts 1ms (unchanged)
+backend/src/infrastructure/metricsCollector.ts 15ms (unchanged)
+backend/src/infrastructure/metricsCollectorInterface.ts 2ms (unchanged)
+backend/src/infrastructure/migrate.ts 1ms (unchanged)
+backend/src/infrastructure/pipelineStorage.ts 20ms (unchanged)
+backend/src/infrastructure/rateLimiter.ts 2ms (unchanged)
+backend/src/infrastructure/recoveryManager.ts 4ms (unchanged)
+backend/src/infrastructure/signalLoggerInterface.ts 1ms (unchanged)
+backend/src/infrastructure/sqliteUtils.ts 1ms (unchanged)
+backend/src/infrastructure/storageHealthMonitor.ts 6ms (unchanged)
+backend/src/infrastructure/storageResourceManager.ts 8ms (unchanged)
+backend/src/infrastructure/typeGuards.ts 4ms (unchanged)
+backend/src/market/helpers/redBlackTree.ts 14ms (unchanged)
+backend/src/market/orderBookState.ts 14ms (unchanged)
+backend/src/market/orderFlowPreprocessor.ts 26ms (unchanged)
+backend/src/market/processors/orderBookProcessor.ts 10ms (unchanged)
+backend/src/market/processors/tradesProcessor.ts 17ms (unchanged)
+backend/src/market/redBlackTreeOrderBook.ts 8ms (unchanged)
+backend/src/multithreading/shared/messageSchemas.ts 4ms (unchanged)
+backend/src/multithreading/shared/workerCircuitBreakerProxy.ts 3ms (unchanged)
+backend/src/multithreading/shared/workerInterfaces.ts 1ms (unchanged)
+backend/src/multithreading/shared/workerMessageRouter.ts 3ms (unchanged)
+backend/src/multithreading/shared/workerMetricsProxy.ts 6ms (unchanged)
+backend/src/multithreading/shared/workerProxylogger.ts 2ms (unchanged)
+backend/src/multithreading/shared/workerRateLimiterProxy.ts 3ms (unchanged)
+backend/src/multithreading/shared/workerWebSocketAdapter.ts 1ms (unchanged)
+backend/src/multithreading/shared/workerWebSocketManager.ts 4ms (unchanged)
+backend/src/multithreading/storage.ts 11ms (unchanged)
+backend/src/multithreading/threadManager.ts 15ms (unchanged)
+backend/src/multithreading/workerLogger.ts 1ms (unchanged)
+backend/src/multithreading/workers/binanceWorker.ts 6ms (unchanged)
+backend/src/multithreading/workers/communicationWorker.ts 14ms (unchanged)
+backend/src/multithreading/workers/loggerWorker.ts 4ms (unchanged)
+backend/src/multithreading/workers/storageWorker.ts 5ms (unchanged)
+backend/src/multithreading/workerSignalLogger.ts 1ms (unchanged)
+backend/src/orderFlowDashBoard.ts 29ms (unchanged)
+backend/src/services/absorptionABTestManager.ts 5ms (unchanged)
+backend/src/services/anomalyDetector.ts 15ms (unchanged)
+backend/src/services/hiddenOrderDetector.ts 8ms (unchanged)
+backend/src/services/icebergDetector.ts 9ms (unchanged)
+backend/src/services/index.ts 0ms (unchanged)
+backend/src/services/llmSignalAnalyzer.ts 1ms (unchanged)
+backend/src/services/marketDataStorageService.ts 4ms (unchanged)
+backend/src/services/signalCoordinator.ts 13ms (unchanged)
+backend/src/services/spoofingDetector.ts 19ms (unchanged)
+backend/src/storage/marketDataCollector.ts 2ms (unchanged)
+backend/src/trading/dataStreamManager.ts 11ms (unchanged)
+backend/src/trading/signalManager.ts 32ms (unchanged)
+backend/src/trading/zoneManager.ts 15ms (unchanged)
+backend/src/types/binanceTypes.ts 1ms (unchanged)
+backend/src/types/calculatedValuesTypes.ts 1ms (unchanged)
+backend/src/types/configTypes.ts 0ms (unchanged)
+backend/src/types/marketEvents.ts 2ms (unchanged)
+backend/src/types/signalTypes.ts 5ms (unchanged)
+backend/src/types/zoneTypes.ts 3ms (unchanged)
+backend/src/utils/adaptiveZoneCalculator.ts 1ms (unchanged)
+backend/src/utils/automaticParameterOptimizer.ts 14ms (unchanged)
+backend/src/utils/binance.ts 7ms (unchanged)
+backend/src/utils/calculations.ts 2ms (unchanged)
+backend/src/utils/circularBuffer.ts 2ms (unchanged)
+backend/src/utils/configurationValidator.ts 3ms (unchanged)
+backend/src/utils/configValidator.ts 3ms (unchanged)
+backend/src/utils/detectorFactory.ts 11ms (unchanged)
+backend/src/utils/detectorStub.ts 1ms (unchanged)
+backend/src/utils/errorHandler.ts 3ms (unchanged)
+backend/src/utils/ewma.ts 1ms (unchanged)
+backend/src/utils/financialMath.ts 6ms (unchanged)
+backend/src/utils/index.ts 0ms (unchanged)
+backend/src/utils/interfaces.ts 1ms (unchanged)
+backend/src/utils/objectPool.ts 7ms (unchanged)
+backend/src/utils/passiveVolumeTracker.ts 2ms (unchanged)
+backend/src/utils/productionUtils.ts 1ms (unchanged)
+backend/src/utils/retryHandler.ts 5ms (unchanged)
+backend/src/utils/rollingStatsWindow.ts 1ms (unchanged)
+backend/src/utils/rollingWindow.ts 2ms (unchanged)
+backend/src/utils/signalValidationLogger.ts 18ms (unchanged)
+backend/src/utils/timeAwareCache.ts 2ms (unchanged)
+backend/src/utils/traditionalIndicatorLogger.ts 7ms (unchanged)
+backend/src/utils/types.ts 4ms (unchanged)
+backend/src/utils/utils.ts 1ms (unchanged)
+backend/src/websocket/websocketManager.ts 9ms (unchanged)
+backend/test/absorption_detector_performance_config.test.ts 6ms (unchanged)
+backend/test/absorptionDetector_marketRealistic_INSTITUTIONAL_PATCH.ts 11ms (unchanged)
+backend/test/absorptionDetector.test.ts 7ms (unchanged)
+backend/test/absorptionDetectorEnhanced_comprehensive.test.ts 8ms (unchanged)
+backend/test/accumulationZoneDetectorEnhanced_comprehensive.test.ts 7ms (unchanged)
+backend/test/accumulationZoneDetectorEnhanced_realistic.test.ts 12ms (unchanged)
+backend/test/accumulationZoneDetectorEnhanced.test.ts 5ms (unchanged)
+backend/test/alertManager.test.ts 6ms (unchanged)
+backend/test/analysis_failureAnalyzer.test.ts 2ms (unchanged)
+backend/test/analysis_marketContextCollector.test.ts 1ms (unchanged)
+backend/test/analysis_signalTracker.test.ts 1ms (unchanged)
+backend/test/analyze_success_validation.test.ts 5ms (unchanged)
+backend/test/anomaly_event_clone.test.ts 1ms (unchanged)
+backend/test/bug_fixes_comprehensive.test.ts 5ms (unchanged)
+backend/test/buyerIsMakerLogic.test.ts 3ms (unchanged)
+backend/test/circular-reference-fix.test.ts 2ms (unchanged)
+backend/test/communicationWorker.test.ts 6ms (unchanged)
+backend/test/config_usage_audit.test.ts 5ms (unchanged)
+backend/test/core_config_comprehensive.test.ts 7ms (unchanged)
+backend/test/core_config.test.ts 1ms (unchanged)
+backend/test/core_errors.test.ts 1ms (unchanged)
+backend/test/data_individualTradesManager.test.ts 5ms (unchanged)
+backend/test/data_microstructureAnalyzer.test.ts 8ms (unchanged)
+backend/test/debug_simple_accumulation.test.ts 4ms (unchanged)
+backend/test/deltaCVD_parameter_optimization.test.ts 5ms (unchanged)
+backend/test/deltaCVD_zscore_bug_reproduction.test.ts 4ms (unchanged)
+backend/test/deltaCVDConfirmation_divergence.test.ts 11ms (unchanged)
+backend/test/deltaCVDConfirmation_pool.test.ts 4ms (unchanged)
+backend/test/deltaCVDConfirmation_preciseValidation.test.ts 15ms (unchanged)
+backend/test/deltaCVDConfirmation_realWorldScenarios.test.ts 14ms (unchanged)
+backend/test/deltaCVDConfirmation_singleWindow.test.ts 5ms (unchanged)
+backend/test/deltaCVDConfirmation_volumeSurge.test.ts 4ms (unchanged)
+backend/test/deltaCVDDetectorEnhanced_comprehensive.test.ts 6ms (unchanged)
+backend/test/deltaCVDDetectorEnhanced_real_integration.test.ts 11ms (unchanged)
+backend/test/deltaCVDDetectorEnhanced_reset.test.ts 3ms (unchanged)
+backend/test/deltaCVDDetectorEnhanced.test.ts 7ms (unchanged)
+backend/test/detector_threshold_analysis.ts 5ms (unchanged)
+backend/test/detectorPropertyTests.test.ts 9ms (unchanged)
+backend/test/detectors_config_validation.test.ts 15ms (unchanged)
+backend/test/detectors_signal_generation_debug.test.ts 12ms (unchanged)
+backend/test/distributionDetectorEnhanced_comprehensive.test.ts 9ms (unchanged)
+backend/test/distributionDetectorEnhanced_realistic.test.ts 12ms (unchanged)
+backend/test/distributionDetectorEnhanced.test.ts 6ms (unchanged)
+backend/test/exhaustionDetector.test.ts 5ms (unchanged)
+backend/test/financialMathPropertyTests.test.ts 8ms (unchanged)
+backend/test/framework/marketDataReplay.ts 12ms (unchanged)
+backend/test/framework/mathematicalPropertyTesting.ts 9ms (unchanged)
+backend/test/framework/performanceBenchmark.ts 8ms (unchanged)
+backend/test/helpers_absorptionZoneTracker_optimization.test.ts 6ms (unchanged)
+backend/test/helpers_crossDetectorAnalytics.test.ts 8ms (unchanged)
+backend/test/helpers_exhaustionZoneTracker.test.ts 3ms (unchanged)
+backend/test/indicators_detectorUtils.test.ts 2ms (unchanged)
+backend/test/infrastructure_circuitBreaker.test.ts 2ms (unchanged)
+backend/test/infrastructure_db.test.ts 1ms (unchanged)
+backend/test/infrastructure_metricsCollector.test.ts 1ms (unchanged)
+backend/test/infrastructure_migrate.test.ts 1ms (unchanged)
+backend/test/infrastructure_rateLimiter.test.ts 1ms (unchanged)
+backend/test/infrastructure_recoveryManager.test.ts 1ms (unchanged)
+backend/test/infrastructure_sqliteUtils.test.ts 1ms (unchanged)
+backend/test/integration/completeSignalTypeValidation.test.ts 4ms (unchanged)
+backend/test/integration/enhancedDetectorSignalFlow.test.ts 6ms (unchanged)
+backend/test/object-pool-zoneTradeRecord.test.ts 2ms (unchanged)
+backend/test/object-pool.test.ts 3ms (unchanged)
+backend/test/orderbook_bidask_reversal_debug.test.ts 11ms (unchanged)
+backend/test/orderbook_bidask_reversal_final.test.ts 6ms (unchanged)
+backend/test/orderbook_bidask_reversal_reproduction.test.ts 6ms (unchanged)
+backend/test/orderbook_threading_dataflow.test.ts 5ms (unchanged)
+backend/test/orderBookProcessor_binConfiguration.test.ts 3ms (unchanged)
+backend/test/orderBookProcessor_symmetricBinning.test.ts 5ms (unchanged)
+backend/test/orderBookProcessor.test.ts 2ms (unchanged)
+backend/test/orderBookState_comprehensive.test.ts 8ms (unchanged)
+backend/test/orderFlowPreprocessor_comprehensive.test.ts 8ms (unchanged)
+backend/test/orderFlowPreprocessor_exactNumbers.test.ts 6ms (unchanged)
+backend/test/orderFlowPreprocessor_timeWindowedVolume.test.ts 9ms (unchanged)
+backend/test/phase_calculation_validation.test.ts 3ms (unchanged)
+backend/test/redBlackTree_bidAskSeparation.test.ts 2ms (unchanged)
+backend/test/redBlackTree_comprehensive.test.ts 9ms (unchanged)
+backend/test/redBlackTreeOrderBook_crossImplementation.test.ts 8ms (unchanged)
+backend/test/redBlackTreeOrderBook_logicValidation.test.ts 7ms (unchanged)
+backend/test/rolling-window-boundary.test.ts 2ms (unchanged)
+backend/test/serviceDetectorConfigValidation.test.ts 4ms (unchanged)
+backend/test/services_anomalyDetector_microstructure.test.ts 8ms (unchanged)
+backend/test/services_anomalyDetector.test.ts 2ms (unchanged)
+backend/test/services_hiddenOrderDetector.test.ts 10ms (unchanged)
+backend/test/services_icebergDetector.test.ts 5ms (unchanged)
+backend/test/services_llmSignalAnalyzer.test.ts 2ms (unchanged)
+backend/test/services_signalCoordinator.test.ts 2ms (unchanged)
+backend/test/services_spoofingDetector_precision.test.ts 3ms (unchanged)
+backend/test/services_spoofingDetector_realScenarios.test.ts 6ms (unchanged)
+backend/test/services_spoofingDetector_zones.test.ts 7ms (unchanged)
+backend/test/services_spoofingDetector.test.ts 1ms (unchanged)
+backend/test/signal_counting_bug.test.ts 3ms (unchanged)
+backend/test/signal_route_tracing.test.ts 3ms (unchanged)
+backend/test/signalManager_backpressure_circuitBreaker.test.ts 9ms (unchanged)
+backend/test/signalManager_conflictResolution_comprehensive.test.ts 13ms (unchanged)
+backend/test/signalManager_conflictResolution.test.ts 7ms (unchanged)
+backend/test/signalManager_coreProcessing.test.ts 6ms (unchanged)
+backend/test/signalManager_marketContext_integration.test.ts 10ms (unchanged)
+backend/test/signalStandardization.integration.test.ts 4ms (unchanged)
+backend/test/signalValidationLogger_fix.test.ts 1ms (unchanged)
+backend/test/signalValidationLogger.test.ts 6ms (unchanged)
+backend/test/simpleIcebergDetector_realWorld.test.ts 9ms (unchanged)
+backend/test/spoofing_detector_price_normalization.test.ts 5ms (unchanged)
+backend/test/spoofing_numeric_stability.test.ts 4ms (unchanged)
+backend/test/storage_pipelineStorage.test.ts 1ms (unchanged)
+backend/test/storage_storage.test.ts 1ms (unchanged)
+backend/test/threadManager_connectionStatus.test.ts 6ms (unchanged)
+backend/test/threadManager_resource_leaks.test.ts 7ms (unchanged)
+backend/test/thresholdConfiguration.test.ts 5ms (unchanged)
+backend/test/tradesProcessor.test.ts 4ms (unchanged)
+backend/test/trading_dataStreamManager.test.ts 1ms (unchanged)
+backend/test/trading_signalManager.test.ts 3ms (unchanged)
+backend/test/utils_binance.test.ts 1ms (unchanged)
+backend/test/utils_calculations.test.ts 1ms (unchanged)
+backend/test/utils_detectorFactory.test.ts 1ms (unchanged)
+backend/test/utils_financialMath.test.ts 19ms (unchanged)
+backend/test/utils_general.test.ts 3ms (unchanged)
+backend/test/utils_productionUtils.test.ts 1ms (unchanged)
+backend/test/utils_rollingStatsWindow.test.ts 1ms (unchanged)
+backend/test/utils_rollingWindow.test.ts 1ms (unchanged)
+backend/test/utils_slope.test.ts 1ms (unchanged)
+backend/test/vitest.setup.ts 1ms (unchanged)
+backend/test/websocketManager.test.ts 6ms (unchanged)
+backend/test/zoneStandardization_integration.test.ts 6ms (unchanged)
+frontend/src/dashboard/charts.ts 29ms (unchanged)
+frontend/src/dashboard/persistence.d.ts 1ms (unchanged)
+frontend/src/dashboard/render.d.ts 0ms (unchanged)
+frontend/src/dashboard/state.ts 3ms (unchanged)
+frontend/src/dashboard/theme.d.ts 0ms (unchanged)
+frontend/src/dashboard/typeGuards.ts 5ms (unchanged)
+frontend/src/dashboard/types.ts 11ms (unchanged)
+frontend/src/dashboard/ui.d.ts 1ms (unchanged)
+frontend/src/frontend-types.ts 6ms (unchanged)
+frontend/src/main.ts 15ms (unchanged)
+frontend/src/shared-types.ts 1ms (unchanged)
+frontend/src/types.ts 2ms (unchanged)
+frontend/src/websocket.ts 4ms (unchanged)
+public/scripts/shared-types.ts 1ms (unchanged)
+public/scripts/types.ts 2ms (unchanged)
+public/scripts/websocket.ts 3ms (unchanged)
+scripts/analyzeSignalPrediction.ts 9ms (unchanged)
+scripts/analyzeVolumeEfficiency.ts 6ms (unchanged)
+scripts/cleanUnusedVars.ts 2ms (unchanged)
+scripts/runBacktest.ts 8ms (unchanged)
+scripts/runDeltaCVDABTest.ts 4ms (unchanged)
+scripts/setupAbsorptionABTest.ts 3ms (unchanged)
+scripts/simpleEfficiencyAnalysis.ts 5ms (unchanged)
+scripts/validateThresholdConfiguration.ts 3ms (unchanged)
+utils/getAnalysisDate.ts 1ms (unchanged)
+verify_threshold_recommendations.ts 6ms (unchanged)
+vitest.config.ts 1ms (unchanged)
+
+/Users/marcschot/Projects/OrderFlow Trading/frontend/src/dashboard/charts.ts
+   306:19  warning  No magic number: 0.6                                                                  @typescript-eslint/no-magic-numbers
+   306:51  warning  No magic number: 0.4                                                                  @typescript-eslint/no-magic-numbers
+   306:66  warning  No magic number: 0.3                                                                  @typescript-eslint/no-magic-numbers
+   306:72  warning  No magic number: 0.2                                                                  @typescript-eslint/no-magic-numbers
+   320:13  warning  No magic number: 40                                                                   @typescript-eslint/no-magic-numbers
+   322:15  warning  No magic number: 25                                                                   @typescript-eslint/no-magic-numbers
+   350:11  error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+   350:19  error    Unsafe construction of a(n) `any` typed value                                         @typescript-eslint/no-unsafe-call
+   350:34  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   350:39  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   501:5   error    Unsafe return of a value of type `any`                                                @typescript-eslint/no-unsafe-return
+   512:27  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   512:32  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   532:27  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   532:32  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   533:10  error    Unsafe call of a(n) `any` typed value                                                 @typescript-eslint/no-unsafe-call
+   533:21  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   533:26  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   535:9   error    Unsafe call of a(n) `any` typed value                                                 @typescript-eslint/no-unsafe-call
+   535:20  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   535:25  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   535:51  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   535:56  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   539:15  error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+   539:23  error    Unsafe construction of a(n) `any` typed value                                         @typescript-eslint/no-unsafe-call
+   539:38  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   539:43  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   701:21  error    Unsafe argument of type `any` assigned to a parameter of type `ChartInstance | null`  @typescript-eslint/no-unsafe-argument
+   714:9   error    Unsafe return of a value of type `any`                                                @typescript-eslint/no-unsafe-return
+   771:16  warning  No magic number: 70                                                                   @typescript-eslint/no-magic-numbers
+   785:16  warning  No magic number: 70                                                                   @typescript-eslint/no-magic-numbers
+   797:27  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   797:32  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   827:11  error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+   827:34  error    Unsafe construction of a(n) `any` typed value                                         @typescript-eslint/no-unsafe-call
+   827:49  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   827:54  error    Unsafe member access .Chart on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   908:35  error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+   908:63  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   908:68  error    Unsafe member access .label on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   950:68  warning  No magic number: 0.3                                                                  @typescript-eslint/no-magic-numbers
+   958:35  error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+   959:48  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+   959:53  error    Unsafe member access .label on an `any` value                                         @typescript-eslint/no-unsafe-member-access
+   991:34  warning  No magic number: 255                                                                  @typescript-eslint/no-magic-numbers
+   991:39  warning  No magic number: 80                                                                   @typescript-eslint/no-magic-numbers
+   991:43  warning  No magic number: 80                                                                   @typescript-eslint/no-magic-numbers
+   991:50  warning  No magic number: 255                                                                  @typescript-eslint/no-magic-numbers
+   992:34  warning  No magic number: 80                                                                   @typescript-eslint/no-magic-numbers
+   992:38  warning  No magic number: 255                                                                  @typescript-eslint/no-magic-numbers
+   992:43  warning  No magic number: 80                                                                   @typescript-eslint/no-magic-numbers
+   992:53  warning  No magic number: 128                                                                  @typescript-eslint/no-magic-numbers
+  1001:33  warning  No magic number: 2000                                                                 @typescript-eslint/no-magic-numbers
+  1005:30  warning  No magic number: 0.3                                                                  @typescript-eslint/no-magic-numbers
+  1007:49  warning  No magic number: 0.4                                                                  @typescript-eslint/no-magic-numbers
+  1010:49  warning  No magic number: 0.6                                                                  @typescript-eslint/no-magic-numbers
+  1017:60  warning  No magic number: 0.3                                                                  @typescript-eslint/no-magic-numbers
+  1057:47  warning  No magic number: 2000                                                                 @typescript-eslint/no-magic-numbers
+  1061:61  warning  No magic number: 0.3                                                                  @typescript-eslint/no-magic-numbers
+  1069:47  warning  No magic number: 2000                                                                 @typescript-eslint/no-magic-numbers
+  1073:61  warning  No magic number: 0.3                                                                  @typescript-eslint/no-magic-numbers
+  1288:9   error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+  1288:68  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  1289:9   error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+  1289:68  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  1381:36  warning  No magic number: 0.2                                                                  @typescript-eslint/no-magic-numbers
+  1394:49  warning  No magic number: 0.0008                                                               @typescript-eslint/no-magic-numbers
+  1408:61  warning  No magic number: 1.5                                                                  @typescript-eslint/no-magic-numbers
+  1472:5   error    '_tradeTime' is defined but never used                                                @typescript-eslint/no-unused-vars
+  1481:17  warning  No magic number: 0.0008                                                               @typescript-eslint/no-magic-numbers
+  1643:15  error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+  1644:55  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  1645:11  error    Unsafe member access .annotations on an `any` value                                   @typescript-eslint/no-unsafe-member-access
+  1685:15  error    Unsafe assignment of an `any` value                                                   @typescript-eslint/no-unsafe-assignment
+  1686:55  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  1687:11  error    Unsafe member access .annotations on an `any` value                                   @typescript-eslint/no-unsafe-member-access
+  1730:59  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  1730:64  error    Unsafe member access .annotations on an `any` value                                   @typescript-eslint/no-unsafe-member-access
+  1821:48  error    Unexpected any. Specify a different type                                              @typescript-eslint/no-explicit-any
+  1821:53  error    Unsafe member access .annotations on an `any` value                                   @typescript-eslint/no-unsafe-member-access
+  1831:36  warning  No magic number: 0.15                                                                 @typescript-eslint/no-magic-numbers
+  1831:58  warning  No magic number: 0.4                                                                  @typescript-eslint/no-magic-numbers
+
+✖ 82 problems (50 errors, 32 warnings)
+

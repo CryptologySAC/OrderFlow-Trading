@@ -72,6 +72,88 @@ const MAX_LABEL_LENGTH = 250;
 const TRUNCATED_LABEL_LENGTH = 245;
 const PRICE_DEVIATION_THRESHOLD = 0.02;
 
+// Trade opacity constants
+const TRADE_OPACITY_HIGH = 0.6;
+const TRADE_OPACITY_MEDIUM_HIGH = 0.5;
+const TRADE_OPACITY_MEDIUM = 0.4;
+const TRADE_OPACITY_LOW = 0.3;
+const TRADE_OPACITY_MINIMAL = 0.2;
+
+// Trade quantity thresholds
+const TRADE_QUANTITY_HIGH = 500;
+const TRADE_QUANTITY_MEDIUM_HIGH = 200;
+const TRADE_QUANTITY_MEDIUM = 100;
+const TRADE_QUANTITY_LOW = 15;
+
+// Point radius constants
+const POINT_RADIUS_LARGEST = 50;
+const POINT_RADIUS_LARGE = 40;
+const POINT_RADIUS_MEDIUM = 25;
+const POINT_RADIUS_SMALL = 10;
+const POINT_RADIUS_TINY = 5;
+const POINT_RADIUS_MINIMAL = 2;
+
+// RSI threshold constants
+const RSI_OVERBOUGHT = 70;
+const RSI_OVERSOLD = 30;
+
+// Color alpha constants
+const COLOR_ALPHA_FULL = 1;
+const COLOR_ALPHA_LIGHT = 0.1;
+const COLOR_ALPHA_MEDIUM = 0.5;
+const COLOR_ALPHA_STRONG = 0.8;
+const COLOR_ALPHA_MAX = 0.9;
+
+// Volume calculation constants
+const VOLUME_NORMALIZER_DARK = 1500;
+const VOLUME_NORMALIZER_LIGHT = 2000;
+const VOLUME_OPACITY_MIN = 0.3;
+const VOLUME_OPACITY_LOW = 0.4;
+const VOLUME_OPACITY_MEDIUM = 0.6;
+const VOLUME_OPACITY_HIGH = 0.8;
+const VOLUME_OPACITY_MAX = 0.9;
+
+// Depletion ratio thresholds
+const DEPLETION_RATIO_LOW = 0.3;
+const DEPLETION_RATIO_MEDIUM = 0.7;
+
+// Zone calculation constants
+const ZONE_ALPHA_MIN = 0.2;
+const ZONE_ALPHA_MAX = 0.5;
+const ZONE_DURATION_MAX_HOURS = 4;
+const ZONE_DURATION_MAX_MS = ZONE_DURATION_MAX_HOURS * 60 * 60 * 1000;
+const ZONE_BASE_THICKNESS_PERCENT = 0.0008; // 0.08%
+const ZONE_STRENGTH_MULTIPLIER_BASE = 1;
+const ZONE_STRENGTH_MULTIPLIER_MAX = 3;
+const ZONE_TOUCH_MULTIPLIER_MAX = 1;
+const ZONE_TOUCH_COUNT_NORMALIZER = 10;
+const ZONE_ALPHA_MULTIPLIER = 1.5;
+const ZONE_ALPHA_MULTIPLIER_MAX = 0.8;
+
+// Breach threshold constants
+const BREACH_THRESHOLD_MULTIPLIER = 2;
+
+// Cleanup time constants
+const CLEANUP_TIME_HOURS = 2;
+const CLEANUP_TIME_MS = CLEANUP_TIME_HOURS * 60 * 60 * 1000;
+
+// Zone color constants
+const ZONE_ALPHA_MIN_PERCENT = 0.15;
+const ZONE_ALPHA_MAX_PERCENT = 0.4;
+
+// RGB color constants
+const COLOR_RED_FULL = 255;
+const COLOR_RED_MEDIUM = 80;
+const COLOR_RED_LOW = 0;
+const COLOR_GREEN_FULL = 255;
+const COLOR_GREEN_MEDIUM = 128;
+const COLOR_GREEN_LOW = 0;
+const COLOR_BLUE_MEDIUM = 128;
+
+// Order book volume normalizers
+const ORDER_BOOK_VOLUME_NORMALIZER_DARK = 1500;
+const ORDER_BOOK_VOLUME_NORMALIZER_LIGHT = 2000;
+
 // Module-level variables with proper types
 let isSyncing = false;
 let chartUpdateScheduled = false;
@@ -303,7 +385,15 @@ function getTradeBackgroundColor(
     const isBuy: boolean = trade.orderType === "BUY";
     const q: number = trade.quantity || 0;
     const opacity: number =
-        q > 500 ? 0.6 : q > 200 ? 0.5 : q > 100 ? 0.4 : q > 15 ? 0.3 : 0.2;
+        q > TRADE_QUANTITY_HIGH
+            ? TRADE_OPACITY_HIGH
+            : q > TRADE_QUANTITY_MEDIUM_HIGH
+              ? TRADE_OPACITY_MEDIUM_HIGH
+              : q > TRADE_QUANTITY_MEDIUM
+                ? TRADE_OPACITY_MEDIUM
+                : q > TRADE_QUANTITY_LOW
+                  ? TRADE_OPACITY_LOW
+                  : TRADE_OPACITY_MINIMAL;
     return isBuy
         ? `rgba(0, 255, 30, ${opacity})`
         : `rgba(255, 0, 90, ${opacity})`;
@@ -315,16 +405,16 @@ function getTradeBackgroundColor(
 function getTradePointRadius(context: ScriptableContext<"scatter">): number {
     const q: number = context.raw?.quantity || 0;
     return q > 1000
-        ? 50
-        : q > 500
-          ? 40
-          : q > 200
-            ? 25
-            : q > 100
-              ? 10
+        ? POINT_RADIUS_LARGEST
+        : q > TRADE_QUANTITY_HIGH
+          ? POINT_RADIUS_LARGE
+          : q > TRADE_QUANTITY_MEDIUM_HIGH
+            ? POINT_RADIUS_MEDIUM
+            : q > TRADE_QUANTITY_MEDIUM
+              ? POINT_RADIUS_SMALL
               : q > 50
-                ? 5
-                : 2;
+                ? POINT_RADIUS_TINY
+                : POINT_RADIUS_MINIMAL;
 }
 
 /**
@@ -768,8 +858,8 @@ function getRSIColor(context: ScriptableContext<"line">): string {
     if (!data || typeof data.rsi !== "number") return "rgba(102, 102, 102, 1)";
 
     const rsi: number = data.rsi;
-    if (rsi >= 70) return "rgba(255, 0, 0, 1)"; // Red for overbought
-    if (rsi <= 30) return "rgba(0, 255, 0, 1)"; // Green for oversold
+    if (rsi >= RSI_OVERBOUGHT) return "rgba(255, 0, 0, 1)"; // Red for overbought
+    if (rsi <= RSI_OVERSOLD) return "rgba(0, 255, 0, 1)"; // Green for oversold
     return "rgba(102, 102, 102, 1)"; // Gray for neutral
 }
 
@@ -782,8 +872,8 @@ function getRSIBackgroundColor(context: ScriptableContext<"line">): string {
         return "rgba(102, 102, 102, 0.1)";
 
     const rsi: number = data.rsi;
-    if (rsi >= 70) return "rgba(255, 0, 0, 0.1)"; // Light red for overbought
-    if (rsi <= 30) return "rgba(0, 255, 0, 0.1)"; // Light green for oversold
+    if (rsi >= RSI_OVERBOUGHT) return "rgba(255, 0, 0, 0.1)"; // Light red for overbought
+    if (rsi <= RSI_OVERSOLD) return "rgba(0, 255, 0, 0.1)"; // Light green for oversold
     return "rgba(102, 102, 102, 0.1)"; // Light gray for neutral
 }
 
@@ -947,7 +1037,9 @@ export function initializeOrderBookChart(
                                 // Add depletion severity indicator
                                 if (level.depletionRatio >= 0.7) {
                                     tooltipText += " 🔥 HIGH";
-                                } else if (level.depletionRatio >= 0.3) {
+                                } else if (
+                                    level.depletionRatio >= DEPLETION_RATIO_LOW
+                                ) {
                                     tooltipText += " ⚠️ MEDIUM";
                                 }
                             }
@@ -988,8 +1080,14 @@ function getDepletionColor(
 
     // Base colors for ask/bid
     const baseColors: Record<string, [number, number, number]> = {
-        ask: theme === "dark" ? [255, 80, 80] : [255, 0, 0], // Red
-        bid: theme === "dark" ? [80, 255, 80] : [0, 128, 0], // Green
+        ask:
+            theme === "dark"
+                ? [COLOR_RED_FULL, COLOR_RED_MEDIUM, COLOR_RED_MEDIUM]
+                : [COLOR_RED_FULL, COLOR_RED_LOW, COLOR_RED_LOW], // Red
+        bid:
+            theme === "dark"
+                ? [COLOR_RED_MEDIUM, COLOR_GREEN_FULL, COLOR_RED_MEDIUM]
+                : [COLOR_RED_LOW, COLOR_GREEN_MEDIUM, COLOR_RED_LOW], // Green
     };
 
     const [r, g, b]: [number, number, number] = baseColors[side] || [0, 0, 0];
@@ -997,24 +1095,24 @@ function getDepletionColor(
     // Calculate opacity based on volume
     let baseOpacity: number =
         theme === "dark"
-            ? Math.min(volume / 1500, 0.9)
-            : Math.min(volume / 2000, 1);
+            ? Math.min(volume / VOLUME_NORMALIZER_DARK, VOLUME_OPACITY_MAX)
+            : Math.min(volume / VOLUME_NORMALIZER_LIGHT, COLOR_ALPHA_FULL);
 
     // Apply depletion effect only if visualization is enabled
     if (depletionEnabled && depletionRatio > 0) {
-        if (depletionRatio < 0.3) {
+        if (depletionRatio < DEPLETION_RATIO_LOW) {
             // Low depletion - slight color shift
-            baseOpacity = Math.max(baseOpacity, 0.4);
-        } else if (depletionRatio < 0.7) {
+            baseOpacity = Math.max(baseOpacity, VOLUME_OPACITY_LOW);
+        } else if (depletionRatio < DEPLETION_RATIO_MEDIUM) {
             // Medium depletion - moderate intensification
-            baseOpacity = Math.max(baseOpacity, 0.6);
+            baseOpacity = Math.max(baseOpacity, VOLUME_OPACITY_MEDIUM);
         } else {
             // High depletion - strong intensification
-            baseOpacity = Math.max(baseOpacity, 0.8);
+            baseOpacity = Math.max(baseOpacity, VOLUME_OPACITY_HIGH);
         }
     }
 
-    return `rgba(${r}, ${g}, ${b}, ${Math.max(baseOpacity, 0.3)})`;
+    return `rgba(${r}, ${g}, ${b}, ${Math.max(baseOpacity, VOLUME_OPACITY_MIN)})`;
 }
 
 /**
@@ -1026,7 +1124,8 @@ function updateOrderBookBorderColors(theme: string): void {
     const datasets = orderBookChart.data.datasets as ChartDataset[];
     if (!datasets || datasets.length < 2) return;
 
-    const borderOpacity: number = theme === "dark" ? 0.8 : 0.5;
+    const borderOpacity: number =
+        theme === "dark" ? COLOR_ALPHA_STRONG : COLOR_ALPHA_MEDIUM;
 
     // Enhanced border colors for depletion visualization
     datasets[0].borderColor =
@@ -1053,25 +1152,37 @@ export function updateOrderBookBarColors(theme: string): void {
         // Ask colors (red) - enhanced opacity for dark mode
         const askOpacity: number =
             theme === "dark"
-                ? Math.min((level.ask ?? 0) / 1500, 0.9) // Higher max opacity in dark mode
-                : Math.min((level.ask ?? 0) / 2000, 1);
+                ? Math.min(
+                      (level.ask ?? 0) / ORDER_BOOK_VOLUME_NORMALIZER_DARK,
+                      COLOR_ALPHA_MAX
+                  ) // Higher max opacity in dark mode
+                : Math.min(
+                      (level.ask ?? 0) / ORDER_BOOK_VOLUME_NORMALIZER_LIGHT,
+                      COLOR_ALPHA_FULL
+                  );
 
         const askColor: string = level.ask
             ? theme === "dark"
-                ? `rgba(255, 80, 80, ${Math.max(askOpacity, 0.3)})` // Brighter red with min opacity
-                : `rgba(255, 0, 0, ${askOpacity})`
+                ? `rgba(${COLOR_RED_FULL}, ${COLOR_RED_MEDIUM}, ${COLOR_RED_MEDIUM}, ${Math.max(askOpacity, VOLUME_OPACITY_MIN)})` // Brighter red with min opacity
+                : `rgba(${COLOR_RED_FULL}, ${COLOR_RED_LOW}, ${COLOR_RED_LOW}, ${askOpacity})`
             : "rgba(0, 0, 0, 0)";
 
         // Bid colors (green) - enhanced opacity for dark mode
         const bidOpacity: number =
             theme === "dark"
-                ? Math.min((level.bid ?? 0) / 1500, 0.9) // Higher max opacity in dark mode
-                : Math.min((level.bid ?? 0) / 2000, 1);
+                ? Math.min(
+                      (level.bid ?? 0) / ORDER_BOOK_VOLUME_NORMALIZER_DARK,
+                      COLOR_ALPHA_MAX
+                  ) // Higher max opacity in dark mode
+                : Math.min(
+                      (level.bid ?? 0) / ORDER_BOOK_VOLUME_NORMALIZER_LIGHT,
+                      COLOR_ALPHA_FULL
+                  );
 
         const bidColor: string = level.bid
             ? theme === "dark"
-                ? `rgba(80, 255, 80, ${Math.max(bidOpacity, 0.3)})` // Brighter green with min opacity
-                : `rgba(0, 128, 0, ${bidOpacity})`
+                ? `rgba(${COLOR_RED_MEDIUM}, ${COLOR_GREEN_FULL}, ${COLOR_RED_MEDIUM}, ${Math.max(bidOpacity, VOLUME_OPACITY_MIN)})` // Brighter green with min opacity
+                : `rgba(${COLOR_RED_LOW}, ${COLOR_GREEN_MEDIUM}, ${COLOR_RED_LOW}, ${bidOpacity})`
             : "rgba(0, 0, 0, 0)";
 
         // Add ask position
@@ -1378,22 +1489,31 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
     // Determine color based on type and strength
     const isSupport: boolean = level.type === "support";
     const baseColor: string = isSupport ? "34, 197, 94" : "239, 68, 68"; // Green for support, red for resistance
-    const alpha: number = Math.max(0.2, Math.min(0.5, level.strength)); // Opacity based on strength
+    const alpha: number = Math.max(
+        ZONE_ALPHA_MIN,
+        Math.min(ZONE_ALPHA_MAX, level.strength)
+    ); // Opacity based on strength
 
     // Calculate time boundaries for the zone
     const now: number = Date.now();
     const startTime: number = level.firstDetected;
     // Zone is valid until crossed or for a maximum duration
-    const maxValidDuration: number = 4 * 60 * 60 * 1000; // 4 hours maximum
+    const maxValidDuration: number = ZONE_DURATION_MAX_MS; // 4 hours maximum
     const endTime: number = Math.min(
         now + maxValidDuration,
         level.lastTouched + maxValidDuration
     );
 
     // Create price tolerance for zone height - make it proportional to strength and touch count
-    const baseThickness: number = level.price * 0.0008; // 0.08% base thickness
-    const strengthMultiplier: number = 1 + level.strength * 2; // 1x to 3x based on strength
-    const touchMultiplier: number = 1 + Math.min(level.touchCount / 10, 1); // Additional thickness for more touches
+    const baseThickness: number = level.price * ZONE_BASE_THICKNESS_PERCENT; // 0.08% base thickness
+    const strengthMultiplier: number =
+        ZONE_STRENGTH_MULTIPLIER_BASE + level.strength * 2; // 1x to 3x based on strength
+    const touchMultiplier: number =
+        ZONE_STRENGTH_MULTIPLIER_BASE +
+        Math.min(
+            level.touchCount / ZONE_TOUCH_COUNT_NORMALIZER,
+            ZONE_TOUCH_MULTIPLIER_MAX
+        ); // Additional thickness for more touches
     const zoneHeight: number =
         baseThickness * strengthMultiplier * touchMultiplier;
 
@@ -1405,7 +1525,7 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         yMin: level.price - zoneHeight / 2,
         yMax: level.price + zoneHeight / 2,
         backgroundColor: `rgba(${baseColor}, ${alpha})`,
-        borderColor: `rgba(${baseColor}, ${Math.min(alpha * 1.5, 0.8)})`,
+        borderColor: `rgba(${baseColor}, ${Math.min(alpha * ZONE_ALPHA_MULTIPLIER, ZONE_ALPHA_MULTIPLIER_MAX)})`,
         borderWidth: 1,
         drawTime: "beforeDatasetsDraw",
         z: 1,
@@ -1425,7 +1545,7 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         xValue: startTime,
         yValue: level.price,
         content: `${isSupport ? "SUPPORT" : "RESISTANCE"} ${level.price.toFixed(2)}`,
-        backgroundColor: `rgba(${baseColor}, 0.9)`,
+        backgroundColor: `rgba(${baseColor}, ${COLOR_ALPHA_MAX})`,
         color: "white",
         font: {
             size: 9,
@@ -1478,10 +1598,15 @@ export function checkSupportResistanceBreaches(
             // Calculate breach threshold - zone is breached if price moves significantly beyond it
             const zoneHeight: number =
                 level.price *
-                0.0008 *
-                (1 + level.strength * 2) *
-                (1 + Math.min(level.touchCount / 10, 1));
-            const breachThreshold: number = zoneHeight * 2; // Breach if price moves 2x zone height beyond level
+                ZONE_BASE_THICKNESS_PERCENT *
+                (ZONE_STRENGTH_MULTIPLIER_BASE + level.strength * 2) *
+                (ZONE_STRENGTH_MULTIPLIER_BASE +
+                    Math.min(
+                        level.touchCount / ZONE_TOUCH_COUNT_NORMALIZER,
+                        ZONE_TOUCH_MULTIPLIER_MAX
+                    ));
+            const breachThreshold: number =
+                zoneHeight * BREACH_THRESHOLD_MULTIPLIER; // Breach if price moves 2x zone height beyond level
 
             let isBreached: boolean = false;
 
@@ -1514,7 +1639,7 @@ export function checkSupportResistanceBreaches(
  * Clean up old support/resistance levels based on time
  */
 export function cleanupOldSupportResistanceLevels(): void {
-    const cutoffTime: number = Date.now() - 2 * 60 * 60 * 1000; // 2 hours
+    const cutoffTime: number = Date.now() - CLEANUP_TIME_MS; // 2 hours
 
     supportResistanceLevels = supportResistanceLevels.filter(
         (level: SupportResistanceLevel) => {
@@ -1828,7 +1953,10 @@ function addZoneToChart(zone: ZoneData): void {
  * Get zone background color based on type and strength
  */
 function getZoneColor(zone: ZoneData): string {
-    const alpha: number = Math.max(0.15, zone.strength * 0.4); // Min 15%, max 40% opacity
+    const alpha: number = Math.max(
+        ZONE_ALPHA_MIN_PERCENT,
+        zone.strength * ZONE_ALPHA_MAX_PERCENT
+    ); // Min 15%, max 40% opacity
 
     switch (zone.type) {
         case "accumulation":
