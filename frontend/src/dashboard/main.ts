@@ -867,7 +867,6 @@ function handleMessage(message: WebSocketMessage): void {
             break;
 
         case "stats":
-            //console.log("Stats received:", message.data);
             break;
 
         case "connection_status":
