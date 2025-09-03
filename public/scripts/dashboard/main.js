@@ -605,11 +605,7 @@ function handleMessage(message) {
             const errorData = message.data;
             console.error("WebSocket error:", errorData.message);
             break;
-        case "test":
-            console.log("Test message received:", message.data);
-            break;
         case "stats":
-            console.log("Stats received:", message.data);
             break;
         case "connection_status":
             console.log("Connection status:", message.data);

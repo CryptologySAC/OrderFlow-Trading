@@ -331,7 +331,7 @@ function initialize(): void {
                 if (rangeSelector) {
                     rangeSelector
                         .querySelectorAll("button")
-                        .forEach((btn) => btn.classList.remove("active"));
+                        .forEach((btn: HTMLButtonElement) => btn.classList.remove("active"));
                 }
                 target.classList.add("active");
                 setRange(
@@ -862,12 +862,8 @@ function handleMessage(message: WebSocketMessage): void {
             console.error("WebSocket error:", errorData.message);
             break;
 
-        case "test":
-            console.log("Test message received:", message.data);
-            break;
-
         case "stats":
-            console.log("Stats received:", message.data);
+            //console.log("Stats received:", message.data);
             break;
 
         case "connection_status":
@@ -1104,7 +1100,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const cutoffTime = Date.now() - TRADE_RETENTION_MINUTES * 60 * 1000;
             const originalLength = trades.length;
             let tradesToRemoveCount = trades.findIndex(
-                (t) => (t as { x: number }).x >= cutoffTime
+                (t: ChartDataPoint) => (t as { x: number }).x >= cutoffTime
             );
             if (tradesToRemoveCount === -1 && originalLength > 0) {
                 tradesToRemoveCount = originalLength;

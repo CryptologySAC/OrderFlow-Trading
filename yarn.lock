@@ -492,6 +492,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@kurkle/color@npm:^0.3.0":
+  version: 0.3.4
+  resolution: "@kurkle/color@npm:0.3.4"
+  checksum: 10c0/0e9fd55c614b005c5f0c4c755bca19ec0293bc7513b4ea3ec1725234f9c2fa81afbc78156baf555c8b9cb0d305619253c3f5bca016067daeebb3d00ebb4ea683
+  languageName: node
+  linkType: hard
+
 "@nodelib/fs.scandir@npm:2.1.5":
   version: 2.1.5
   resolution: "@nodelib/fs.scandir@npm:2.1.5"
@@ -751,6 +758,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/chart.js@npm:^4.0.1":
+  version: 4.0.1
+  resolution: "@types/chart.js@npm:4.0.1"
+  dependencies:
+    chart.js: "npm:*"
+  checksum: 10c0/bd2df86ce1eea2dfcd29123eccef3b0a257c2ab2d5e24674a859b60133453b808fe32b4c924f2de793e8975ef3525416e79ba5f9d35862e4e064678d0afd2d42
+  languageName: node
+  linkType: hard
+
 "@types/connect@npm:*":
   version: 3.4.38
   resolution: "@types/connect@npm:3.4.38"
@@ -794,6 +810,13 @@ __metadata:
     "@types/express-serve-static-core": "npm:^5.0.0"
     "@types/serve-static": "npm:*"
   checksum: 10c0/f0fbc8daa7f40070b103cf4d020ff1dd08503477d866d1134b87c0390bba71d5d7949cb8b4e719a81ccba89294d8e1573414e6dcbb5bb1d097a7b820928ebdef
+  languageName: node
+  linkType: hard
+
+"@types/hammerjs@npm:^2.0.45":
+  version: 2.0.46
+  resolution: "@types/hammerjs@npm:2.0.46"
+  checksum: 10c0/f3c1cb20dc2f0523f7b8c76065078544d50d8ae9b0edc1f62fed657210ed814266ff2dfa835d2c157a075991001eec3b64c88bf92e3e6e895c0db78d05711d06
   languageName: node
   linkType: hard
 
@@ -1576,6 +1599,46 @@ __metadata:
   languageName: node
   linkType: hard
 
+"chart.js@npm:*, chart.js@npm:^4.5.0":
+  version: 4.5.0
+  resolution: "chart.js@npm:4.5.0"
+  dependencies:
+    "@kurkle/color": "npm:^0.3.0"
+  checksum: 10c0/f12c7f9a238ee7ce6d3f7111628e9daba86bb8ff8e54cfe63525fde6ded9003c72c4c8d2c7d5702539dc0aff7e682dfec058660ade8d03a970da002656d4ac91
+  languageName: node
+  linkType: hard
+
+"chartjs-adapter-date-fns@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "chartjs-adapter-date-fns@npm:3.0.0"
+  peerDependencies:
+    chart.js: ">=2.8.0"
+    date-fns: ">=2.0.0"
+  checksum: 10c0/bc785632da9e6253a969c84f5d382e39944246de8410285f060d6715b3ed681cee80142bb2c410329b4c21094efc6d54f9c289200463dce865f736a01a76de4b
+  languageName: node
+  linkType: hard
+
+"chartjs-plugin-annotation@npm:^3.1.0":
+  version: 3.1.0
+  resolution: "chartjs-plugin-annotation@npm:3.1.0"
+  peerDependencies:
+    chart.js: ">=4.0.0"
+  checksum: 10c0/5494a008a013888b122ac6754c1314e100b6368f55110f08401e3cbdb5969b372ece9569ed3b166b8fbad8c2dc84f15795602079613e2f5f65f787a0931bd676
+  languageName: node
+  linkType: hard
+
+"chartjs-plugin-zoom@npm:^2.2.0":
+  version: 2.2.0
+  resolution: "chartjs-plugin-zoom@npm:2.2.0"
+  dependencies:
+    "@types/hammerjs": "npm:^2.0.45"
+    hammerjs: "npm:^2.0.8"
+  peerDependencies:
+    chart.js: ">=3.2.0"
+  checksum: 10c0/15817e912dcc0c62e66121d10c7f1af04cd788c8c831b9ed8f822e2835501b8816143e10b5b4f286a9afddc91492c3d7104b49e7226a3fb682b94412f9ee4087
+  languageName: node
+  linkType: hard
+
 "check-error@npm:^2.1.1":
   version: 2.1.1
   resolution: "check-error@npm:2.1.1"
@@ -1739,6 +1802,13 @@ __metadata:
     shebang-command: "npm:^2.0.0"
     which: "npm:^2.0.1"
   checksum: 10c0/053ea8b2135caff68a9e81470e845613e374e7309a47731e81639de3eaeb90c3d01af0e0b44d2ab9d50b43467223b88567dfeb3262db942dc063b9976718ffc1
+  languageName: node
+  linkType: hard
+
+"date-fns@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "date-fns@npm:4.1.0"
+  checksum: 10c0/b79ff32830e6b7faa009590af6ae0fb8c3fd9ffad46d930548fbb5acf473773b4712ae887e156ba91a7b3dc30591ce0f517d69fd83bd9c38650fdc03b4e0bac8
   languageName: node
   linkType: hard
 
@@ -2688,6 +2758,13 @@ __metadata:
   version: 1.4.0
   resolution: "graphemer@npm:1.4.0"
   checksum: 10c0/e951259d8cd2e0d196c72ec711add7115d42eb9a8146c8eeda5b8d3ac91e5dd816b9cd68920726d9fd4490368e7ed86e9c423f40db87e2d8dfafa00fa17c3a31
+  languageName: node
+  linkType: hard
+
+"hammerjs@npm:^2.0.8":
+  version: 2.0.8
+  resolution: "hammerjs@npm:2.0.8"
+  checksum: 10c0/5c95e5774b5ea49492cb3fa8f1949aea67048a0b84af33acb555e7139abfcf3c83aca2b83e0c5008755bc230166df7b5e469d1e3eb6746c48f215f3672609fed
   languageName: node
   linkType: hard
 
@@ -3743,6 +3820,7 @@ __metadata:
     "@binance/common": "npm:^1.2.3"
     "@binance/spot": "npm:^13.0.1"
     "@types/better-sqlite3": "npm:7.6.13"
+    "@types/chart.js": "npm:^4.0.1"
     "@types/express": "npm:^5.0.3"
     "@types/node": "npm:^24.2.0"
     "@types/ws": "npm:^8.18.1"
@@ -3751,7 +3829,12 @@ __metadata:
     "@vitest/coverage-v8": "npm:^3.2.4"
     async-mutex: "npm:^0.5.0"
     better-sqlite3: "npm:^12.2.0"
+    chart.js: "npm:^4.5.0"
+    chartjs-adapter-date-fns: "npm:^3.0.0"
+    chartjs-plugin-annotation: "npm:^3.1.0"
+    chartjs-plugin-zoom: "npm:^2.2.0"
     cross-env: "npm:^10.0.0"
+    date-fns: "npm:^4.1.0"
     decimal.js: "npm:^10.6.0"
     dotenv: "npm:^17.2.1"
     eslint: "npm:^9.32.0"

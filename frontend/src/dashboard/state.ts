@@ -231,53 +231,84 @@ export function setRuntimeConfig(
 // =============================================================================
 
 /**
- * Safely merges two configuration objects with circular reference protection
+ * Safely merges two configuration objects with circular reference protection.
+ * This version uses a more robust circular reference detection method.
  */
 function safeConfigMerge(
     target: RuntimeConfig,
     source: RuntimeConfig
 ): RuntimeConfig {
-    const visited = new WeakMap<object, boolean>();
-
-    function isCircular(obj: unknown): boolean {
-        if (obj && typeof obj === "object") {
-            if (visited.has(obj as object)) {
-                return true;
-            }
-            visited.set(obj as object, true);
-        }
-        return false;
-    }
-
-    function safeClone(obj: unknown, depth = 0, maxDepth = 10): unknown {
-        if (depth > maxDepth) {
-            console.warn("Max depth reached during config cloning");
-            return {};
-        }
-
-        if (!obj || typeof obj !== "object" || isCircular(obj)) {
+    const safeClone = (obj: unknown, visited = new WeakSet()): unknown => {
+        if (obj === null || typeof obj !== "object") {
             return obj;
         }
 
-        if (Array.isArray(obj)) {
-            return obj.map((item) => safeClone(item, depth + 1, maxDepth));
+        if (visited.has(obj)) {
+            // Return a placeholder for circular references
+            return "[Circular]";
         }
 
-        const result: Record<string, unknown> = {};
+        visited.add(obj);
+
+        if (Array.isArray(obj)) {
+            const newArr: unknown[] = [];
+            for (const item of obj) {
+                newArr.push(safeClone(item, visited));
+            }
+            visited.delete(obj);
+            return newArr;
+        }
+
+        const newObj: Record<string, unknown> = {};
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                result[key] = safeClone(
+                newObj[key] = safeClone(
                     (obj as Record<string, unknown>)[key],
-                    depth + 1,
-                    maxDepth
+                    visited
                 );
             }
         }
-        return result;
-    }
+
+        visited.delete(obj);
+        return newObj;
+    };
 
     const clonedTarget = safeClone(target) as Record<string, unknown>;
     const clonedSource = safeClone(source) as Record<string, unknown>;
 
-    return { ...clonedTarget, ...clonedSource } as RuntimeConfig;
+    // Perform a deep merge
+    const deepMerge = (
+        targetObj: Record<string, any>,
+        sourceObj: Record<string, any>
+    ): Record<string, any> => {
+        const output = { ...targetObj };
+        if (
+            typeof targetObj === "object" &&
+            targetObj !== null &&
+            typeof sourceObj === "object" &&
+            sourceObj !== null
+        ) {
+            Object.keys(sourceObj).forEach((key) => {
+                if (
+                    typeof sourceObj[key] === "object" &&
+                    sourceObj[key] !== null &&
+                    !Array.isArray(sourceObj[key])
+                ) {
+                    if (!(key in targetObj)) {
+                        Object.assign(output, { [key]: sourceObj[key] });
+                    } else {
+                        output[key] = deepMerge(
+                            targetObj[key],
+                            sourceObj[key]
+                        );
+                    }
+                } else {
+                    Object.assign(output, { [key]: sourceObj[key] });
+                }
+            });
+        }
+        return output;
+    };
+
+    return deepMerge(clonedTarget, clonedSource) as RuntimeConfig;
 }

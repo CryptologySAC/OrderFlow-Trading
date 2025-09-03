@@ -38,21 +38,12 @@ import type {
     ChartDataset,
 } from "../frontend-types.js";
 
-// Chart.js type declarations
-declare global {
-    interface Window {
-        Chart: {
-            new (ctx: CanvasRenderingContext2D, config: unknown): ChartInstance;
-            Annotation?: unknown;
-            register?(plugin: unknown): void;
-            registry?: {
-                plugins?: {
-                    get?(name: string): unknown;
-                };
-            };
-        };
-    }
-}
+import { Chart, registerables, ScriptableContext, TooltipItem } from 'chart.js';
+import 'chartjs-adapter-date-fns';
+import annotationPlugin from 'chartjs-plugin-annotation';
+import zoomPlugin from 'chartjs-plugin-zoom';
+
+Chart.register(...registerables, annotationPlugin, zoomPlugin);
 
 // Define zone types locally
 type ZoneUpdateType =
@@ -63,25 +54,6 @@ type ZoneUpdateType =
     | "zone_completed"
     | "zone_invalidated";
 type ZoneSignalType = "completion" | "invalidation" | "consumption";
-
-// Chart.js specific types for contexts and tooltips
-interface TooltipItem<T extends "line" | "bar" | "scatter"> {
-    raw: T extends "scatter"
-        ? ChartDataPoint
-        : T extends "line"
-          ? RSIDataPoint
-          : unknown;
-    label?: string;
-}
-
-interface ScriptableContext<T extends "line" | "bar" | "scatter"> {
-    raw: T extends "scatter"
-        ? ChartDataPoint
-        : T extends "line"
-          ? RSIDataPoint
-          : unknown;
-    chart: ChartInstance;
-}
 
 // Magic number constants
 const PADDING_PERCENTAGE = 0.05;
@@ -390,9 +362,9 @@ export function isValidTrade(trade: unknown): trade is Trade {
  * Gets the background color for a trade based on type and quantity.
  */
 function getTradeBackgroundColor(
-    context: ScriptableContext<"scatter">
+    context: ScriptableContext<"scatter", ChartDataPoint>
 ): string {
-    const trade = context.raw;
+    const trade = context.raw as ChartDataPoint;
     if (!trade) return "rgba(0, 0, 0, 0)";
 
     const isBuy: boolean = trade.orderType === "BUY";
@@ -415,8 +387,8 @@ function getTradeBackgroundColor(
 /**
  * Gets the point radius for a trade based on quantity.
  */
-function getTradePointRadius(context: ScriptableContext<"scatter">): number {
-    const q: number = context.raw?.quantity || 0;
+function getTradePointRadius(context: ScriptableContext<"scatter", ChartDataPoint>): number {
+    const q: number = (context.raw as ChartDataPoint)?.quantity || 0;
     return q > 1000
         ? POINT_RADIUS_LARGEST
         : q > TRADE_QUANTITY_HIGH
@@ -450,7 +422,7 @@ export function initializeTradesChart(
         initialMax = now + PADDING_TIME;
     }
 
-    const chart = new window.Chart(ctx, {
+    const chart = new Chart(ctx, {
         type: "scatter",
         data: {
             datasets: [
@@ -498,7 +470,7 @@ export function initializeTradesChart(
                 tooltip: {
                     callbacks: {
                         label: (context: TooltipItem<"scatter">) => {
-                            const t = context.raw;
+                            const t = context.raw as ChartDataPoint;
                             return t
                                 ? `Price: ${t.y.toFixed(2)}, Qty: ${t.quantity}, Type: ${t.orderType}`
                                 : "";
@@ -518,8 +490,8 @@ export function initializeTradesChart(
                                 display: true,
                                 content: (ctx: ScriptableContext<"scatter">) =>
                                     (
-                                        ctx.chart.options.plugins?.annotation
-                                            ?.annotations?.["lastPriceLine"]
+                                        (ctx.chart.options.plugins?.annotation
+                                            ?.annotations?.lastPriceLine as any)
                                             ?.yMin as number
                                     )?.toFixed(2) || "",
                                 position: "end",
@@ -537,11 +509,7 @@ export function initializeTradesChart(
                     pan: {
                         enabled: true,
                         mode: "x",
-                        onPanComplete: ({
-                            chart,
-                        }: {
-                            chart: ChartInstance;
-                        }) => {
+                        onPanComplete: ({ chart }: { chart: Chart }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
@@ -568,11 +536,7 @@ export function initializeTradesChart(
                             enabled: true,
                         },
                         mode: "x",
-                        onZoomComplete: ({
-                            chart,
-                        }: {
-                            chart: ChartInstance;
-                        }) => {
+                        onZoomComplete: ({ chart }: { chart: Chart }) => {
                             if (isSyncing) return;
                             isSyncing = true;
                             if (rsiChart) {
@@ -616,7 +580,7 @@ export function initializeRSIChart(
 ): ChartInstance | null {
     if (rsiChart) return rsiChart;
 
-    if (typeof window.Chart === "undefined") {
+    if (typeof Chart === "undefined") {
         console.error("Chart.js not loaded - cannot initialize RSI chart");
         throw new Error("Chart.js is not loaded");
     }
@@ -635,15 +599,10 @@ export function initializeRSIChart(
         initialMax = now + PADDING_TIME;
     }
 
-    if (
-        typeof window.Chart.Annotation !== "undefined" &&
-        !window.Chart.registry?.plugins?.get?.("annotation")
-    ) {
-        window.Chart.register?.(window.Chart.Annotation);
-    }
+    
 
     try {
-        const chart = new window.Chart(ctx, {
+        const chart = new Chart(ctx, {
             type: "line",
             data: {
                 datasets: [
@@ -697,7 +656,7 @@ export function initializeRSIChart(
                     tooltip: {
                         callbacks: {
                             label: (context: TooltipItem<"line">) => {
-                                const data = context.raw;
+                                const data = context.raw as RSIDataPoint;
                                 return data
                                     ? `RSI: ${data.rsi.toFixed(1)}`
                                     : "";
@@ -748,11 +707,7 @@ export function initializeRSIChart(
                         pan: {
                             enabled: true,
                             mode: "x",
-                            onPanComplete: ({
-                                chart,
-                            }: {
-                                chart: ChartInstance;
-                            }) => {
+                            onPanComplete: ({ chart }: { chart: Chart }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
@@ -780,11 +735,7 @@ export function initializeRSIChart(
                                 enabled: true,
                             },
                             mode: "x",
-                            onZoomComplete: ({
-                                chart,
-                            }: {
-                                chart: ChartInstance;
-                            }) => {
+                            onZoomComplete: ({ chart }: { chart: Chart }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
                                 if (tradesChart) {
@@ -905,7 +856,7 @@ export function initializeOrderBookChart(
     ctx: CanvasRenderingContext2D
 ): ChartInstance | null {
     if (orderBookChart) return orderBookChart;
-    if (typeof window.Chart === "undefined") {
+    if (typeof Chart === "undefined") {
         throw new Error("Chart.js is not loaded");
     }
 

@@ -116,36 +116,56 @@ export function setRuntimeConfig(config) {
     }
 }
 function safeConfigMerge(target, source) {
-    const visited = new WeakMap();
-    function isCircular(obj) {
-        if (obj && typeof obj === "object") {
-            if (visited.has(obj)) {
-                return true;
-            }
-            visited.set(obj, true);
-        }
-        return false;
-    }
-    function safeClone(obj, depth = 0, maxDepth = 10) {
-        if (depth > maxDepth) {
-            console.warn("Max depth reached during config cloning");
-            return {};
-        }
-        if (!obj || typeof obj !== "object" || isCircular(obj)) {
+    const safeClone = (obj, visited = new WeakSet()) => {
+        if (obj === null || typeof obj !== "object") {
             return obj;
         }
-        if (Array.isArray(obj)) {
-            return obj.map((item) => safeClone(item, depth + 1, maxDepth));
+        if (visited.has(obj)) {
+            return "[Circular]";
         }
-        const result = {};
+        visited.add(obj);
+        if (Array.isArray(obj)) {
+            const newArr = [];
+            for (const item of obj) {
+                newArr.push(safeClone(item, visited));
+            }
+            visited.delete(obj);
+            return newArr;
+        }
+        const newObj = {};
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                result[key] = safeClone(obj[key], depth + 1, maxDepth);
+                newObj[key] = safeClone(obj[key], visited);
             }
         }
-        return result;
-    }
+        visited.delete(obj);
+        return newObj;
+    };
     const clonedTarget = safeClone(target);
     const clonedSource = safeClone(source);
-    return { ...clonedTarget, ...clonedSource };
+    const deepMerge = (targetObj, sourceObj) => {
+        const output = { ...targetObj };
+        if (typeof targetObj === "object" &&
+            targetObj !== null &&
+            typeof sourceObj === "object" &&
+            sourceObj !== null) {
+            Object.keys(sourceObj).forEach((key) => {
+                if (typeof sourceObj[key] === "object" &&
+                    sourceObj[key] !== null &&
+                    !Array.isArray(sourceObj[key])) {
+                    if (!(key in targetObj)) {
+                        Object.assign(output, { [key]: sourceObj[key] });
+                    }
+                    else {
+                        output[key] = deepMerge(targetObj[key], sourceObj[key]);
+                    }
+                }
+                else {
+                    Object.assign(output, { [key]: sourceObj[key] });
+                }
+            });
+        }
+        return output;
+    };
+    return deepMerge(clonedTarget, clonedSource);
 }
