@@ -178,9 +178,9 @@ export function scheduleOrderBookUpdate(): void {
 export function updateYAxisBounds(): void {
     if (!tradesChart || trades.length === 0) return;
 
-    const chartOptions = tradesChart.options as ChartOptions;
-    const xMin: number = chartOptions.scales.x.min as number;
-    const xMax: number = chartOptions.scales.x.max as number;
+const chartOptions = tradesChart.options as any;
+    const xMin: number = chartOptions.scales?.['x']?.min as number;
+    const xMax: number = chartOptions.scales?.['x']?.max as number;
 
     // PERFORMANCE OPTIMIZATION: Use single pass through trades array
     // Instead of filter + map + spread, do everything in one loop
@@ -222,7 +222,7 @@ export function updateTimeAnnotations(
     activeRange: number
 ): void {
     if (!tradesChart) return;
-    const chartOptions = tradesChart.options as ChartOptions;
+const chartOptions = tradesChart.options as any;
     const annotations = chartOptions.plugins?.annotation?.annotations;
     if (!annotations) return;
 
@@ -362,7 +362,7 @@ export function isValidTrade(trade: unknown): trade is Trade {
  * Gets the background color for a trade based on type and quantity.
  */
 function getTradeBackgroundColor(
-    context: ScriptableContext<"scatter", ChartDataPoint>
+    context: ScriptableContext<any>
 ): string {
     const trade = context.raw as ChartDataPoint;
     if (!trade) return "rgba(0, 0, 0, 0)";
@@ -387,7 +387,7 @@ function getTradeBackgroundColor(
 /**
  * Gets the point radius for a trade based on quantity.
  */
-function getTradePointRadius(context: ScriptableContext<"scatter", ChartDataPoint>): number {
+function getTradePointRadius(context: ScriptableContext<any>): number {
     const q: number = (context.raw as ChartDataPoint)?.quantity || 0;
     return q > 1000
         ? POINT_RADIUS_LARGEST
@@ -432,7 +432,6 @@ export function initializeTradesChart(
                     data: trades,
                     backgroundColor: getTradeBackgroundColor,
                     pointRadius: getTradePointRadius,
-                    hoverRadius: getTradePointRadius,
                 },
             ],
         },
@@ -453,7 +452,6 @@ export function initializeTradesChart(
                     grid: {
                         display: true,
                         color: "rgba(102, 102, 102, 0.1)",
-                        ticks: { source: "auto" },
                     },
                 },
                 y: {
@@ -488,7 +486,7 @@ export function initializeTradesChart(
                             drawTime: "afterDatasetsDraw",
                             label: {
                                 display: true,
-                                content: (ctx: ScriptableContext<"scatter">) =>
+                                content: (ctx: any) =>
                                     (
                                         (ctx.chart.options.plugins?.annotation
                                             ?.annotations?.lastPriceLine as any)
@@ -517,11 +515,11 @@ export function initializeTradesChart(
                                     rsiChart.options as ChartOptions;
                                 const chartOptions =
                                     chart.options as ChartOptions;
-                                rsiChartOptions.scales.x.min =
-                                    chartOptions.scales.x.min ??
+                                rsiChartOptions.scales?.['x']?.min =
+                                    chartOptions.scales?.['x']?.min ??
                                     Date.now() - 90 * 60000;
-                                rsiChartOptions.scales.x.max =
-                                    chartOptions.scales.x.max ??
+                                rsiChartOptions.scales?.['x']?.max =
+                                    chartOptions.scales?.['x']?.max ??
                                     Date.now() + PADDING_TIME;
                                 rsiChart.update("none");
                             }
@@ -544,10 +542,10 @@ export function initializeTradesChart(
                                     rsiChart.options.scales?.x &&
                                     chart.options.scales?.x
                                 ) {
-                                    rsiChart.options.scales.x.min =
-                                        chart.options.scales.x.min ??
+                        (rsiChart.options as any).scales.x.min =
+                                        (chart.options.scales as any).x.min ??
                                         Date.now() - 90 * 60000;
-                                    rsiChart.options.scales.x.max =
+                        (rsiChart.options as any).scales.x.max =
                                         chart.options.scales.x.max ??
                                         Date.now() + PADDING_TIME;
                                     rsiChart.update("none");
@@ -561,7 +559,7 @@ export function initializeTradesChart(
         },
     });
 
-    setTradesChart(chart as ChartInstance);
+    setTradesChart(chart as any);
 
     // Initialize time annotations for specific time ranges
     if (activeRange !== null) {
@@ -615,7 +613,6 @@ export function initializeRSIChart(
                         borderWidth: 2,
                         fill: false,
                         pointRadius: 0,
-                        hoverRadius: 4,
                         tension: 0.1,
                     },
                 ],
@@ -713,12 +710,12 @@ export function initializeRSIChart(
                                 if (tradesChart) {
                                     if (
                                         tradesChart.options.scales?.x &&
-                                        chart.options.scales?.x
+                                        chart.options.scales?["x"]
                                     ) {
-                                        tradesChart.options.scales.x.min =
-                                            chart.options.scales.x.min ??
+        (tradesChart.options as any).scales.x.min =
+                                            (chart.options.scales as any).x.min ??
                                             Date.now() - 90 * 60000;
-                                        tradesChart.options.scales.x.max =
+        (tradesChart.options as any).scales.x.max =
                                             chart.options.scales.x.max ??
                                             Date.now() + PADDING_TIME;
                                         tradesChart.update("none");
@@ -741,13 +738,13 @@ export function initializeRSIChart(
                                 if (tradesChart) {
                                     if (
                                         tradesChart.options.scales?.x &&
-                                        chart.options.scales?.x
+                                        chart.options.scales?["x"]
                                     ) {
-                                        tradesChart.options.scales.x.min =
-                                            chart.options.scales.x.min ??
+        (tradesChart.options as any).scales.x.min =
+                                            chart.options.scales["x"].min ??
                                             Date.now() - 90 * 60000;
-                                        tradesChart.options.scales.x.max =
-                                            chart.options.scales.x.max ??
+        (tradesChart.options as any).scales.x.max =
+                                            chart.options.scales["x"]["max"] ??
                                             Date.now() + PADDING_TIME;
                                         tradesChart.update("none");
                                     }
@@ -760,7 +757,7 @@ export function initializeRSIChart(
             },
         });
 
-        setRsiChart(chart);
+    setRsiChart(chart as any);
 
         // Initialize time annotations
         if (activeRange !== null) {
@@ -826,7 +823,7 @@ export function safeUpdateRSIChart(rsiData: RSIDataPoint[]): boolean {
  * Gets the color for RSI line based on current value
  */
 function getRSIColor(context: ScriptableContext<"line">): string {
-    const data = context.raw;
+    const data = context.raw as RSIDataPoint;
     if (!data || typeof data.rsi !== "number") return "rgba(102, 102, 102, 1)";
 
     const rsi: number = data.rsi;
@@ -839,7 +836,7 @@ function getRSIColor(context: ScriptableContext<"line">): string {
  * Gets the background color for RSI chart area
  */
 function getRSIBackgroundColor(context: ScriptableContext<"line">): string {
-    const data = context.raw;
+    const data = context.raw as RSIDataPoint;
     if (!data || typeof data.rsi !== "number")
         return "rgba(102, 102, 102, 0.1)";
 
@@ -886,7 +883,7 @@ export function initializeOrderBookChart(
         bidColors.push("rgba(0, 128, 0, 0.5)"); // Placeholder, will be updated by theme
     });
 
-    const chart: ChartInstance = new window.Chart(ctx, {
+    const chart: ChartInstance = new Chart(ctx, {
         type: "bar",
         data: {
             labels: labels,
@@ -1028,7 +1025,7 @@ export function initializeOrderBookChart(
             },
         },
     });
-    setOrderBookChart(chart);
+    setOrderBookChart(chart as any as ChartInstance);
     return chart;
 }
 
