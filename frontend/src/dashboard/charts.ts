@@ -206,12 +206,15 @@ const chartOptions = tradesChart.options as any;
     if (visibleCount === 0) return;
 
     const padding: number = (yMax - yMin) * PADDING_PERCENTAGE;
-    const tradesChartOptions = tradesChart.options as ChartOptions;
-    const yScale = tradesChartOptions.scales.y;
+    const tradesChartOptions: ChartOptions = tradesChart.options as ChartOptions;
+    if(tradesChartOptions === undefined) {
+        throw new Error("tradesChartOptions is undefined");
+    }
+    const yScale = tradesChartOptions!.scales!.y;
     yScale.suggestedMin = yMin - padding;
     yScale.suggestedMax = yMax + padding;
-    delete yScale.min;
-    delete yScale.max;
+    yScale.min = 0;
+    yScale.max = 0;
 }
 
 /**
@@ -264,7 +267,7 @@ export function updateRSITimeAnnotations(
     if (!annotations) return;
 
     // Create a completely new annotations object to avoid circular references
-    const newAnnotations: Record<string, ChartAnnotation> = {};
+    const newAnnotations: any = {};
 
     // Preserve existing overbought/oversold lines with deep copies
     if (annotations["overboughtLine"]) {
@@ -297,7 +300,7 @@ export function updateRSITimeAnnotations(
 
     // Replace the entire annotations object
     if (rsiChart.options.plugins?.annotation) {
-        rsiChart.options.plugins.annotation.annotations = newAnnotations;
+        rsiChart.options.plugins.annotation.annotations = newAnnotations as any;
     }
 }
 
@@ -515,10 +518,13 @@ export function initializeTradesChart(
                                     rsiChart.options as ChartOptions;
                                 const chartOptions =
                                     chart.options as ChartOptions;
-                                rsiChartOptions.scales['x'].min =
+                                if (rsiChartOptions === undefined) {
+                                    throw new Error("rsiChartOptions is undefined.")
+                                }
+                                rsiChartOptions!.scales!['x'].min =
                                     chartOptions.scales?.['x']?.min ??
                                     Date.now() - 90 * 60000;
-                                rsiChartOptions.scales['x'].max =
+                                rsiChartOptions!.scales!['x'].max =
                                     chartOptions.scales?.['x']?.max ??
                                     Date.now() + PADDING_TIME;
                                 rsiChart.update("none");
@@ -707,22 +713,22 @@ export function initializeRSIChart(
                             onPanComplete: ({ chart }: { chart: Chart }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
+
                                 if (tradesChart) {
-                                    if (
-                                        tradesChart.options.scales?.x &&
-                                        chart.options.scales?["x"]
-                                    ) {
-        (tradesChart.options as any).scales.x.min =
-                                            (chart.options.scales as any).x.min ??
-                                            Date.now() - 90 * 60000;
-        (tradesChart.options as any).scales.x.max =
-                                            chart.options.scales.x.max ??
-                                            Date.now() + PADDING_TIME;
+                                    if (tradesChart.options.scales?.x && chart.options.scales?.x) {
+                                        tradesChart.options.scales.x!.min =
+                                            chart.options.scales.x!.min ?? Date.now() - 90 * 60000;
+
+                                        tradesChart.options.scales.x!.max =
+                                            chart.options.scales.x!.max ?? Date.now() + PADDING_TIME;
+
                                         tradesChart.update("none");
                                     }
                                 }
+
                                 isSyncing = false;
                             },
+
                         },
                         zoom: {
                             wheel: {
@@ -735,22 +741,22 @@ export function initializeRSIChart(
                             onZoomComplete: ({ chart }: { chart: Chart }) => {
                                 if (isSyncing) return;
                                 isSyncing = true;
+
                                 if (tradesChart) {
-                                    if (
-                                        tradesChart.options.scales?.x &&
-                                        chart.options.scales?["x"]
-                                    ) {
-        (tradesChart.options as any).scales.x.min =
-                                            chart.options.scales["x"].min ??
-                                            Date.now() - 90 * 60000;
-        (tradesChart.options as any).scales.x.max =
-                                            chart.options.scales["x"]["max"] ??
-                                            Date.now() + PADDING_TIME;
+                                    if (tradesChart.options.scales?.x && chart.options.scales?.x) {
+                                        tradesChart.options.scales.x!.min =
+                                            chart.options.scales.x!.min ?? Date.now() - 90 * 60000;
+
+                                        tradesChart.options.scales.x!.max =
+                                            chart.options.scales.x!.max ?? Date.now() + PADDING_TIME;
+
                                         tradesChart.update("none");
                                     }
                                 }
+
                                 isSyncing = false;
                             },
+
                         },
                     },
                 },
@@ -1395,8 +1401,11 @@ export function addAnomalyChartLabel(anomaly: Anomaly): void {
         tradesChart.options.plugins.annotation = { annotations: {} };
     }
     const annotations = tradesChart.options.plugins.annotation.annotations;
+    if (annotations === undefined) {
+        throw new Error("annotations is undefined.");
+    }
 
-    annotations[`anomaly.${now}`] = {
+    (annotations as any)[`anomaly.${now}`] = {
         type: "label",
         xValue: anomaly.timestamp ?? anomaly.detectedAt ?? now,
         yValue: anomaly.price ?? 0,
@@ -1461,6 +1470,9 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         tradesChart.options.plugins.annotation = { annotations: {} };
     }
     const annotations = tradesChart.options.plugins.annotation.annotations;
+    if(annotations === undefined) {
+        throw new Error("annotations is undefined.");
+    }
     const levelId: string = `sr_level_${level.id}`;
 
     // Determine color based on type and strength
@@ -1513,11 +1525,11 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         annotation.borderDash = [5, 5];
     }
 
-    annotations[levelId] = annotation;
+    (annotations as any)[levelId] = annotation as any;
 
     // Add a label for the level - positioned at the start of the zone
     const labelId: string = `sr_label_${level.id}`;
-    annotations[labelId] = {
+    (annotations as any)[labelId] = {
         type: "label",
         xValue: startTime,
         yValue: level.price,
@@ -1555,8 +1567,8 @@ function removeSupportResistanceLevel(levelId: string): void {
     const barId: string = `sr_level_${levelId}`;
     const labelId: string = `sr_label_${levelId}`;
 
-    delete annotations[barId];
-    delete annotations[labelId];
+    delete (annotations as any)[barId];
+    delete (annotations as any)[labelId];
 
     tradesChart.update("none");
 }
