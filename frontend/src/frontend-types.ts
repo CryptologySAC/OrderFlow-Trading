@@ -1,3 +1,9 @@
+// Chart.js v4 Type Augmentation
+import type { Chart as ChartJS } from "chart.js";
+
+// Extend Chart.js types for our use case
+export type ChartInstance = ChartJS;
+
 // Frontend Type Definitions for TypeScript Conversion
 // This file contains all type definitions needed for the frontend JavaScript to TypeScript conversion
 
@@ -109,17 +115,6 @@ export interface ChartConfiguration {
         datasets: ChartDataset[];
     };
     options: ChartOptions;
-}
-
-// Chart.js instance type (simplified)
-export interface ChartInstance {
-    data: {
-        datasets: ChartDataset[];
-    };
-    options: ChartOptions;
-    update(mode?: string): void;
-    resize(): void;
-    destroy(): void;
 }
 
 // =============================================================================

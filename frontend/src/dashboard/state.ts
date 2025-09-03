@@ -297,10 +297,7 @@ function safeConfigMerge(
                     if (!(key in targetObj)) {
                         Object.assign(output, { [key]: sourceObj[key] });
                     } else {
-                        output[key] = deepMerge(
-                            targetObj[key],
-                            sourceObj[key]
-                        );
+                        output[key] = deepMerge(targetObj[key], sourceObj[key]);
                     }
                 } else {
                     Object.assign(output, { [key]: sourceObj[key] });

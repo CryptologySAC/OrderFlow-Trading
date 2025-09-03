@@ -515,10 +515,10 @@ export function initializeTradesChart(
                                     rsiChart.options as ChartOptions;
                                 const chartOptions =
                                     chart.options as ChartOptions;
-                                rsiChartOptions.scales?.['x']?.min =
+                                rsiChartOptions.scales['x'].min =
                                     chartOptions.scales?.['x']?.min ??
                                     Date.now() - 90 * 60000;
-                                rsiChartOptions.scales?.['x']?.max =
+                                rsiChartOptions.scales['x'].max =
                                     chartOptions.scales?.['x']?.max ??
                                     Date.now() + PADDING_TIME;
                                 rsiChart.update("none");

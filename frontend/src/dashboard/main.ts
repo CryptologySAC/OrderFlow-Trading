@@ -215,20 +215,22 @@ function updateUnifiedTimeRange(latestTime: number): void {
             tradesChart &&
             (tradesChart as ChartInstance).options &&
             (tradesChart as ChartInstance).options.scales &&
-            (tradesChart as ChartInstance).options.scales.x
+            (tradesChart as any).options.scales.x
         ) {
-            (tradesChart as ChartInstance).options.scales.x.min = unifiedMin;
-            (tradesChart as ChartInstance).options.scales.x.max = unifiedMax;
+            (tradesChart as ChartInstance).options!.scales!["x"]!.min =
+                unifiedMin;
+            (tradesChart as ChartInstance).options!.scales!["x"]!.max =
+                unifiedMax;
             updateTimeAnnotations(latestTime, activeRange);
         }
         if (
             rsiChart &&
             (rsiChart as ChartInstance).options &&
             (rsiChart as ChartInstance).options.scales &&
-            (rsiChart as ChartInstance).options.scales.x
+            (rsiChart as any).options.scales.x
         ) {
-            (rsiChart as ChartInstance).options.scales.x.min = unifiedMin;
-            (rsiChart as ChartInstance).options.scales.x.max = unifiedMax;
+            (rsiChart as ChartInstance).options!.scales!["x"]!.min = unifiedMin;
+            (rsiChart as ChartInstance).options!.scales!["x"]!.max = unifiedMax;
             updateRSITimeAnnotations(latestTime, activeRange);
         }
     }
@@ -331,7 +333,9 @@ function initialize(): void {
                 if (rangeSelector) {
                     rangeSelector
                         .querySelectorAll("button")
-                        .forEach((btn: HTMLButtonElement) => btn.classList.remove("active"));
+                        .forEach((btn: HTMLButtonElement) =>
+                            btn.classList.remove("active")
+                        );
                 }
                 target.classList.add("active");
                 setRange(
@@ -478,8 +482,8 @@ function handleMessage(message: WebSocketMessage): void {
                     const chartInstance = tradesChart as ChartInstance;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = (plugins as any).annotation;
+                    const annotations = (annotation as any).annotations;
                     if (annotations) {
                         const line = annotations[
                             "lastPriceLine"
@@ -509,8 +513,8 @@ function handleMessage(message: WebSocketMessage): void {
                         const chartInstance = tradesChart as ChartInstance;
                         const chartOptions = chartInstance.options;
                         const plugins = chartOptions.plugins;
-                        const annotation = plugins?.annotation;
-                        const annotations = annotation?.annotations;
+                        const annotation = (plugins as any).annotation;
+                        const annotations = (annotation as any).annotations;
                         if (annotations) {
                             annotations[signalId] = {
                                 type: "label",
@@ -613,8 +617,8 @@ function handleMessage(message: WebSocketMessage): void {
                     const chartInstance = tradesChart as ChartInstance;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = (plugins as any).annotation;
+                    const annotations = (annotation as any).annotations;
                     if (annotations) {
                         const line = annotations[
                             "lastPriceLine"
@@ -646,8 +650,8 @@ function handleMessage(message: WebSocketMessage): void {
                     const chartInstance = tradesChart as ChartInstance;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = (plugins as any).annotation;
+                    const annotations = (annotation as any).annotations;
                     if (annotations) {
                         annotations[id] = {
                             type: "label",
@@ -693,8 +697,8 @@ function handleMessage(message: WebSocketMessage): void {
                         const chartInstance = tradesChart as ChartInstance;
                         const chartOptions = chartInstance.options;
                         const plugins = chartOptions.plugins;
-                        const annotation = plugins?.annotation;
-                        const annotations = annotation?.annotations;
+                        const annotation = (plugins as any).annotation;
+                        const annotations = (annotation as any).annotations;
                         if (annotations) {
                             annotations[signal.id] = {
                                 type: "label",
@@ -932,8 +936,8 @@ const tradeWebsocket = new TradeWebSocket({
                     const chartInstance = tradesChart as ChartInstance;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = (plugins as any).annotation;
+                    const annotations = (annotation as any).annotations;
                     if (annotations) {
                         const line = annotations[
                             "lastPriceLine"
@@ -1024,8 +1028,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         const chartInstance = tradesChart as ChartInstance;
                         const chartOptions = chartInstance.options;
                         const plugins = chartOptions.plugins;
-                        const annotation = plugins?.annotation;
-                        const annotations = annotation?.annotations;
+                        const annotation = (plugins as any).annotation;
+                        const annotations = (annotation as any).annotations;
                         if (annotations) {
                             Object.keys(annotations).forEach((key) => {
                                 if (
@@ -1064,8 +1068,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         const chartInstance = tradesChart as ChartInstance;
                         const chartOptions = chartInstance.options;
                         const plugins = chartOptions.plugins;
-                        const annotation = plugins?.annotation;
-                        const annotations = annotation?.annotations;
+                        const annotation = (plugins as any).annotation;
+                        const annotations = (annotation as any).annotations;
                         if (annotations) {
                             Object.keys(annotations).forEach((key) => {
                                 if (key !== "lastPriceLine") {
