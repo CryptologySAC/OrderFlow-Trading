@@ -88,16 +88,18 @@ function updateUnifiedTimeRange(latestTime) {
             tradesChart.options &&
             tradesChart.options.scales &&
             tradesChart.options.scales.x) {
-            tradesChart.options.scales.x.min = unifiedMin;
-            tradesChart.options.scales.x.max = unifiedMax;
+            tradesChart.options.scales["x"].min =
+                unifiedMin;
+            tradesChart.options.scales["x"].max =
+                unifiedMax;
             updateTimeAnnotations(latestTime, activeRange);
         }
         if (rsiChart &&
             rsiChart.options &&
             rsiChart.options.scales &&
             rsiChart.options.scales.x) {
-            rsiChart.options.scales.x.min = unifiedMin;
-            rsiChart.options.scales.x.max = unifiedMax;
+            rsiChart.options.scales["x"].min = unifiedMin;
+            rsiChart.options.scales["x"].max = unifiedMax;
             updateRSITimeAnnotations(latestTime, activeRange);
         }
     }
@@ -265,8 +267,8 @@ function handleMessage(message) {
                     const chartInstance = tradesChart;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = plugins.annotation;
+                    const annotations = annotation.annotations;
                     if (annotations) {
                         const line = annotations["lastPriceLine"];
                         if (line) {
@@ -293,8 +295,8 @@ function handleMessage(message) {
                         const chartInstance = tradesChart;
                         const chartOptions = chartInstance.options;
                         const plugins = chartOptions.plugins;
-                        const annotation = plugins?.annotation;
-                        const annotations = annotation?.annotations;
+                        const annotation = plugins.annotation;
+                        const annotations = annotation.annotations;
                         if (annotations) {
                             annotations[signalId] = {
                                 type: "label",
@@ -373,8 +375,8 @@ function handleMessage(message) {
                     const chartInstance = tradesChart;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = plugins.annotation;
+                    const annotations = annotation.annotations;
                     if (annotations) {
                         const line = annotations["lastPriceLine"];
                         if (line) {
@@ -403,8 +405,8 @@ function handleMessage(message) {
                     const chartInstance = tradesChart;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = plugins.annotation;
+                    const annotations = annotation.annotations;
                     if (annotations) {
                         annotations[id] = {
                             type: "label",
@@ -450,8 +452,8 @@ function handleMessage(message) {
                         const chartInstance = tradesChart;
                         const chartOptions = chartInstance.options;
                         const plugins = chartOptions.plugins;
-                        const annotation = plugins?.annotation;
-                        const annotations = annotation?.annotations;
+                        const annotation = plugins.annotation;
+                        const annotations = annotation.annotations;
                         if (annotations) {
                             annotations[signal.id] = {
                                 type: "label",
@@ -649,8 +651,8 @@ const tradeWebsocket = new TradeWebSocket({
                     const chartInstance = tradesChart;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = plugins.annotation;
+                    const annotations = annotation.annotations;
                     if (annotations) {
                         const line = annotations["lastPriceLine"];
                         if (line) {
@@ -727,8 +729,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     const chartInstance = tradesChart;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = plugins.annotation;
+                    const annotations = annotation.annotations;
                     if (annotations) {
                         Object.keys(annotations).forEach((key) => {
                             if (key !== signalId &&
@@ -753,8 +755,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     const chartInstance = tradesChart;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
-                    const annotation = plugins?.annotation;
-                    const annotations = annotation?.annotations;
+                    const annotation = plugins.annotation;
+                    const annotations = annotation.annotations;
                     if (annotations) {
                         Object.keys(annotations).forEach((key) => {
                             if (key !== "lastPriceLine") {

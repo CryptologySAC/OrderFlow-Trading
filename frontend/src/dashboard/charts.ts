@@ -38,10 +38,12 @@ import type {
     ChartDataset,
 } from "../frontend-types.js";
 
-import { Chart, registerables, ScriptableContext, TooltipItem } from 'chart.js';
-import 'chartjs-adapter-date-fns';
-import annotationPlugin from 'chartjs-plugin-annotation';
-import zoomPlugin from 'chartjs-plugin-zoom';
+import { Chart, registerables, ScriptableContext, TooltipItem } from "chart.js";
+import "chartjs-adapter-date-fns";
+import annotationPlugin from "chartjs-plugin-annotation";
+//import type { AnnotationOptions } from "chartjs-plugin-annotation";
+
+import zoomPlugin from "chartjs-plugin-zoom";
 
 Chart.register(...registerables, annotationPlugin, zoomPlugin);
 
@@ -178,9 +180,9 @@ export function scheduleOrderBookUpdate(): void {
 export function updateYAxisBounds(): void {
     if (!tradesChart || trades.length === 0) return;
 
-const chartOptions = tradesChart.options as any;
-    const xMin: number = chartOptions.scales?.['x']?.min as number;
-    const xMax: number = chartOptions.scales?.['x']?.max as number;
+    const chartOptions = tradesChart.options as any;
+    const xMin: number = chartOptions.scales?.["x"]?.min as number;
+    const xMax: number = chartOptions.scales?.["x"]?.max as number;
 
     // PERFORMANCE OPTIMIZATION: Use single pass through trades array
     // Instead of filter + map + spread, do everything in one loop
@@ -206,11 +208,12 @@ const chartOptions = tradesChart.options as any;
     if (visibleCount === 0) return;
 
     const padding: number = (yMax - yMin) * PADDING_PERCENTAGE;
-    const tradesChartOptions: ChartOptions = tradesChart.options as ChartOptions;
-    if(tradesChartOptions === undefined) {
-        throw new Error("tradesChartOptions is undefined");
+    const tradesChartOptions: ChartOptions =
+        tradesChart.options as ChartOptions;
+    if (tradesChartOptions === undefined ||tradesChartOptions.scales === undefined || tradesChartOptions.scales["y"] === undefined) {
+        throw new Error("tradesChartOptions(.scales.y) is undefined");
     }
-    const yScale = tradesChartOptions!.scales!.y;
+    const yScale = tradesChartOptions.scales["y"];
     yScale.suggestedMin = yMin - padding;
     yScale.suggestedMax = yMax + padding;
     yScale.min = 0;
@@ -225,7 +228,7 @@ export function updateTimeAnnotations(
     activeRange: number
 ): void {
     if (!tradesChart) return;
-const chartOptions = tradesChart.options as any;
+    const chartOptions = tradesChart.options as any;
     const annotations = chartOptions.plugins?.annotation?.annotations;
     if (!annotations) return;
 
@@ -364,9 +367,7 @@ export function isValidTrade(trade: unknown): trade is Trade {
 /**
  * Gets the background color for a trade based on type and quantity.
  */
-function getTradeBackgroundColor(
-    context: ScriptableContext<any>
-): string {
+function getTradeBackgroundColor(context: ScriptableContext<any>): string {
     const trade = context.raw as ChartDataPoint;
     if (!trade) return "rgba(0, 0, 0, 0)";
 
@@ -491,9 +492,11 @@ export function initializeTradesChart(
                                 display: true,
                                 content: (ctx: any) =>
                                     (
-                                        (ctx.chart.options.plugins?.annotation
-                                            ?.annotations?.lastPriceLine as any)
-                                            ?.yMin as number
+                                        (
+                                            ctx.chart.options.plugins
+                                                ?.annotation?.annotations
+                                                ?.lastPriceLine as any
+                                        )?.yMin as number
                                     )?.toFixed(2) || "",
                                 position: "end",
                                 xAdjust: -2,
@@ -519,15 +522,19 @@ export function initializeTradesChart(
                                 const chartOptions =
                                     chart.options as ChartOptions;
                                 if (rsiChartOptions === undefined) {
-                                    throw new Error("rsiChartOptions is undefined.")
+                                    throw new Error(
+                                        "rsiChartOptions is undefined."
+                                    );
                                 }
-                                rsiChartOptions!.scales!['x'].min =
-                                    chartOptions.scales?.['x']?.min ??
-                                    Date.now() - 90 * 60000;
-                                rsiChartOptions!.scales!['x'].max =
-                                    chartOptions.scales?.['x']?.max ??
-                                    Date.now() + PADDING_TIME;
-                                rsiChart.update("none");
+                                if (rsiChartOptions.scales && rsiChartOptions.scales["x"]) {
+                                    rsiChartOptions.scales["x"].min =
+                                        chartOptions.scales?.["x"]?.min ??
+                                        Date.now() - 90 * 60000;
+                                    rsiChartOptions.scales["x"].max =
+                                        chartOptions.scales?.["x"]?.max ??
+                                        Date.now() + PADDING_TIME;
+                                    rsiChart.update("none");
+                                }
                             }
                             isSyncing = false;
                         },
@@ -543,16 +550,20 @@ export function initializeTradesChart(
                         onZoomComplete: ({ chart }: { chart: Chart }) => {
                             if (isSyncing) return;
                             isSyncing = true;
-                            if (rsiChart) {
+                            if (rsiChart && chart) {
                                 if (
-                                    rsiChart.options.scales?.x &&
-                                    chart.options.scales?.x
+                                    rsiChart.options &&
+                                    rsiChart.options.scales &&
+                                    chart.options &&
+                                    chart.options.scales &&
+                                    rsiChart.options.scales["x"] &&
+                                    chart.options.scales["x"]
                                 ) {
-                        (rsiChart.options as any).scales.x.min =
+                                    (rsiChart.options as any).scales.x.min =
                                         (chart.options.scales as any).x.min ??
                                         Date.now() - 90 * 60000;
-                        (rsiChart.options as any).scales.x.max =
-                                        chart.options.scales.x.max ??
+                                    (rsiChart.options as any).scales.x.max =
+                                        chart.options.scales["x"].max ??
                                         Date.now() + PADDING_TIME;
                                     rsiChart.update("none");
                                 }
@@ -602,8 +613,6 @@ export function initializeRSIChart(
         initialMin = now - 90 * 60000; // 90 minutes ago
         initialMax = now + PADDING_TIME;
     }
-
-    
 
     try {
         const chart = new Chart(ctx, {
@@ -714,13 +723,24 @@ export function initializeRSIChart(
                                 if (isSyncing) return;
                                 isSyncing = true;
 
-                                if (tradesChart) {
-                                    if (tradesChart.options.scales?.x && chart.options.scales?.x) {
-                                        tradesChart.options.scales.x!.min =
-                                            chart.options.scales.x!.min ?? Date.now() - 90 * 60000;
+                                if (
+                                    tradesChart &&
+                                    tradesChart.options &&
+                                    tradesChart.options.scales &&
+                                    chart.options &&
+                                    chart.options.scales
+                                ) {
+                                    if (
+                                        tradesChart.options.scales["x"] &&
+                                        chart.options.scales["x"]
+                                    ) {
+                                        tradesChart.options.scales["x"].min =
+                                            chart.options.scales["x"].min ??
+                                            Date.now() - 90 * 60000;
 
-                                        tradesChart.options.scales.x!.max =
-                                            chart.options.scales.x!.max ?? Date.now() + PADDING_TIME;
+                                        tradesChart.options.scales["x"].max =
+                                            chart.options.scales["x"].max ??
+                                            Date.now() + PADDING_TIME;
 
                                         tradesChart.update("none");
                                     }
@@ -728,7 +748,6 @@ export function initializeRSIChart(
 
                                 isSyncing = false;
                             },
-
                         },
                         zoom: {
                             wheel: {
@@ -742,13 +761,24 @@ export function initializeRSIChart(
                                 if (isSyncing) return;
                                 isSyncing = true;
 
-                                if (tradesChart) {
-                                    if (tradesChart.options.scales?.x && chart.options.scales?.x) {
-                                        tradesChart.options.scales.x!.min =
-                                            chart.options.scales.x!.min ?? Date.now() - 90 * 60000;
+                                if (
+                                    tradesChart &&
+                                    tradesChart.options &&
+                                    tradesChart.options.scales &&
+                                    chart.options &&
+                                    chart.options.scales
+                                ) {
+                                    if (
+                                        tradesChart.options.scales["x"] &&
+                                        chart.options.scales["x"]
+                                    ) {
+                                        tradesChart.options.scales["x"]!.min =
+                                            chart.options.scales["x"]!.min ??
+                                            Date.now() - 90 * 60000;
 
-                                        tradesChart.options.scales.x!.max =
-                                            chart.options.scales.x!.max ?? Date.now() + PADDING_TIME;
+                                        tradesChart.options.scales["x"]!.max =
+                                            chart.options.scales["x"]!.max ??
+                                            Date.now() + PADDING_TIME;
 
                                         tradesChart.update("none");
                                     }
@@ -756,14 +786,13 @@ export function initializeRSIChart(
 
                                 isSyncing = false;
                             },
-
                         },
                     },
                 },
             },
         });
 
-    setRsiChart(chart as any);
+        setRsiChart(chart as any);
 
         // Initialize time annotations
         if (activeRange !== null) {
@@ -1470,7 +1499,7 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         tradesChart.options.plugins.annotation = { annotations: {} };
     }
     const annotations = tradesChart.options.plugins.annotation.annotations;
-    if(annotations === undefined) {
+    if (annotations === undefined) {
         throw new Error("annotations is undefined.");
     }
     const levelId: string = `sr_level_${level.id}`;

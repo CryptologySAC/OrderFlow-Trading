@@ -1,5 +1,10 @@
 // Chart.js v4 Type Augmentation
-import type { Chart as ChartJS, ChartOptions as ChartJSOptions, ScaleOptionsByType, CartesianScaleTypeRegistry } from "chart.js";
+import type {
+    Chart as ChartJS,
+    ChartOptions as ChartJSOptions,
+    ScaleOptionsByType,
+    CartesianScaleTypeRegistry,
+} from "chart.js";
 
 // Extend Chart.js types for our use case
 export type ChartInstance = ChartJS;
@@ -88,7 +93,7 @@ export interface ChartOptions extends ChartJSOptions {
     };
     plugins?: {
         annotation?: any; // Use any for Chart.js plugin compatibility
-    } & ChartJSOptions['plugins'];
+    } & ChartJSOptions["plugins"];
 }
 
 export interface ChartDataset {
