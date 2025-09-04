@@ -12,7 +12,6 @@ import {
 } from "./state.js";
 import { saveColumnWidths, saveTimeRange } from "./persistence.js";
 import { updateRSITimeAnnotations } from "./charts.js";
-import {updateTimeAnnotations, updateYAxisBounds } from "./tradeChart.js";
 
 function snap(value) {
     return Math.round(value / GRID_SIZE) * GRID_SIZE;
@@ -163,7 +162,6 @@ export function setRange(duration, tradeChart, rsiChart) {
             tradeChart.options.scales.x.min = minTime;
             tradeChart.options.scales.x.max = maxTime;
             updateYAxisBounds();
-            updateTimeAnnotations(now, duration);
             //tradeChart.update();
         }
 

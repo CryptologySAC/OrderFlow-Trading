@@ -3,14 +3,29 @@ import "chartjs-adapter-date-fns";
 Chart.register(...registerables);
 import { tradesCanvas, orderBookCanvas, rsiCanvas, anomalyFilters, signalFilters, trades, activeRange, PADDING_TIME, } from "./state.js";
 import { initializeOrderBookChart, cleanupOldSupportResistanceLevels, cleanupOldZones, } from "./charts.js";
-import { initializeTradesChart, createTrade, processTradeBacklog, isValidTradeData, updateYAxisBounds, updateTimeAnnotations, } from "./tradeChart.js";
+import { TradeChart } from "./tradeChart.js";
 import { renderAnomalyList, renderSignalsList, updateTradeDelayIndicator, } from "./render.js";
 import { restoreColumnWidths, restoreAnomalyFilters, restoreTimeRange, restoreVerticalLayout, resetAllSettings, saveAnomalyFilters, } from "./persistence.js";
 import { setupColumnResizing, } from "./ui.js";
 import { getCurrentTheme, getSystemTheme, updateChartTheme, restoreTheme, toggleTheme, updateThemeToggleButton, toggleDepletionVisualization, updateDepletionToggleButton, } from "./theme.js";
 import { TradeWebSocket } from "../websocket.js";
-let tradeChart;
-let lastTradeUpdate = 0;
+const tradesCtx = tradesCanvas ? tradesCanvas.getContext("2d") : null;
+if (!tradesCtx) {
+    throw new Error("Could not get 2D context for trades chart");
+}
+let now = Date.now();
+let initialMin, initialMax;
+if (activeRange !== null) {
+    initialMin = now - activeRange;
+    initialMax = now + PADDING_TIME;
+}
+else {
+    initialMin = now - 90 * 60000;
+    initialMax = now + PADDING_TIME;
+}
+const tradeChart = new TradeChart(tradesCtx, initialMin, initialMax, now);
+tradeChart.activeRange = activeRange;
+let lastTradeUpdate = now;
 export function isValidSignalData(data) {
     return (typeof data.id === "string" &&
         typeof data.type === "string" &&
@@ -74,17 +89,15 @@ let unifiedMin = 0;
 let unifiedMax = 0;
 const messageQueue = [];
 let isProcessingQueue = false;
-function updateUnifiedTimeRange(latestTime, tradeChart) {
+export function updateUnifiedTimeRange(latestTime, tradeChart) {
     if (activeRange !== null) {
         unifiedMin = latestTime - activeRange;
         unifiedMax = latestTime + PADDING_TIME;
-        if (tradeChart &&
-            tradeChart.options &&
-            tradeChart.options.scales &&
-            tradeChart.options.scales["x"]) {
-            tradeChart.options.scales["x"].min = unifiedMin;
-            tradeChart.options.scales["x"].max = unifiedMax;
-            updateTimeAnnotations(tradeChart, latestTime, activeRange);
+        try {
+            tradeChart.setScaleX(unifiedMin, unifiedMax);
+        }
+        catch (error) {
+            console.error("updateUnifiedTimeRange Error: ", error);
         }
     }
 }
@@ -102,11 +115,6 @@ function initialize() {
         console.error("Order book chart canvas not found");
         return;
     }
-    const tradesCtx = tradesCanvas.getContext("2d");
-    if (!tradesCtx) {
-        console.error("Could not get 2D context for trades chart");
-        return;
-    }
     const orderBookCtx = orderBookCanvas.getContext("2d");
     if (!orderBookCtx) {
         console.error("Could not get 2D context for order book chart");
@@ -118,21 +126,7 @@ function initialize() {
         return;
     }
     try {
-        const now = Date.now();
-        let initialMin, initialMax;
-        if (activeRange !== null) {
-            initialMin = now - activeRange;
-            initialMax = now + PADDING_TIME;
-        }
-        else {
-            initialMin = now - 90 * 60000;
-            initialMax = now + PADDING_TIME;
-        }
         initializeOrderBookChart(orderBookCtx);
-        tradeChart = initializeTradesChart(tradesCtx, initialMin, initialMax, now);
-        if (!tradeChart) {
-            throw new Error("Failed to initialize Trade Chart.");
-        }
     }
     catch (error) {
         console.error("Error in initializing charts: ", error);
@@ -211,19 +205,11 @@ function handleMessage(message) {
     switch (message.type) {
         case "trade":
             const trade = message.data;
-            if (isValidTradeData(trade) &&
-                tradeChart &&
-                tradeChart.data &&
-                tradeChart.data.datasets &&
-                tradeChart.data.datasets[0] &&
-                tradeChart.data.datasets[0].data) {
-                const dataPoint = createTrade(trade.time, trade.price, trade.quantity, trade.orderType);
-                tradeChart.data.datasets[0].data.push(dataPoint);
+            tradeChart.addTrade(trade);
+            if (tradeChart) {
                 const now = Date.now();
-                if (now - lastTradeUpdate > 20 && tradeChart) {
+                if (now - lastTradeUpdate > 2000 && tradeChart) {
                     updateUnifiedTimeRange(now, tradeChart);
-                    updateYAxisBounds(tradeChart);
-                    tradeChart.update("none");
                     lastTradeUpdate = now;
                 }
             }
@@ -249,19 +235,8 @@ const tradeWebsocket = new TradeWebSocket({
     pingInterval: 10000,
     pongWait: 5000,
     onBacklog: (backLog) => {
-        const trades = processTradeBacklog(backLog);
-        if (tradeChart) {
-            const chartInstance = tradeChart;
-            const chartData = chartInstance.data;
-            if (chartData && chartData.datasets && chartData.datasets[0]) {
-                chartData.datasets[0].data = [
-                    ...trades,
-                ];
-                updateYAxisBounds(tradeChart);
-                updateUnifiedTimeRange(Date.now(), tradeChart);
-            }
-            tradeChart.update("none");
-        }
+        tradeChart.processTradeBacklog(backLog);
+        updateUnifiedTimeRange(Date.now(), tradeChart);
     },
     onMessage: (message) => {
         if (typeof message === "object" && message !== null) {

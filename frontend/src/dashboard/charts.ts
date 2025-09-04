@@ -42,10 +42,7 @@ import {
     TooltipItem,
     ChartOptions,
 } from "chart.js";
-import annotationPlugin, {
-    //    EventContext,
-    //PartialEventContext,
-} from "chartjs-plugin-annotation";
+import annotationPlugin from "chartjs-plugin-annotation"; //PartialEventContext, //    EventContext,
 
 import zoomPlugin from "chartjs-plugin-zoom";
 import "chartjs-adapter-date-fns";

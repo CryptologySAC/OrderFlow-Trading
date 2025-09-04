@@ -48,14 +48,7 @@ import {
     //updateOrderBookDisplay,
     //safeUpdateRSIChart,
 } from "./charts.js";
-import {
-    initializeTradesChart,
-    createTrade,
-    processTradeBacklog,
-    isValidTradeData,
-    updateYAxisBounds,
-    updateTimeAnnotations,
-} from "./tradeChart.js";
+import { TradeChart } from "./tradeChart.js";
 import {
     renderAnomalyList,
     renderSignalsList,
@@ -108,8 +101,28 @@ import type {
 // ============================================================================
 // VARIABLES
 // ============================================================================
-let tradeChart: Chart<"scatter">;
-let lastTradeUpdate = 0;
+const tradesCtx = tradesCanvas ? tradesCanvas.getContext("2d") : null;
+if (!tradesCtx) {
+    throw new Error("Could not get 2D context for trades chart");
+}
+let now = Date.now();
+let initialMin: number, initialMax: number;
+
+if (activeRange !== null) {
+    initialMin = now - activeRange;
+    initialMax = now + PADDING_TIME;
+} else {
+    initialMin = now - 90 * 60000; // 90 minutes ago
+    initialMax = now + PADDING_TIME;
+}
+const tradeChart: TradeChart = new TradeChart(
+    tradesCtx,
+    initialMin,
+    initialMax,
+    now
+);
+tradeChart.activeRange = activeRange;
+let lastTradeUpdate = now;
 
 // ============================================================================
 // GLOBAL UTILITIES
@@ -231,23 +244,18 @@ let isProcessingQueue = false;
 // ============================================================================
 // CORE FUNCTIONS
 // ============================================================================
-function updateUnifiedTimeRange(
+export function updateUnifiedTimeRange(
     latestTime: number,
-    tradeChart: Chart<"scatter">
+    tradeChart: TradeChart
 ): void {
     if (activeRange !== null) {
         unifiedMin = latestTime - activeRange;
         unifiedMax = latestTime + PADDING_TIME;
 
-        if (
-            tradeChart &&
-            tradeChart.options &&
-            tradeChart.options.scales &&
-            tradeChart.options.scales["x"]
-        ) {
-            tradeChart.options!.scales!["x"]!.min = unifiedMin;
-            tradeChart.options!.scales!["x"]!.max = unifiedMax;
-            updateTimeAnnotations(tradeChart, latestTime, activeRange);
+        try {
+            tradeChart.setScaleX(unifiedMin, unifiedMax);
+        } catch (error) {
+            console.error("updateUnifiedTimeRange Error: ", error);
         }
 
         /** 
@@ -283,12 +291,6 @@ function initialize(): void {
         return;
     }
 
-    const tradesCtx = tradesCanvas.getContext("2d");
-    if (!tradesCtx) {
-        console.error("Could not get 2D context for trades chart");
-        return;
-    }
-
     const orderBookCtx = orderBookCanvas.getContext("2d");
     if (!orderBookCtx) {
         console.error("Could not get 2D context for order book chart");
@@ -303,27 +305,18 @@ function initialize(): void {
 
     // Initialize charts first
     try {
-        const now = Date.now();
-        let initialMin: number, initialMax: number;
+        //const now = Date.now();
+        //let initialMin: number, initialMax: number;
 
-        if (activeRange !== null) {
-            initialMin = now - activeRange;
-            initialMax = now + PADDING_TIME;
-        } else {
-            initialMin = now - 90 * 60000; // 90 minutes ago
-            initialMax = now + PADDING_TIME;
-        }
+        //if (activeRange !== null) {
+        //    initialMin = now - activeRange;
+        //    initialMax = now + PADDING_TIME;
+        //} else {
+        //    initialMin = now - 90 * 60000; // 90 minutes ago
+        //    initialMax = now + PADDING_TIME;
+        //}
 
         initializeOrderBookChart(orderBookCtx);
-        tradeChart = initializeTradesChart(
-            tradesCtx,
-            initialMin,
-            initialMax,
-            now
-        ) as Chart<"scatter">;
-        if (!tradeChart) {
-            throw new Error("Failed to initialize Trade Chart.");
-        }
         /*
         const rsiChart = initializeRSIChart(
             rsiCtx,
@@ -556,27 +549,11 @@ function handleMessage(message: WebSocketMessage): void {
         // Proces an incomming trade
         case "trade":
             const trade: TradeData = message.data as TradeData;
-            if (
-                isValidTradeData(trade) &&
-                tradeChart &&
-                tradeChart.data &&
-                tradeChart.data.datasets &&
-                tradeChart.data.datasets[0] &&
-                tradeChart.data.datasets[0].data
-            ) {
-                const dataPoint: ChartDataPoint = createTrade(
-                    trade.time,
-                    trade.price,
-                    trade.quantity,
-                    trade.orderType
-                );
-                tradeChart.data.datasets[0].data.push(dataPoint);
-
+            tradeChart.addTrade(trade);
+            if (tradeChart) {
                 const now = Date.now();
-                if (now - lastTradeUpdate > 20 && tradeChart) {
+                if (now - lastTradeUpdate > 2000 && tradeChart) {
                     updateUnifiedTimeRange(now, tradeChart);
-                    updateYAxisBounds(tradeChart);
-                    tradeChart.update("none");
                     lastTradeUpdate = now;
                 }
             }
@@ -837,24 +814,9 @@ const tradeWebsocket = new TradeWebSocket({
     pingInterval: 10000,
     pongWait: 5000,
     onBacklog: (backLog: TradeData[]) => {
-        const trades = processTradeBacklog(backLog);
-        if (tradeChart) {
-            const chartInstance = tradeChart as Chart<"scatter">;
-            const chartData = chartInstance.data;
-            if (chartData && chartData.datasets && chartData.datasets[0]) {
-                chartData.datasets[0].data = [
-                    ...(trades as {
-                        x: number;
-                        y: number;
-                        quantity?: number;
-                        orderType?: "BUY" | "SELL";
-                    }[]),
-                ];
-                updateYAxisBounds(tradeChart);
-                updateUnifiedTimeRange(Date.now(), tradeChart);
-            }
-            tradeChart.update("none");
-        }
+        tradeChart.processTradeBacklog(backLog);
+        updateUnifiedTimeRange(Date.now(), tradeChart);
+        
         // if (trades.length > 0) {
         //const latestTrade = trades[trades.length - 1];
         //const latestTime = (latestTrade as { x: number; y: number }).x;
