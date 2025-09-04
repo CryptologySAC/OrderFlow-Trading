@@ -11,7 +11,8 @@ import {
     ITEM_MARGIN,
 } from "./state.js";
 import { saveColumnWidths, saveTimeRange } from "./persistence.js";
-import { updateYAxisBounds, updateRSITimeAnnotations, updateTimeAnnotations } from "./charts.js";
+import { updateRSITimeAnnotations } from "./charts.js";
+import {updateTimeAnnotations, updateYAxisBounds } from "./tradeChart.js";
 
 function snap(value) {
     return Math.round(value / GRID_SIZE) * GRID_SIZE;
@@ -136,7 +137,12 @@ function scheduleLayoutAdjust(target) {
  * Sets the time range for the trades chart.
  * @param {number|null} duration - Duration in milliseconds, or null for all data.
  */
-export function setRange(duration) {
+export function setRange(duration, tradeChart, rsiChart) {
+    // Apply the restored time range to the charts AFTER initialization
+        console.log(
+            "Applying time range after chart initialization:",
+            activeRange === null ? "ALL" : `${activeRange / 60000} minutes`
+        );
     setActiveRange(duration);
 
     // Use EXACT same timestamp for both charts to ensure perfect synchronization
@@ -151,13 +157,14 @@ export function setRange(duration) {
             `Setting IDENTICAL time range for both charts: ${new Date(minTime).toLocaleTimeString()} - ${new Date(maxTime).toLocaleTimeString()}`
         );
 
+        
         // Update trades chart
-        if (tradesChart) {
-            tradesChart.options.scales.x.min = minTime;
-            tradesChart.options.scales.x.max = maxTime;
+        if (tradeChart) {
+            tradeChart.options.scales.x.min = minTime;
+            tradeChart.options.scales.x.max = maxTime;
             updateYAxisBounds();
             updateTimeAnnotations(now, duration);
-            tradesChart.update();
+            //tradeChart.update();
         }
 
         // Update RSI chart with EXACT same values
@@ -165,16 +172,10 @@ export function setRange(duration) {
             rsiChart.options.scales.x.min = minTime;
             rsiChart.options.scales.x.max = maxTime;
             updateRSITimeAnnotations(now, duration);
-            rsiChart.update();
-        }
-
-        if (rsiChart) {
-            rsiChart.options.scales.x.min = minTime;
-            rsiChart.options.scales.x.max = maxTime;
-            updateRSITimeAnnotations(now, duration);
-            rsiChart.update();
+            //rsiChart.update();
             console.log("RSI chart updated with time range");
         }
+            
     } else {
         // For "ALL" range, use a simple approach: both charts show last 90 minutes
         // This ensures they always show the same time range
@@ -187,11 +188,11 @@ export function setRange(duration) {
             max: new Date(allRangeMax).toLocaleTimeString(),
         });
 
-        if (tradesChart) {
-            tradesChart.options.scales.x.min = allRangeMin;
-            tradesChart.options.scales.x.max = allRangeMax;
+        if (tradeChart) {
+            tradeChart.options.scales.x.min = allRangeMin;
+            tradeChart.options.scales.x.max = allRangeMax;
             updateYAxisBounds();
-            tradesChart.update();
+            tradeChart.update();
         }
 
         if (rsiChart) {
@@ -238,11 +239,11 @@ export function setRange(duration) {
             const timeRange = maxTime - minTime;
             const padding = Math.max(PADDING_TIME, timeRange * 0.05); // 5% padding or minimum PADDING_TIME
 
-            if (tradesChart) {
-                tradesChart.options.scales.x.min = minTime - padding;
-                tradesChart.options.scales.x.max = maxTime + padding;
+            if (tradeChart) {
+                tradeChart.options.scales.x.min = minTime - padding;
+                tradeChart.options.scales.x.max = maxTime + padding;
                 updateYAxisBounds();
-                tradesChart.update();
+                tradeChart.update();
             }
 
             if (rsiChart) {
@@ -251,16 +252,16 @@ export function setRange(duration) {
                 // For "ALL" case, use center of range as latestTime and full range as activeRange
                 const latestTime = (minTime + maxTime) / 2;
                 const effectiveRange = (maxTime - minTime) / 2 + padding;
-                updateRSITimeAnnotations(latestTime, effectiveRange);
+                //updateRSITimeAnnotations(latestTime, effectiveRange);
                 rsiChart.update();
             }
         } else {
             // No data available, use undefined to let Chart.js auto-scale
-            if (tradesChart) {
-                tradesChart.options.scales.x.min = undefined;
-                tradesChart.options.scales.x.max = undefined;
+            if (tradeChart) {
+                tradeChart.options.scales.x.min = undefined;
+                tradeChart.options.scales.x.max = undefined;
                 updateYAxisBounds();
-                tradesChart.update();
+                tradeChart.update();
             }
 
             if (rsiChart) {

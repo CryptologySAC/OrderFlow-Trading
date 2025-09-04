@@ -2,7 +2,7 @@
 // STRICT 100% TYPE-SAFE FRONTEND INTERFACES
 // Based on backend data structures - NO ASSUMPTIONS, NO GUESSING
 // ============================================================================
-
+import type { TradeData } from "../types.js";
 // ============================================================================
 // CORE WEB SOCKET MESSAGE TYPES (from backend/src/utils/interfaces.ts)
 // ============================================================================
@@ -31,19 +31,6 @@ export interface WebSocketMessage {
     type: WebSocketMessageType;
     data: unknown;
     now: number;
-}
-
-// ============================================================================
-// TRADE DATA TYPES (from backend/src/utils/types.ts)
-// ============================================================================
-
-export interface TradeData {
-    time: number;
-    price: number;
-    quantity: number;
-    orderType: "BUY" | "SELL";
-    symbol: string;
-    tradeId: number;
 }
 
 // ============================================================================
@@ -719,20 +706,6 @@ export function isValidWebSocketMessage(
     return validTypes.includes(msg["type"] as WebSocketMessageType);
 }
 
-export function isValidTradeData(data: unknown): data is TradeData {
-    if (!data || typeof data !== "object") return false;
-    const trade = data as Record<string, unknown>;
-
-    return (
-        typeof trade["time"] === "number" &&
-        typeof trade["price"] === "number" &&
-        typeof trade["quantity"] === "number" &&
-        (trade["orderType"] === "BUY" || trade["orderType"] === "SELL") &&
-        typeof trade["symbol"] === "string" &&
-        typeof trade["tradeId"] === "number"
-    );
-}
-
 export function isValidOrderBookData(data: unknown): data is OrderBookData {
     if (!data || typeof data !== "object") return false;
     const ob = data as Record<string, unknown>;
@@ -916,10 +889,6 @@ export function validateAndCastWebSocketMessage(
     data: unknown
 ): WebSocketMessage | null {
     return isValidWebSocketMessage(data) ? data : null;
-}
-
-export function validateAndCastTradeData(data: unknown): TradeData | null {
-    return isValidTradeData(data) ? data : null;
 }
 
 export function validateAndCastOrderBookData(

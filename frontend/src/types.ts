@@ -72,10 +72,23 @@ export interface AnomalyMessage extends BaseMessage {
     };
 }
 
+// ============================================================================
+// TRADE DATA TYPES (from backend/src/utils/types.ts)
+// ============================================================================
+
+export interface TradeData {
+    time: number;
+    price: number;
+    quantity: number;
+    orderType: "BUY" | "SELL";
+    symbol: string;
+    tradeId: number;
+}
+
 // Backlog message (from server)
 export interface BacklogMessage extends BaseMessage {
     type: MessageType.BACKLOG;
-    data: TradeMessage[];
+    data: TradeData[];
 }
 
 // Error message from server

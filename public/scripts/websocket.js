@@ -13,7 +13,7 @@ export class TradeWebSocket {
     pingInterval = null;
     pongTimeout = null;
     reconnectAttempts = 0;
-    constructor({ url, maxTrades = 50000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onReconnectFail = () => { }, }) {
+    constructor({ url, maxTrades = 10000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onReconnectFail = () => { }, }) {
         this.url = url;
         this.maxTrades = maxTrades;
         this.maxReconnectAttempts = maxReconnectAttempts;
@@ -74,7 +74,6 @@ export class TradeWebSocket {
     }
     handleBacklog(message) {
         if (Array.isArray(message.data)) {
-            console.log(`Backlog of ${message.data.length} trades received.`);
             this.onBacklog(message.data);
         }
         else {

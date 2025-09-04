@@ -2,49 +2,65 @@
 // EXACT TYPE-SAFE FRONTEND IMPLEMENTATION
 // Recreates main.js functionality with ZERO unknown/any types
 // Uses exact backend message structures
+import {
+    Chart,
+    registerables,
+    //ChartOptions
+} from "chart.js";
+import "chartjs-adapter-date-fns";
 
+//import annotationPlugin, {
+//    AnnotationOptions,
+//EventContext,
+//PartialEventContext,
+//} from "chartjs-plugin-annotation";
+Chart.register(...registerables);
 import {
     tradesCanvas,
     orderBookCanvas,
     rsiCanvas,
-    rangeSelector,
+    //rangeSelector,
     anomalyFilters,
     signalFilters,
     trades,
-    anomalyList,
-    signalsList,
-    rsiData,
+    //anomalyList,
+    //signalsList,
+    //rsiData,
     activeRange,
-    dedupTolerance,
-    rsiChart,
-    tradesChart,
+    //dedupTolerance,
     PADDING_TIME,
-    MAX_RSI_DATA,
-    setRuntimeConfig,
+    //MAX_RSI_DATA,
+    //setRuntimeConfig,
 } from "./state.js";
 import {
-    initializeTradesChart,
-    initializeRSIChart,
+    //initializeRSIChart,
     initializeOrderBookChart,
     cleanupOldSupportResistanceLevels,
     cleanupOldZones,
+
+    //updateRSITimeAnnotations,
+    //scheduleTradesChartUpdate,
+    //checkSupportResistanceBreaches,
+    //buildSignalLabel,
+    //handleSupportResistanceLevel,
+    //handleZoneUpdate,
+    //handleZoneSignal,
+    //updateOrderBookDisplay,
+    //safeUpdateRSIChart,
+} from "./charts.js";
+import {
+    initializeTradesChart,
+    createTrade,
+    processTradeBacklog,
+    isValidTradeData,
     updateYAxisBounds,
     updateTimeAnnotations,
-    updateRSITimeAnnotations,
-    scheduleTradesChartUpdate,
-    checkSupportResistanceBreaches,
-    buildSignalLabel,
-    handleSupportResistanceLevel,
-    handleZoneUpdate,
-    handleZoneSignal,
-    updateOrderBookDisplay,
-    safeUpdateRSIChart,
-} from "./charts.js";
+} from "./tradeChart.js";
 import {
     renderAnomalyList,
     renderSignalsList,
     updateTradeDelayIndicator,
-    showSignalBundleBadge,
+    //showSignalBundleBadge,
 } from "./render.js";
 import {
     restoreColumnWidths,
@@ -54,7 +70,10 @@ import {
     resetAllSettings,
     saveAnomalyFilters,
 } from "./persistence.js";
-import { setupColumnResizing, setRange } from "./ui.js";
+import {
+    setupColumnResizing,
+    //setRange
+} from "./ui.js";
 import {
     getCurrentTheme,
     getSystemTheme,
@@ -68,24 +87,29 @@ import {
 import { TradeWebSocket } from "../websocket.js";
 import type {
     WebSocketMessage,
-    TradeData,
     RSIDataPoint,
     ZoneUpdateEvent,
     ZoneSignalEvent,
 } from "./types.js";
+import type { TradeData } from "../types.js";
 import type {
     Signal,
     OrderBookData,
     SupportResistanceLevel,
-    ZoneData,
+    //ZoneData,
 } from "../frontend-types.js";
-import { isValidTradeData } from "./types.js";
 import type {
-    ChartAnnotation,
-    ChartInstance,
+    //ChartAnnotation,
+    //ChartInstance,
     ChartDataPoint,
     Anomaly,
 } from "../frontend-types.js";
+
+// ============================================================================
+// VARIABLES
+// ============================================================================
+let tradeChart: Chart<"scatter">;
+let lastTradeUpdate = 0;
 
 // ============================================================================
 // GLOBAL UTILITIES
@@ -95,7 +119,7 @@ import type {
 // TYPE GUARDS (NO UNKNOWN PARAMETERS)
 // ============================================================================
 
-function isValidSignalData(data: Signal): boolean {
+export function isValidSignalData(data: Signal): boolean {
     return (
         typeof data.id === "string" &&
         typeof data.type === "string" &&
@@ -105,7 +129,7 @@ function isValidSignalData(data: Signal): boolean {
     );
 }
 
-function isValidAnomalyData(data: Anomaly): boolean {
+export function isValidAnomalyData(data: Anomaly): boolean {
     return (
         typeof data.type === "string" &&
         typeof data.detectedAt === "number" &&
@@ -119,7 +143,7 @@ function isValidAnomalyData(data: Anomaly): boolean {
     );
 }
 
-function isValidOrderBookData(data: OrderBookData): boolean {
+export function isValidOrderBookData(data: OrderBookData): boolean {
     return (
         Array.isArray(data.priceLevels) &&
         data.priceLevels.every(
@@ -131,7 +155,7 @@ function isValidOrderBookData(data: OrderBookData): boolean {
     );
 }
 
-function isValidRSIData(data: RSIDataPoint): boolean {
+export function isValidRSIData(data: RSIDataPoint): boolean {
     return (
         typeof data.time === "number" &&
         typeof data.rsi === "number" &&
@@ -140,7 +164,9 @@ function isValidRSIData(data: RSIDataPoint): boolean {
     );
 }
 
-function isValidSupportResistanceData(data: SupportResistanceLevel): boolean {
+export function isValidSupportResistanceData(
+    data: SupportResistanceLevel
+): boolean {
     return (
         typeof data.id === "string" &&
         typeof data.price === "number" &&
@@ -153,7 +179,7 @@ function isValidSupportResistanceData(data: SupportResistanceLevel): boolean {
     );
 }
 
-function isValidZoneUpdateData(data: ZoneUpdateEvent): boolean {
+export function isValidZoneUpdateData(data: ZoneUpdateEvent): boolean {
     return (
         typeof data.updateType === "string" &&
         typeof data.zone === "object" &&
@@ -164,7 +190,7 @@ function isValidZoneUpdateData(data: ZoneUpdateEvent): boolean {
     );
 }
 
-function isValidZoneSignalData(data: ZoneSignalEvent): boolean {
+export function isValidZoneSignalData(data: ZoneSignalEvent): boolean {
     return (
         typeof data.signalType === "string" &&
         typeof data.zone === "object" &&
@@ -185,7 +211,7 @@ function isValidZoneSignalData(data: ZoneSignalEvent): boolean {
 let unifiedMin = 0;
 let unifiedMax = 0;
 
-let orderBookData: OrderBookData = {
+/* let orderBookData: OrderBookData = {
     priceLevels: [],
     bestBid: 0,
     bestAsk: 0,
@@ -196,7 +222,7 @@ let orderBookData: OrderBookData = {
     imbalance: 0,
     timestamp: 0,
 };
-
+*/
 // let supportResistanceLevels: SupportResistanceLevel[] = []; // Not used in main.ts
 
 const messageQueue: WebSocketMessage[] = [];
@@ -205,24 +231,26 @@ let isProcessingQueue = false;
 // ============================================================================
 // CORE FUNCTIONS
 // ============================================================================
-
-function updateUnifiedTimeRange(latestTime: number): void {
+function updateUnifiedTimeRange(
+    latestTime: number,
+    tradeChart: Chart<"scatter">
+): void {
     if (activeRange !== null) {
         unifiedMin = latestTime - activeRange;
         unifiedMax = latestTime + PADDING_TIME;
 
         if (
-            tradesChart &&
-            (tradesChart as ChartInstance).options &&
-            (tradesChart as ChartInstance).options.scales &&
-            (tradesChart as any).options.scales.x
+            tradeChart &&
+            tradeChart.options &&
+            tradeChart.options.scales &&
+            tradeChart.options.scales["x"]
         ) {
-            (tradesChart as ChartInstance).options!.scales!["x"]!.min =
-                unifiedMin;
-            (tradesChart as ChartInstance).options!.scales!["x"]!.max =
-                unifiedMax;
-            updateTimeAnnotations(latestTime, activeRange);
+            tradeChart.options!.scales!["x"]!.min = unifiedMin;
+            tradeChart.options!.scales!["x"]!.max = unifiedMax;
+            updateTimeAnnotations(tradeChart, latestTime, activeRange);
         }
+
+        /** 
         if (
             rsiChart &&
             (rsiChart as ChartInstance).options &&
@@ -233,21 +261,8 @@ function updateUnifiedTimeRange(latestTime: number): void {
             (rsiChart as ChartInstance).options!.scales!["x"]!.max = unifiedMax;
             updateRSITimeAnnotations(latestTime, activeRange);
         }
+            */
     }
-}
-
-function createTrade(
-    time: number,
-    price: number,
-    quantity: number,
-    orderType: "BUY" | "SELL"
-): ChartDataPoint {
-    return {
-        x: time,
-        y: price,
-        quantity: quantity,
-        orderType: orderType,
-    };
 }
 
 function initialize(): void {
@@ -287,65 +302,82 @@ function initialize(): void {
     }
 
     // Initialize charts first
-    initializeTradesChart(tradesCtx);
-    initializeOrderBookChart(orderBookCtx);
-    initializeRSIChart(rsiCtx);
+    try {
+        const now = Date.now();
+        let initialMin: number, initialMax: number;
 
-    // Apply the restored time range to the charts AFTER initialization
-    console.log(
-        "Applying time range after chart initialization:",
-        activeRange === null ? "ALL" : `${activeRange / 60000} minutes`
-    );
-    setRange(activeRange);
+        if (activeRange !== null) {
+            initialMin = now - activeRange;
+            initialMax = now + PADDING_TIME;
+        } else {
+            initialMin = now - 90 * 60000; // 90 minutes ago
+            initialMax = now + PADDING_TIME;
+        }
 
-    // Validate chart initialization before connecting WebSocket
-    if (!rsiChart) {
-        console.error(
-            "Failed to initialize RSI chart - WebSocket connection aborted"
+        initializeOrderBookChart(orderBookCtx);
+        tradeChart = initializeTradesChart(
+            tradesCtx,
+            initialMin,
+            initialMax,
+            now
+        ) as Chart<"scatter">;
+        if (!tradeChart) {
+            throw new Error("Failed to initialize Trade Chart.");
+        }
+        /*
+        const rsiChart = initializeRSIChart(
+            rsiCtx,
+            initialMin,
+            initialMax,
+            now
         );
+        if (!rsiChart) {
+            throw new Error("Failed to initialize RSI Chart.");
+        }
+
+        setRange(activeRange, tradeChart, rsiChart);
+
+        // Setup range selector
+        if (rangeSelector) {
+            rangeSelector.addEventListener("click", (e: Event) => {
+                const target = e.target as HTMLElement;
+                if (target.tagName === "BUTTON") {
+                    const range = target.getAttribute("data-range");
+                    if (rangeSelector) {
+                        rangeSelector
+                            .querySelectorAll("button")
+                            .forEach((btn: HTMLButtonElement) =>
+                                btn.classList.remove("active")
+                            );
+                    }
+                    target.classList.add("active");
+                    setRange(
+                        range === "all" ? null : range ? parseInt(range) : null,
+                        tradeChart,
+                        rsiChart
+                    );
+                }
+            });
+        } else {
+            console.warn("Range selector element not found");
+        }
+            */
+    } catch (error) {
+        console.error("Error in initializing charts: ", error);
         return;
     }
 
-    // Validate RSI chart structure
-    if (
-        !rsiChart ||
-        !(rsiChart as ChartInstance).data ||
-        !(rsiChart as ChartInstance).data.datasets
-    ) {
-        console.error(
-            "RSI chart structure invalid after initialization - WebSocket connection aborted"
-        );
+    try {
+        // Connect to the trade WebSocket after charts are ready
+        tradeWebsocket.connect();
+        console.log("Connected to Trade Websocket.");
+    } catch (error) {
+        console.error("Failed to connect to web socket.", error);
         return;
     }
-
-    // Connect to the trade WebSocket after charts are ready
-    tradeWebsocket.connect();
 
     // Setup interact.js for column resizing
     setupColumnResizing();
-
-    // Setup range selector
-    if (rangeSelector) {
-        rangeSelector.addEventListener("click", (e: Event) => {
-            const target = e.target as HTMLElement;
-            if (target.tagName === "BUTTON") {
-                const range = target.getAttribute("data-range");
-                if (rangeSelector) {
-                    rangeSelector
-                        .querySelectorAll("button")
-                        .forEach((btn: HTMLButtonElement) =>
-                            btn.classList.remove("active")
-                        );
-                }
-                target.classList.add("active");
-                setRange(
-                    range === "all" ? null : range ? parseInt(range) : null
-                );
-            }
-        });
-    } else {
-        console.warn("Range selector element not found");
-    }
 
     // Setup reset layout button
     const resetLayoutBtn = document.getElementById("resetLayout");
@@ -436,70 +468,7 @@ function handleMessage(message: WebSocketMessage): void {
     }
 
     switch (message.type) {
-        case "pong":
-            // Handle pong response - connection health
-            console.log("Received pong from server");
-            break;
-
-        case "backlog":
-            const tradeBacklog = message.data as TradeData[];
-            console.log(`${tradeBacklog.length} backlog trades received.`);
-            trades.length = 0;
-            for (const trade of tradeBacklog) {
-                if (isValidTradeData(trade)) {
-                    trades.push(
-                        createTrade(
-                            trade.time,
-                            trade.price,
-                            trade.quantity,
-                            trade.orderType
-                        )
-                    );
-                }
-            }
-            if (tradesChart) {
-                const chartInstance = tradesChart as ChartInstance;
-                const chartData = chartInstance.data;
-                if (chartData && chartData.datasets && chartData.datasets[0]) {
-                    chartData.datasets[0].data = [
-                        ...(trades as {
-                            x: number;
-                            y: number;
-                            quantity?: number;
-                            orderType?: "BUY" | "SELL";
-                        }[]),
-                    ];
-                }
-            }
-            if (trades.length > 0) {
-                const latestTrade = trades[trades.length - 1] as {
-                    x: number;
-                    y: number;
-                };
-                const latestTime = latestTrade.x;
-                const latestPrice = latestTrade.y;
-                if (tradesChart) {
-                    const chartInstance = tradesChart as ChartInstance;
-                    const chartOptions = chartInstance.options;
-                    const plugins = chartOptions.plugins;
-                    const annotation = (plugins as any).annotation;
-                    const annotations = (annotation as any).annotations;
-                    if (annotations) {
-                        const line = annotations[
-                            "lastPriceLine"
-                        ] as ChartAnnotation;
-                        if (line) {
-                            line.yMin = latestPrice;
-                            line.yMax = latestPrice;
-                        }
-                    }
-                }
-                updateUnifiedTimeRange(latestTime);
-                updateYAxisBounds();
-            }
-            scheduleTradesChartUpdate();
-            break;
-
+        /*
         case "signal_backlog":
             const backlogSignals = message.data as Signal[];
             console.log(`${backlogSignals.length} backlog signals received.`);
@@ -583,59 +552,36 @@ function handleMessage(message: WebSocketMessage): void {
                 );
             }
             break;
-
+*/
+        // Proces an incomming trade
         case "trade":
-            const trade = message.data as TradeData;
-            if (isValidTradeData(trade)) {
-                trades.push(
-                    createTrade(
-                        trade.time,
-                        trade.price,
-                        trade.quantity,
-                        trade.orderType
-                    )
+            const trade: TradeData = message.data as TradeData;
+            if (
+                isValidTradeData(trade) &&
+                tradeChart &&
+                tradeChart.data &&
+                tradeChart.data.datasets &&
+                tradeChart.data.datasets[0] &&
+                tradeChart.data.datasets[0].data
+            ) {
+                const dataPoint: ChartDataPoint = createTrade(
+                    trade.time,
+                    trade.price,
+                    trade.quantity,
+                    trade.orderType
                 );
-                if (tradesChart) {
-                    const chartInstance = tradesChart as ChartInstance;
-                    const chartData = chartInstance.data;
-                    if (
-                        chartData &&
-                        chartData.datasets &&
-                        chartData.datasets[0]
-                    ) {
-                        chartData.datasets[0].data = [
-                            ...(trades as {
-                                x: number;
-                                y: number;
-                                quantity?: number;
-                                orderType?: "BUY" | "SELL";
-                            }[]),
-                        ];
-                    }
+                tradeChart.data.datasets[0].data.push(dataPoint);
+
+                const now = Date.now();
+                if (now - lastTradeUpdate > 20 && tradeChart) {
+                    updateUnifiedTimeRange(now, tradeChart);
+                    updateYAxisBounds(tradeChart);
+                    tradeChart.update("none");
+                    lastTradeUpdate = now;
                 }
-                if (tradesChart) {
-                    const chartInstance = tradesChart as ChartInstance;
-                    const chartOptions = chartInstance.options;
-                    const plugins = chartOptions.plugins;
-                    const annotation = (plugins as any).annotation;
-                    const annotations = (annotation as any).annotations;
-                    if (annotations) {
-                        const line = annotations[
-                            "lastPriceLine"
-                        ] as ChartAnnotation;
-                        if (line) {
-                            line.yMin = trade.price;
-                            line.yMax = trade.price;
-                        }
-                    }
-                }
-                updateUnifiedTimeRange(trade.time);
-                updateYAxisBounds();
-                checkSupportResistanceBreaches(trade.price);
-                scheduleTradesChartUpdate();
             }
             break;
-
+        /*
         case "signal":
             const signal: Signal = message.data as Signal;
             if (isValidSignalData(signal)) {
@@ -758,16 +704,16 @@ function handleMessage(message: WebSocketMessage): void {
                 }
                 if (!window.rsiUpdateTimeout) {
                     window.rsiUpdateTimeout = setTimeout(() => {
-                        const updateSuccess = safeUpdateRSIChart([...rsiData]);
+                        //const updateSuccess = safeUpdateRSIChart([...rsiData]);
                         if (window.rsiUpdateTimeout) {
                             clearTimeout(window.rsiUpdateTimeout);
                             delete window.rsiUpdateTimeout;
                         }
-                        if (!updateSuccess) {
-                            console.error(
-                                "Failed to update RSI chart with batched data"
-                            );
-                        }
+                        //if (!updateSuccess) {
+                        //    console.error(
+                        //        "Failed to update RSI chart with batched data"
+                        //    );
+                        //}
                     }, 100);
                 }
             } else {
@@ -860,7 +806,7 @@ function handleMessage(message: WebSocketMessage): void {
                 });
             }
             break;
-
+*/
         case "error":
             const errorData = message.data as { message: string };
             console.error("WebSocket error:", errorData.message);
@@ -874,7 +820,7 @@ function handleMessage(message: WebSocketMessage): void {
             break;
 
         default:
-            console.warn("Unknown message type:", message.type);
+            //console.warn("Unknown message type:", message.type);
             break;
     }
 }
@@ -885,73 +831,56 @@ function handleMessage(message: WebSocketMessage): void {
 
 const tradeWebsocket = new TradeWebSocket({
     url: "ws://localhost:3001",
-    maxTrades: 50000,
+    maxTrades: 10000,
     maxReconnectAttempts: 10,
     reconnectDelay: 1000,
     pingInterval: 10000,
     pongWait: 5000,
-    onBacklog: (backLog: unknown) => {
-        if (Array.isArray(backLog)) {
-            console.log(`${backLog.length} backlog trades received.`);
-            trades.length = 0;
-            for (const trade of backLog) {
-                if (isValidTradeData(trade)) {
-                    // TypeScript knows trade is valid after isValidTradeData check
-                    const tradeObj = trade as unknown as {
-                        time: number;
-                        price: number;
-                        quantity: number;
-                        orderType: "BUY" | "SELL";
-                    };
-                    trades.push(
-                        createTrade(
-                            tradeObj.time,
-                            tradeObj.price,
-                            tradeObj.quantity,
-                            tradeObj.orderType
-                        )
-                    );
-                }
+    onBacklog: (backLog: TradeData[]) => {
+        const trades = processTradeBacklog(backLog);
+        if (tradeChart) {
+            const chartInstance = tradeChart as Chart<"scatter">;
+            const chartData = chartInstance.data;
+            if (chartData && chartData.datasets && chartData.datasets[0]) {
+                chartData.datasets[0].data = [
+                    ...(trades as {
+                        x: number;
+                        y: number;
+                        quantity?: number;
+                        orderType?: "BUY" | "SELL";
+                    }[]),
+                ];
+                updateYAxisBounds(tradeChart);
+                updateUnifiedTimeRange(Date.now(), tradeChart);
             }
-            if (tradesChart) {
-                const chartInstance = tradesChart as ChartInstance;
-                const chartData = chartInstance.data;
-                if (chartData && chartData.datasets && chartData.datasets[0]) {
-                    chartData.datasets[0].data = [
-                        ...(trades as {
-                            x: number;
-                            y: number;
-                            quantity?: number;
-                            orderType?: "BUY" | "SELL";
-                        }[]),
-                    ];
-                }
-            }
-            if (trades.length > 0) {
-                const latestTrade = trades[trades.length - 1];
-                const latestTime = (latestTrade as { x: number; y: number }).x;
-                const latestPrice = (latestTrade as { x: number; y: number }).y;
-                if (tradesChart) {
-                    const chartInstance = tradesChart as ChartInstance;
-                    const chartOptions = chartInstance.options;
-                    const plugins = chartOptions.plugins;
-                    const annotation = (plugins as any).annotation;
-                    const annotations = (annotation as any).annotations;
-                    if (annotations) {
-                        const line = annotations[
-                            "lastPriceLine"
-                        ] as ChartAnnotation;
-                        if (line) {
-                            line.yMin = latestPrice;
-                            line.yMax = latestPrice;
-                        }
-                    }
-                }
-                updateUnifiedTimeRange(latestTime);
-                updateYAxisBounds();
-            }
-            scheduleTradesChartUpdate();
+            tradeChart.update("none");
         }
+        // if (trades.length > 0) {
+        //const latestTrade = trades[trades.length - 1];
+        //const latestTime = (latestTrade as { x: number; y: number }).x;
+        //const latestPrice = (latestTrade as { x: number; y: number }).y;
+        //if (tradeChart) {
+        //const chartInstance = tradeChart as Chart<"scatter">;
+        //const chartOptions = chartInstance.options;
+        //const plugins = chartOptions.plugins;
+        //const annotation = (plugins as any).annotation;
+        //const annotations = (annotation as any).annotations;
+        //if (annotations) {
+        //    const line = annotations[
+        //        "lastPriceLine"
+        //    ] as AnnotationOptions<"line">;
+        //    if (line) {
+        //        line.yMin = latestPrice;
+        //        line.yMax = latestPrice;
+        //    }
+        //}
+        //}
+        //(tradeChart.options.plugins?.annotation?.annotations as any)["lastPriceLine"].borderCapStyle = "butt";
+        //tradeChart.update("none");
+        //
+
+        //}
+        //scheduleTradesChartUpdate();
     },
     onMessage: (message: unknown) => {
         // Convert websocket message to our expected format with proper validation
@@ -1019,10 +948,11 @@ document.addEventListener("DOMContentLoaded", () => {
             (e: Event) => {
                 const target = e.target as HTMLElement;
                 if (target.closest(".signal-row")) {
-                    const signalRow = target.closest(
-                        ".signal-row"
-                    ) as HTMLElement;
-                    const signalId = signalRow.dataset["signalId"];
+                    //const signalRow = target.closest(
+                    //    ".signal-row"
+                    //) as HTMLElement;
+                    //const signalId = signalRow.dataset["signalId"];
+                    /*
                     if (tradesChart && signalId) {
                         const chartInstance = tradesChart as ChartInstance;
                         const chartOptions = chartInstance.options;
@@ -1053,6 +983,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             chartInstance.update("none");
                         }
                     }
+                        */
                 }
             },
             true
@@ -1063,6 +994,7 @@ document.addEventListener("DOMContentLoaded", () => {
             (e: Event) => {
                 const target = e.target as HTMLElement;
                 if (target.closest(".signal-row")) {
+                    /*
                     if (tradesChart) {
                         const chartInstance = tradesChart as ChartInstance;
                         const chartOptions = chartInstance.options;
@@ -1090,6 +1022,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             chartInstance.update("none");
                         }
                     }
+                        */
                 }
             },
             true
@@ -1117,6 +1050,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const keptTrades = trades.slice(tradesToRemoveCount);
                 trades.length = 0;
                 trades.push(...keptTrades);
+                /*
                 if (tradesChart) {
                     const chartInstance = tradesChart as ChartInstance;
                     const chartData = chartInstance.data;
@@ -1134,6 +1068,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         scheduleTradesChartUpdate();
                     }
                 }
+                    */
                 const removedCount = originalLength - trades.length;
                 console.log(
                     `Trade cleanup complete: filtered ${removedCount} old trades, ${trades.length} remaining`

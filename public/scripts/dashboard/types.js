@@ -26,17 +26,6 @@ export function isValidWebSocketMessage(data) {
     ];
     return validTypes.includes(msg["type"]);
 }
-export function isValidTradeData(data) {
-    if (!data || typeof data !== "object")
-        return false;
-    const trade = data;
-    return (typeof trade["time"] === "number" &&
-        typeof trade["price"] === "number" &&
-        typeof trade["quantity"] === "number" &&
-        (trade["orderType"] === "BUY" || trade["orderType"] === "SELL") &&
-        typeof trade["symbol"] === "string" &&
-        typeof trade["tradeId"] === "number");
-}
 export function isValidOrderBookData(data) {
     if (!data || typeof data !== "object")
         return false;
@@ -186,9 +175,6 @@ export function isValidSupportResistanceData(data) {
 }
 export function validateAndCastWebSocketMessage(data) {
     return isValidWebSocketMessage(data) ? data : null;
-}
-export function validateAndCastTradeData(data) {
-    return isValidTradeData(data) ? data : null;
 }
 export function validateAndCastOrderBookData(data) {
     return isValidOrderBookData(data) ? data : null;

@@ -13,6 +13,177 @@ import type {
     ChartDataPoint,
 } from "../frontend-types.js";
 
+import { Chart, registerables } from "chart.js";
+
+import "chartjs-adapter-date-fns";
+import annotationPlugin from "chartjs-plugin-annotation";
+import { format } from "date-fns";
+import zoomPlugin from "chartjs-plugin-zoom";
+
+Chart.register(...registerables, zoomPlugin, annotationPlugin);
+// Register date adapter explicitly for Chart.js v4
+import { _adapters } from "chart.js";
+_adapters._date.override({
+    formats: () => ({
+        datetime: "MMM dd, yyyy, h:mm:ss a",
+        millisecond: "h:mm:ss.SSS a",
+        second: "h:mm:ss a",
+        minute: "h:mm a",
+        hour: "h a",
+        day: "MMM dd",
+        week: "MMM dd",
+        month: "MMM yyyy",
+        quarter: "QQQ yyyy",
+        year: "yyyy",
+    }),
+    parse: (value: any) => {
+        if (typeof value === "string") {
+            return new Date(value).getTime();
+        }
+        return value;
+    },
+    format: (timestamp: number, f: string) => {
+        return format(new Date(timestamp), f);
+    },
+    add: (timestamp: number, amount: number, unit: string) => {
+        const date = new Date(timestamp);
+        switch (unit) {
+            case "millisecond":
+                date.setMilliseconds(date.getMilliseconds() + amount);
+                break;
+            case "second":
+                date.setSeconds(date.getSeconds() + amount);
+                break;
+            case "minute":
+                date.setMinutes(date.getMinutes() + amount);
+                break;
+            case "hour":
+                date.setHours(date.getHours() + amount);
+                break;
+            case "day":
+                date.setDate(date.getDate() + amount);
+                break;
+            case "week":
+                date.setDate(date.getDate() + amount * 7);
+                break;
+            case "month":
+                date.setMonth(date.getMonth() + amount);
+                break;
+            case "quarter":
+                date.setMonth(date.getMonth() + amount * 3);
+                break;
+            case "year":
+                date.setFullYear(date.getFullYear() + amount);
+                break;
+        }
+        return date.getTime();
+    },
+    diff: (max: number, min: number, unit: string) => {
+        const diff = max - min;
+        switch (unit) {
+            case "millisecond":
+                return diff;
+            case "second":
+                return diff / 1000;
+            case "minute":
+                return diff / (1000 * 60);
+            case "hour":
+                return diff / (1000 * 60 * 60);
+            case "day":
+                return diff / (1000 * 60 * 60 * 24);
+            case "week":
+                return diff / (1000 * 60 * 60 * 24 * 7);
+            case "month":
+                return diff / (1000 * 60 * 60 * 24 * 30);
+            case "quarter":
+                return diff / (1000 * 60 * 60 * 24 * 90);
+            case "year":
+                return diff / (1000 * 60 * 60 * 24 * 365);
+            default:
+                return diff;
+        }
+    },
+    startOf: (timestamp: number, unit: string, weekday?: number) => {
+        const date = new Date(timestamp);
+        switch (unit) {
+            case "second":
+                date.setMilliseconds(0);
+                break;
+            case "minute":
+                date.setSeconds(0, 0);
+                break;
+            case "hour":
+                date.setMinutes(0, 0, 0);
+                break;
+            case "day":
+                date.setHours(0, 0, 0, 0);
+                break;
+            case "week": {
+                const day = date.getDay();
+                const diff = date.getDate() - day + (weekday || 0);
+                date.setDate(diff);
+                date.setHours(0, 0, 0, 0);
+                break;
+            }
+            case "month":
+                date.setDate(1);
+                date.setHours(0, 0, 0, 0);
+                break;
+            case "quarter": {
+                const quarter = Math.floor(date.getMonth() / 3);
+                date.setMonth(quarter * 3, 1);
+                date.setHours(0, 0, 0, 0);
+                break;
+            }
+            case "year":
+                date.setMonth(0, 1);
+                date.setHours(0, 0, 0, 0);
+                break;
+        }
+        return date.getTime();
+    },
+    endOf: (timestamp: number, unit: string) => {
+        const date = new Date(timestamp);
+        switch (unit) {
+            case "second":
+                date.setMilliseconds(999);
+                break;
+            case "minute":
+                date.setSeconds(59, 999);
+                break;
+            case "hour":
+                date.setMinutes(59, 59, 999);
+                break;
+            case "day":
+                date.setHours(23, 59, 59, 999);
+                break;
+            case "week": {
+                const day = date.getDay();
+                const diff = date.getDate() + (6 - day);
+                date.setDate(diff);
+                date.setHours(23, 59, 59, 999);
+                break;
+            }
+            case "month": {
+                date.setMonth(date.getMonth() + 1, 0);
+                date.setHours(23, 59, 59, 999);
+                break;
+            }
+            case "quarter": {
+                const quarter = Math.floor(date.getMonth() / 3) + 1;
+                date.setMonth(quarter * 3, 0);
+                date.setHours(23, 59, 59, 999);
+                break;
+            }
+            case "year":
+                date.setMonth(11, 31);
+                date.setHours(23, 59, 59, 999);
+                break;
+        }
+        return date.getTime();
+    },
+});
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -30,6 +201,7 @@ export const TRADE_TIMEOUT_MS = 10000; // 10 seconds
 export const GRID_SIZE = 25; // snapping grid for draggable/resizable elements
 export const ITEM_MARGIN = 20; // fixed space between dashboard items
 export const MAX_RSI_DATA = 100;
+export const PADDING_PERCENTAGE = 0.05;
 
 // =============================================================================
 // DOM REFERENCES
@@ -56,11 +228,11 @@ export const orderBookContainer = document.getElementById("orderBookContainer");
 // CHART INSTANCES
 // =============================================================================
 
-export let tradesChart: ChartInstance | null = null;
+export let tradesChart: Chart<"scatter"> | null = null;
 export let orderBookChart: ChartInstance | null = null;
-export let rsiChart: ChartInstance | null = null;
+export let rsiChart: Chart<"line"> | null = null;
 
-export function setTradesChart(chart: ChartInstance | null): void {
+export function setTradesChart(chart: Chart<"scatter"> | null): void {
     tradesChart = chart;
 }
 
@@ -68,7 +240,7 @@ export function setOrderBookChart(chart: ChartInstance | null): void {
     orderBookChart = chart;
 }
 
-export function setRsiChart(chart: ChartInstance | null): void {
+export function setRsiChart(chart: Chart<"line"> | null): void {
     rsiChart = chart;
 }
 

@@ -1,7 +1,7 @@
 import {
     type WebSocketMessage,
     MessageType,
-    type TradeMessage,
+    type TradeData,
     type BacklogMessage,
     type PingMessage,
 } from "./types.js";
@@ -15,7 +15,7 @@ interface TradeWebSocketConfig {
     pingInterval?: number;
     pongWait?: number;
     onMessage?: (message: WebSocketMessage) => void;
-    onBacklog?: (data: TradeMessage[]) => void;
+    onBacklog?: (data: TradeData[]) => void;
     onReconnectFail?: () => void;
     onTimeout?: () => void;
 }
@@ -30,7 +30,7 @@ export class TradeWebSocket {
     private readonly pongWaitTime: number;
 
     private onMessage: (message: WebSocketMessage) => void;
-    private onBacklog: (data: TradeMessage[]) => void;
+    private onBacklog: (data: TradeData[]) => void;
     private onReconnectFail: () => void;
 
     private ws: WebSocket | null = null;
@@ -40,7 +40,7 @@ export class TradeWebSocket {
 
     constructor({
         url,
-        maxTrades = 50000,
+        maxTrades = 10000,
         maxReconnectAttempts = 10,
         reconnectDelay = 1000,
         pingInterval = 10000,
@@ -114,7 +114,6 @@ export class TradeWebSocket {
 
     private handleBacklog(message: BacklogMessage): void {
         if (Array.isArray(message.data)) {
-            console.log(`Backlog of ${message.data.length} trades received.`);
             this.onBacklog(message.data);
         } else {
             console.warn("Received malformed backlog data:", message.data);

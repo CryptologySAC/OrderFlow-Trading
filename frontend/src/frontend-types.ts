@@ -21,55 +21,10 @@ import type { WebSocketMessage } from "./types.js";
 export interface ChartDataPoint {
     x: number;
     y: number;
-    quantity?: number;
-    orderType?: "BUY" | "SELL";
-}
-
-export interface ChartAnnotation {
-    type: string;
-    xValue?: number;
-    yValue?: number;
-    xMin?: number;
-    xMax?: number;
-    yMin?: number;
-    yMax?: number;
-    content?: string;
-    backgroundColor?: string;
-    color?: string;
-    font?: {
-        size?: number;
-        family?: string;
-        weight?: string;
-    };
-    borderRadius?: number;
-    padding?: number;
-    position?: {
-        x: string;
-        y: string;
-    };
-    borderColor?: string;
-    borderWidth?: number;
-    borderDash?: number[];
-    drawTime?: string;
-    label?: {
-        display?: boolean;
-        content?: string;
-        position?: string;
-        backgroundColor?: string;
-        color?: string;
-        font?: {
-            size?: number;
-            family?: string;
-            weight?: string;
-        };
-        padding?: number;
-        borderRadius?: number;
-    };
-    z?: number;
-    xAdjust?: number;
-    yAdjust?: number;
-    enter?: (context: unknown, event: MouseEvent) => void;
-    leave?: () => void;
+    quantity: number;
+    orderType: "BUY" | "SELL";
+    pointRadius: number;
+    backgroundColor: string;
 }
 
 export interface ChartScale {

@@ -2,7 +2,6 @@ import {
     tradesChart,
     orderBookChart,
     rsiChart,
-    trades,
     activeRange,
     PADDING_TIME,
     FIFTEEN_MINUTES,
@@ -11,7 +10,7 @@ import {
     activeZones,
     maxActiveZones,
     signalsList,
-    setTradesChart,
+    //setTradesChart,
     setOrderBookChart,
     setRsiChart,
 } from "./state.js";
@@ -23,10 +22,7 @@ import {
 } from "./theme.js";
 
 import type {
-    ChartAnnotation,
     ChartInstance,
-    ChartDataPoint,
-    ChartOptions,
     Anomaly,
     Trade,
     OrderBookLevel,
@@ -38,127 +34,23 @@ import type {
     ChartDataset,
 } from "../frontend-types.js";
 
-import { Chart, registerables, ScriptableContext, TooltipItem } from "chart.js";
-import "chartjs-adapter-date-fns";
-import annotationPlugin from "chartjs-plugin-annotation";
-//import type { AnnotationOptions } from "chartjs-plugin-annotation";
+import {
+    Chart,
+    ChartEvent,
+    registerables,
+    ScriptableContext,
+    TooltipItem,
+    ChartOptions,
+} from "chart.js";
+import annotationPlugin, {
+    //    EventContext,
+    //PartialEventContext,
+} from "chartjs-plugin-annotation";
 
 import zoomPlugin from "chartjs-plugin-zoom";
+import "chartjs-adapter-date-fns";
 
-Chart.register(...registerables, annotationPlugin, zoomPlugin);
-// Register date adapter explicitly for Chart.js v4
-import { _adapters } from "chart.js";
-_adapters._date.override({
-  formats: () => ({
-    datetime: "MMM dd, yyyy, h:mm:ss a",
-    millisecond: "h:mm:ss.SSS a",
-    second: "h:mm:ss a",
-    minute: "h:mm a",
-    hour: "h a",
-    day: "MMM dd",
-    week: "MMM dd",
-    month: "MMM yyyy",
-    quarter: "QQQ yyyy",
-    year: "yyyy"
-  }),
-  parse: (value: any) => {
-    if (typeof value === "string") {
-      return new Date(value).getTime();
-    }
-    return value;
-  },
-  format: (timestamp: number, format: string) => {
-    void format;
-    const date = new Date(timestamp);
-    return date.toLocaleString();
-  },
-  add: (timestamp: number, amount: number, unit: string) => {
-    const date = new Date(timestamp);
-    switch (unit) {
-      case "millisecond": date.setMilliseconds(date.getMilliseconds() + amount); break;
-      case "second": date.setSeconds(date.getSeconds() + amount); break;
-      case "minute": date.setMinutes(date.getMinutes() + amount); break;
-      case "hour": date.setHours(date.getHours() + amount); break;
-      case "day": date.setDate(date.getDate() + amount); break;
-      case "week": date.setDate(date.getDate() + amount * 7); break;
-      case "month": date.setMonth(date.getMonth() + amount); break;
-      case "quarter": date.setMonth(date.getMonth() + amount * 3); break;
-      case "year": date.setFullYear(date.getFullYear() + amount); break;
-    }
-    return date.getTime();
-  },
-  diff: (max: number, min: number, unit: string) => {
-    const diff = max - min;
-    switch (unit) {
-      case "millisecond": return diff;
-      case "second": return diff / 1000;
-      case "minute": return diff / (1000 * 60);
-      case "hour": return diff / (1000 * 60 * 60);
-      case "day": return diff / (1000 * 60 * 60 * 24);
-      case "week": return diff / (1000 * 60 * 60 * 24 * 7);
-      case "month": return diff / (1000 * 60 * 60 * 24 * 30);
-      case "quarter": return diff / (1000 * 60 * 60 * 24 * 90);
-      case "year": return diff / (1000 * 60 * 60 * 24 * 365);
-      default: return diff;
-    }
-  },
-  startOf: (timestamp: number, unit: string, weekday?: number) => {
-    const date = new Date(timestamp);
-    switch (unit) {
-      case "second": date.setMilliseconds(0); break;
-      case "minute": date.setSeconds(0, 0); break;
-      case "hour": date.setMinutes(0, 0, 0); break;
-      case "day": date.setHours(0, 0, 0, 0); break;
-      case "week": {
-        const day = date.getDay();
-        const diff = date.getDate() - day + (weekday || 0);
-        date.setDate(diff);
-        date.setHours(0, 0, 0, 0);
-        break;
-      }
-      case "month": date.setDate(1); date.setHours(0, 0, 0, 0); break;
-      case "quarter": {
-        const quarter = Math.floor(date.getMonth() / 3);
-        date.setMonth(quarter * 3, 1);
-        date.setHours(0, 0, 0, 0);
-        break;
-      }
-      case "year": date.setMonth(0, 1); date.setHours(0, 0, 0, 0); break;
-    }
-    return date.getTime();
-  },
-  endOf: (timestamp: number, unit: string) => {
-    const date = new Date(timestamp);
-    switch (unit) {
-      case "second": date.setMilliseconds(999); break;
-      case "minute": date.setSeconds(59, 999); break;
-      case "hour": date.setMinutes(59, 59, 999); break;
-      case "day": date.setHours(23, 59, 59, 999); break;
-      case "week": {
-        const day = date.getDay();
-        const diff = date.getDate() + (6 - day);
-        date.setDate(diff);
-        date.setHours(23, 59, 59, 999);
-        break;
-      }
-      case "month": {
-        date.setMonth(date.getMonth() + 1, 0);
-        date.setHours(23, 59, 59, 999);
-        break;
-      }
-      case "quarter": {
-        const quarter = Math.floor(date.getMonth() / 3) + 1;
-        date.setMonth(quarter * 3, 0);
-        date.setHours(23, 59, 59, 999);
-        break;
-      }
-      case "year": date.setMonth(11, 31); date.setHours(23, 59, 59, 999); break;
-    }
-    return date.getTime();
-  }
-});
-
-
+Chart.register(...registerables, zoomPlugin, annotationPlugin);
 
 // Define zone types locally
 type ZoneUpdateType =
@@ -171,31 +63,9 @@ type ZoneUpdateType =
 type ZoneSignalType = "completion" | "invalidation" | "consumption";
 
 // Magic number constants
-const PADDING_PERCENTAGE = 0.05;
 const MAX_LABEL_LENGTH = 250;
 const TRUNCATED_LABEL_LENGTH = 245;
 const PRICE_DEVIATION_THRESHOLD = 0.02;
-
-// Trade opacity constants
-const TRADE_OPACITY_HIGH = 0.6;
-const TRADE_OPACITY_MEDIUM_HIGH = 0.5;
-const TRADE_OPACITY_MEDIUM = 0.4;
-const TRADE_OPACITY_LOW = 0.3;
-const TRADE_OPACITY_MINIMAL = 0.2;
-
-// Trade quantity thresholds
-const TRADE_QUANTITY_HIGH = 500;
-const TRADE_QUANTITY_MEDIUM_HIGH = 200;
-const TRADE_QUANTITY_MEDIUM = 100;
-const TRADE_QUANTITY_LOW = 15;
-
-// Point radius constants
-const POINT_RADIUS_LARGEST = 50;
-const POINT_RADIUS_LARGE = 40;
-const POINT_RADIUS_MEDIUM = 25;
-const POINT_RADIUS_SMALL = 10;
-const POINT_RADIUS_TINY = 5;
-const POINT_RADIUS_MINIMAL = 2;
 
 // RSI threshold constants
 const RSI_OVERBOUGHT = 70;
@@ -221,16 +91,16 @@ const DEPLETION_RATIO_LOW = 0.3;
 const DEPLETION_RATIO_MEDIUM = 0.7;
 
 // Zone calculation constants
-const ZONE_ALPHA_MIN = 0.2;
-const ZONE_ALPHA_MAX = 0.5;
-const ZONE_DURATION_MAX_HOURS = 4;
-const ZONE_DURATION_MAX_MS = ZONE_DURATION_MAX_HOURS * 60 * 60 * 1000;
+//const ZONE_ALPHA_MIN = 0.2;
+//const ZONE_ALPHA_MAX = 0.5;
+//const ZONE_DURATION_MAX_HOURS = 4;
+//const ZONE_DURATION_MAX_MS = ZONE_DURATION_MAX_HOURS * 60 * 60 * 1000;
 const ZONE_BASE_THICKNESS_PERCENT = 0.0008; // 0.08%
 const ZONE_STRENGTH_MULTIPLIER_BASE = 1;
 const ZONE_TOUCH_MULTIPLIER_MAX = 1;
 const ZONE_TOUCH_COUNT_NORMALIZER = 10;
-const ZONE_ALPHA_MULTIPLIER = 1.5;
-const ZONE_ALPHA_MULTIPLIER_MAX = 0.8;
+//const ZONE_ALPHA_MULTIPLIER = 1.5;
+//const ZONE_ALPHA_MULTIPLIER_MAX = 0.8;
 
 // Breach threshold constants
 const BREACH_THRESHOLD_MULTIPLIER = 2;
@@ -288,89 +158,6 @@ export function scheduleOrderBookUpdate(): void {
 }
 
 /**
- * Updates Y-axis bounds based on visible trades (optimized for performance)
- */
-export function updateYAxisBounds(): void {
-    if (!tradesChart || trades.length === 0) return;
-
-    const chartOptions = tradesChart.options as any;
-    const xMin: number = chartOptions.scales?.["x"]?.min as number;
-    const xMax: number = chartOptions.scales?.["x"]?.max as number;
-
-    // PERFORMANCE OPTIMIZATION: Use single pass through trades array
-    // Instead of filter + map + spread, do everything in one loop
-    let yMin: number = Infinity;
-    let yMax: number = -Infinity;
-    let visibleCount: number = 0;
-
-    // Single efficient loop through trades
-    for (let i = trades.length - 1; i >= 0; i--) {
-        const trade: ChartDataPoint | undefined = trades[i];
-        if (!trade) continue;
-        if (trade.x >= xMin && trade.x <= xMax) {
-            const price: number = trade.y;
-            if (price < yMin) yMin = price;
-            if (price > yMax) yMax = price;
-            visibleCount++;
-
-            // Early exit if we have enough samples for accurate bounds
-            if (visibleCount >= 1000) break;
-        }
-    }
-
-    if (visibleCount === 0) return;
-
-    const padding: number = (yMax - yMin) * PADDING_PERCENTAGE;
-    const tradesChartOptions: ChartOptions =
-        tradesChart.options as ChartOptions;
-    if (tradesChartOptions === undefined ||tradesChartOptions.scales === undefined || tradesChartOptions.scales["y"] === undefined) {
-        throw new Error("tradesChartOptions(.scales.y) is undefined");
-    }
-    const yScale = tradesChartOptions.scales["y"];
-    yScale.suggestedMin = yMin - padding;
-    yScale.suggestedMax = yMax + padding;
-    yScale.min = 0;
-    yScale.max = 0;
-}
-
-/**
- * Updates 15-minute annotations efficiently
- */
-export function updateTimeAnnotations(
-    latestTime: number,
-    activeRange: number
-): void {
-    if (!tradesChart) return;
-    const chartOptions = tradesChart.options as any;
-    const annotations = chartOptions.plugins?.annotation?.annotations;
-    if (!annotations) return;
-
-    const min: number = latestTime - activeRange;
-    const max: number = latestTime + PADDING_TIME;
-
-    Object.keys(annotations).forEach((key: string) => {
-        if (!isNaN(Number(key)) && (Number(key) < min || Number(key) > max)) {
-            delete annotations[key];
-        }
-    });
-
-    let time: number = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
-    while (time <= max) {
-        if (!annotations[time]) {
-            annotations[time] = {
-                type: "line",
-                xMin: time,
-                xMax: time,
-                borderColor: "rgba(102, 102, 102, 0.4)",
-                borderWidth: 2,
-                z: 1,
-            };
-        }
-        time += FIFTEEN_MINUTES;
-    }
-}
-
-/**
  * Updates 15-minute time annotations for RSI chart
  */
 export function updateRSITimeAnnotations(
@@ -386,18 +173,19 @@ export function updateRSITimeAnnotations(
     const newAnnotations: any = {};
 
     // Preserve existing overbought/oversold lines with deep copies
+    /*
     if (annotations["overboughtLine"]) {
         newAnnotations["overboughtLine"] = {
             ...annotations["overboughtLine"],
-        } as ChartAnnotation;
+        } as AnnotationOptions<"line">;
     }
 
     if (annotations["oversoldLine"]) {
         newAnnotations["oversoldLine"] = {
             ...annotations["oversoldLine"],
-        } as ChartAnnotation;
+        } as AnnotationOptions<"line">;
     }
-
+*/
     // Add time annotations
     const min: number = latestTime - activeRange;
     const max: number = latestTime + PADDING_TIME;
@@ -415,25 +203,9 @@ export function updateRSITimeAnnotations(
     }
 
     // Replace the entire annotations object
-    if (rsiChart.options.plugins?.annotation) {
-        rsiChart.options.plugins.annotation.annotations = newAnnotations as any;
-    }
-}
-
-export function createTrade(
-    x: number,
-    y: number,
-    quantity: number,
-    orderType: string
-): ChartDataPoint {
-    return {
-        x,
-        y,
-        quantity,
-        orderType: (orderType.toLowerCase() === "buy" ? "BUY" : "SELL") as
-            | "BUY"
-            | "SELL",
-    };
+    //if (rsiChart.options.plugins?.annotation) {
+    //    rsiChart.options.plugins.annotation.annotations = newAnnotations as any;
+    //}
 }
 
 /**
@@ -478,257 +250,18 @@ export function isValidTrade(trade: unknown): trade is Trade {
 }
 
 /**
- * Gets the background color for a trade based on type and quantity.
- */
-function getTradeBackgroundColor(context: ScriptableContext<any>): string {
-    const trade = context.raw as ChartDataPoint;
-    if (!trade) return "rgba(0, 0, 0, 0)";
-
-    const isBuy: boolean = trade.orderType === "BUY";
-    const q: number = trade.quantity || 0;
-    const opacity: number =
-        q > TRADE_QUANTITY_HIGH
-            ? TRADE_OPACITY_HIGH
-            : q > TRADE_QUANTITY_MEDIUM_HIGH
-              ? TRADE_OPACITY_MEDIUM_HIGH
-              : q > TRADE_QUANTITY_MEDIUM
-                ? TRADE_OPACITY_MEDIUM
-                : q > TRADE_QUANTITY_LOW
-                  ? TRADE_OPACITY_LOW
-                  : TRADE_OPACITY_MINIMAL;
-    return isBuy
-        ? `rgba(0, 255, 30, ${opacity})`
-        : `rgba(255, 0, 90, ${opacity})`;
-}
-
-/**
- * Gets the point radius for a trade based on quantity.
- */
-function getTradePointRadius(context: ScriptableContext<any>): number {
-    const q: number = (context.raw as ChartDataPoint)?.quantity || 0;
-    return q > 1000
-        ? POINT_RADIUS_LARGEST
-        : q > TRADE_QUANTITY_HIGH
-          ? POINT_RADIUS_LARGE
-          : q > TRADE_QUANTITY_MEDIUM_HIGH
-            ? POINT_RADIUS_MEDIUM
-            : q > TRADE_QUANTITY_MEDIUM
-              ? POINT_RADIUS_SMALL
-              : q > 50
-                ? POINT_RADIUS_TINY
-                : POINT_RADIUS_MINIMAL;
-}
-
-/**
- * Initializes the trades scatter chart.
- */
-export function initializeTradesChart(
-    ctx: CanvasRenderingContext2D
-): ChartInstance | null {
-    if (tradesChart) return tradesChart;
-
-    // Use EXACT same time calculation as RSI chart
-    const now: number = Date.now();
-    let initialMin: number, initialMax: number;
-
-    if (activeRange !== null) {
-        initialMin = now - activeRange;
-        initialMax = now + PADDING_TIME;
-    } else {
-        initialMin = now - 90 * 60000; // 90 minutes ago
-        initialMax = now + PADDING_TIME;
-    }
-
-    const chart = new Chart(ctx, {
-        type: "scatter",
-        data: {
-            datasets: [
-                {
-                    label: "Trades",
-                    parsing: { xAxisKey: "x", yAxisKey: "y" },
-                    data: trades,
-                    backgroundColor: getTradeBackgroundColor,
-                    pointRadius: getTradePointRadius,
-                },
-            ],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            layout: { padding: 0 },
-            scales: {
-                x: {
-                    type: "time",
-                    time: {
-                        unit: "minute",
-                        displayFormats: { minute: "HH:mm" },
-                    },
-                    min: initialMin,
-                    max: initialMax,
-                    grid: {
-                        display: true,
-                        color: "rgba(102, 102, 102, 0.1)",
-                    },
-                },
-                y: {
-                    type: "linear",
-                    title: { display: true, text: "USDT" },
-                    ticks: { stepSize: 0.05, precision: 2 },
-                    position: "right",
-                    grace: 0.1,
-                    offset: true,
-                },
-            },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: (context: TooltipItem<"scatter">) => {
-                            const t = context.raw as ChartDataPoint;
-                            return t
-                                ? `Price: ${t.y.toFixed(2)}, Qty: ${t.quantity}, Type: ${t.orderType}`
-                                : "";
-                        },
-                    },
-                },
-                annotation: {
-                    annotations: {
-                        lastPriceLine: {
-                            type: "line",
-                            yMin: undefined,
-                            yMax: undefined,
-                            borderColor: "blue",
-                            borderWidth: 1,
-                            drawTime: "afterDatasetsDraw",
-                            label: {
-                                display: true,
-                                content: (ctx: any) =>
-                                    (
-                                        (
-                                            ctx.chart.options.plugins
-                                                ?.annotation?.annotations
-                                                ?.lastPriceLine as any
-                                        )?.yMin as number
-                                    )?.toFixed(2) || "",
-                                position: "end",
-                                xAdjust: -2,
-                                yAdjust: 0,
-                                backgroundColor: "rgba(0, 0, 255, 0.5)",
-                                color: "white",
-                                font: { size: 12 },
-                                padding: 6,
-                            },
-                        },
-                    },
-                },
-                zoom: {
-                    pan: {
-                        enabled: true,
-                        mode: "x",
-                        onPanComplete: ({ chart }: { chart: Chart }) => {
-                            if (isSyncing) return;
-                            isSyncing = true;
-                            if (rsiChart) {
-                                const rsiChartOptions =
-                                    rsiChart.options as ChartOptions;
-                                const chartOptions =
-                                    chart.options as ChartOptions;
-                                if (rsiChartOptions === undefined) {
-                                    throw new Error(
-                                        "rsiChartOptions is undefined."
-                                    );
-                                }
-                                if (rsiChartOptions.scales && rsiChartOptions.scales["x"]) {
-                                    rsiChartOptions.scales["x"].min =
-                                        chartOptions.scales?.["x"]?.min ??
-                                        Date.now() - 90 * 60000;
-                                    rsiChartOptions.scales["x"].max =
-                                        chartOptions.scales?.["x"]?.max ??
-                                        Date.now() + PADDING_TIME;
-                                    rsiChart.update("none");
-                                }
-                            }
-                            isSyncing = false;
-                        },
-                    },
-                    zoom: {
-                        wheel: {
-                            enabled: true,
-                        },
-                        pinch: {
-                            enabled: true,
-                        },
-                        mode: "x",
-                        onZoomComplete: ({ chart }: { chart: Chart }) => {
-                            if (isSyncing) return;
-                            isSyncing = true;
-                            if (rsiChart && chart) {
-                                if (
-                                    rsiChart.options &&
-                                    rsiChart.options.scales &&
-                                    chart.options &&
-                                    chart.options.scales &&
-                                    rsiChart.options.scales["x"] &&
-                                    chart.options.scales["x"]
-                                ) {
-                                    (rsiChart.options as any).scales.x.min =
-                                        (chart.options.scales as any).x.min ??
-                                        Date.now() - 90 * 60000;
-                                    (rsiChart.options as any).scales.x.max =
-                                        chart.options.scales["x"].max ??
-                                        Date.now() + PADDING_TIME;
-                                    rsiChart.update("none");
-                                }
-                            }
-                            isSyncing = false;
-                        },
-                    },
-                },
-            },
-        },
-    });
-
-    setTradesChart(chart as any);
-
-    // Initialize time annotations for specific time ranges
-    if (activeRange !== null) {
-        updateTimeAnnotations(now, activeRange);
-    }
-
-    console.log("Trades chart initialized successfully");
-    return chart;
-}
-
-/**
  * Initializes the RSI chart.
  */
 export function initializeRSIChart(
-    ctx: CanvasRenderingContext2D
-): ChartInstance | null {
+    ctx: CanvasRenderingContext2D,
+    initialMin: number,
+    initialMax: number,
+    now: number
+): Chart<"line"> | null {
     if (rsiChart) return rsiChart;
 
-    if (typeof Chart === "undefined") {
-        console.error("Chart.js not loaded - cannot initialize RSI chart");
-        throw new Error("Chart.js is not loaded");
-    }
-
-    // Get current time range for initial setup - SAME as trades chart
-    const now: number = Date.now();
-    let initialMin: number, initialMax: number;
-
-    if (activeRange !== null) {
-        // Use the SAME calculation as trades chart
-        initialMin = now - activeRange;
-        initialMax = now + PADDING_TIME;
-    } else {
-        // For "ALL" case, use the SAME default as trades chart
-        initialMin = now - 90 * 60000; // 90 minutes ago
-        initialMax = now + PADDING_TIME;
-    }
-
     try {
-        const chart = new Chart(ctx, {
+        const chart: Chart<"line"> = new Chart(ctx, {
             type: "line",
             data: {
                 datasets: [
@@ -763,14 +296,13 @@ export function initializeRSIChart(
                             display: true,
                             color: "rgba(102, 102, 102, 0.1)",
                         },
-                        ticks: { source: "data" }, // Prevent auto-scaling
                     },
                     y: {
                         type: "linear",
                         title: { display: true, text: "RSI" },
                         min: 0,
                         max: 100,
-                        ticks: { stepSize: 10 },
+                        ticks: { stepSize: 5 },
                         position: "right",
                         grace: 0,
                         offset: true,
@@ -788,46 +320,7 @@ export function initializeRSIChart(
                             },
                         },
                     },
-                    annotation: {
-                        annotations: {
-                            overboughtLine: {
-                                type: "line",
-                                yMin: 70,
-                                yMax: 70,
-                                borderColor: "rgba(255, 0, 0, 0.8)",
-                                borderWidth: 1,
-                                borderDash: [5, 5],
-                                drawTime: "beforeDatasetsDraw",
-                                label: {
-                                    display: true,
-                                    content: "Overbought (70)",
-                                    position: "end",
-                                    backgroundColor: "rgba(255, 0, 0, 0.8)",
-                                    color: "white",
-                                    font: { size: 10 },
-                                    padding: 4,
-                                },
-                            },
-                            oversoldLine: {
-                                type: "line",
-                                yMin: 30,
-                                yMax: 30,
-                                borderColor: "rgba(0, 255, 0, 0.8)",
-                                borderWidth: 1,
-                                borderDash: [5, 5],
-                                drawTime: "beforeDatasetsDraw",
-                                label: {
-                                    display: true,
-                                    content: "Oversold (30)",
-                                    position: "start",
-                                    backgroundColor: "rgba(0, 255, 0, 0.8)",
-                                    color: "white",
-                                    font: { size: 10 },
-                                    padding: 4,
-                                },
-                            },
-                        },
-                    },
+
                     zoom: {
                         pan: {
                             enabled: true,
@@ -840,20 +333,20 @@ export function initializeRSIChart(
                                     tradesChart &&
                                     tradesChart.options &&
                                     tradesChart.options.scales &&
+                                    tradesChart.options.scales["x"] &&
                                     chart.options &&
-                                    chart.options.scales
+                                    chart.options.scales &&
+                                    chart.options.scales["x"]
                                 ) {
                                     if (
-                                        tradesChart.options.scales["x"] &&
-                                        chart.options.scales["x"]
+                                        chart.options.scales["x"].min &&
+                                        chart.options.scales["x"].max
                                     ) {
                                         tradesChart.options.scales["x"].min =
-                                            chart.options.scales["x"].min ??
-                                            Date.now() - 90 * 60000;
+                                            chart.options.scales["x"].min;
 
                                         tradesChart.options.scales["x"].max =
-                                            chart.options.scales["x"].max ??
-                                            Date.now() + PADDING_TIME;
+                                            chart.options.scales["x"].max;
 
                                         tradesChart.update("none");
                                     }
@@ -905,19 +398,66 @@ export function initializeRSIChart(
             },
         });
 
-        setRsiChart(chart as any);
+        /*
+        const overboughtLine: AnnotationOptions<"line"> = {
+            type: "line",
+            yMin: 70,
+            yMax: 70,
+            borderColor: "rgba(255, 0, 0, 0.8)",
+            borderWidth: 1,
+            borderDash: [5, 5],
+            drawTime: "beforeDatasetsDraw",
+            label: {
+                display: true,
+                content: "Overbought (70)",
+                position: "end",
+                backgroundColor: "rgba(255, 0, 0, 0.8)",
+                color: "white",
+                font: { size: 10 },
+                padding: 4,
+            },
+        };
+
+        const oversoldLine: AnnotationOptions<"line"> = {
+            type: "line",
+            yMin: 30,
+            yMax: 30,
+            borderColor: "rgba(0, 255, 0, 0.8)",
+            borderWidth: 1,
+            borderDash: [5, 5],
+            drawTime: "beforeDatasetsDraw",
+            label: {
+                display: true,
+                content: "Oversold (30)",
+                position: "start",
+                backgroundColor: "rgba(0, 255, 0, 0.8)",
+                color: "white",
+                font: { size: 10 },
+                padding: 4,
+            },
+        };
+
+        (
+            chart.options.plugins!.annotation!.annotations as Record<
+                string,
+                AnnotationOptions<"line">
+            >
+        )["overboughtLine"] = overboughtLine;
+        (
+            chart.options.plugins!.annotation!.annotations as Record<
+                string,
+                AnnotationOptions<"line">
+            >
+        )["oversoldLine"] = oversoldLine;
+*/
+        setRsiChart(chart as Chart<"line">);
 
         // Initialize time annotations
         if (activeRange !== null) {
             updateRSITimeAnnotations(now, activeRange);
-        } else {
-            // For "ALL" case, use the calculated range
-            updateRSITimeAnnotations(
-                (initialMin + initialMax) / 2,
-                (initialMax - initialMin) / 2 + PADDING_TIME
-            );
         }
 
+        console.log("RSI Chart initialized succesfully!");
         return chart;
     } catch (error) {
         console.error("Failed to create RSI chart:", error);
@@ -927,7 +467,7 @@ export function initializeRSIChart(
 
 /**
  * Safely updates RSI chart with error recovery
- */
+ *v/
 export function safeUpdateRSIChart(rsiData: RSIDataPoint[]): boolean {
     if (!rsiChart) {
         console.warn(
@@ -1537,16 +1077,18 @@ export function updateOrderBookDisplay(data: OrderBookData): void {
 
 export function addAnomalyChartLabel(anomaly: Anomaly): void {
     if (!tradesChart) return;
-    const now: number = anomaly.timestamp || anomaly.detectedAt || Date.now();
+    void anomaly;
+    //const now: number = anomaly.timestamp || anomaly.detectedAt || Date.now();
     if (!tradesChart.options.plugins) tradesChart.options.plugins = {};
-    if (!tradesChart.options.plugins.annotation) {
-        tradesChart.options.plugins.annotation = { annotations: {} };
-    }
-    const annotations = tradesChart.options.plugins.annotation.annotations;
-    if (annotations === undefined) {
-        throw new Error("annotations is undefined.");
-    }
+    //if (!tradesChart.options.plugins.annotation) {
+    //    tradesChart.options.plugins.annotation = { annotations: {} };
+    //}
+    //const annotations = tradesChart.options.plugins.annotation.annotations;
+    //if (annotations === undefined) {
+    //    throw new Error("annotations is undefined.");
+    //}
 
+    /*
     (annotations as any)[`anomaly.${now}`] = {
         type: "label",
         xValue: anomaly.timestamp ?? anomaly.detectedAt ?? now,
@@ -1565,6 +1107,7 @@ export function addAnomalyChartLabel(anomaly: Anomaly): void {
         padding: 6,
         borderRadius: 6,
     };
+    */
     tradesChart.update("none");
 }
 
@@ -1590,7 +1133,7 @@ export function handleSupportResistanceLevel(levelData: {
     }
 
     // Add level to chart
-    addSupportResistanceToChart(level);
+    //addSupportResistanceToChart(level);
 
     console.log("Support/Resistance level added to chart:", {
         id: level.id,
@@ -1603,7 +1146,7 @@ export function handleSupportResistanceLevel(levelData: {
 
 /**
  * Add support/resistance level as translucent bar on chart
- */
+ * /
 function addSupportResistanceToChart(level: SupportResistanceLevel): void {
     if (!tradesChart) return;
 
@@ -1615,27 +1158,31 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
     if (annotations === undefined) {
         throw new Error("annotations is undefined.");
     }
-    const levelId: string = `sr_level_${level.id}`;
+    //const levelId: string = `sr_level_${level.id}`;
 
     // Determine color based on type and strength
-    const isSupport: boolean = level.type === "support";
-    const baseColor: string = isSupport ? "34, 197, 94" : "239, 68, 68"; // Green for support, red for resistance
+    //const isSupport: boolean = level.type === "support";
+    //const baseColor: string = isSupport ? "34, 197, 94" : "239, 68, 68"; // Green for support, red for resistance
+    /*
     const alpha: number = Math.max(
         ZONE_ALPHA_MIN,
         Math.min(ZONE_ALPHA_MAX, level.strength)
     ); // Opacity based on strength
 
     // Calculate time boundaries for the zone
-    const now: number = Date.now();
+    //const now: number = Date.now();
     const startTime: number = level.firstDetected;
     // Zone is valid until crossed or for a maximum duration
-    const maxValidDuration: number = ZONE_DURATION_MAX_MS; // 4 hours maximum
+    //const maxValidDuration: number = ZONE_DURATION_MAX_MS; // 4 hours maximum
+
+    /*
     const endTime: number = Math.min(
         now + maxValidDuration,
         level.lastTouched + maxValidDuration
     );
 
     // Create price tolerance for zone height - make it proportional to strength and touch count
+    /*
     const baseThickness: number = level.price * ZONE_BASE_THICKNESS_PERCENT; // 0.08% base thickness
     const strengthMultiplier: number =
         ZONE_STRENGTH_MULTIPLIER_BASE + level.strength * 2; // 1x to 3x based on strength
@@ -1645,11 +1192,12 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
             level.touchCount / ZONE_TOUCH_COUNT_NORMALIZER,
             ZONE_TOUCH_MULTIPLIER_MAX
         ); // Additional thickness for more touches
-    const zoneHeight: number =
-        baseThickness * strengthMultiplier * touchMultiplier;
+    //const zoneHeight: number =
+    //    baseThickness * strengthMultiplier * touchMultiplier;
 
     // Add the time-bounded zone box
-    const annotation: ChartAnnotation = {
+    /* 
+    const annotation: AnnotationOptions<"box"> = {
         type: "box",
         xMin: startTime,
         xMax: endTime,
@@ -1668,6 +1216,7 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
     }
 
     (annotations as any)[levelId] = annotation as any;
+    * /
 
     // Add a label for the level - positioned at the start of the zone
     const labelId: string = `sr_label_${level.id}`;
@@ -1693,7 +1242,6 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
         drawTime: "afterDatasetsDraw",
         z: 5,
     };
-
     tradesChart.update("none");
 }
 
@@ -1703,14 +1251,15 @@ function addSupportResistanceToChart(level: SupportResistanceLevel): void {
 function removeSupportResistanceLevel(levelId: string): void {
     if (!tradesChart) return;
 
-    const annotations = tradesChart.options.plugins?.annotation?.annotations;
-    if (!annotations) return;
+    void levelId;
+    //const annotations = tradesChart.options.plugins?.annotation?.annotations;
+    //if (!annotations) return;
 
-    const barId: string = `sr_level_${levelId}`;
-    const labelId: string = `sr_label_${levelId}`;
+    //const barId: string = `sr_level_${levelId}`;
+    //const labelId: string = `sr_label_${levelId}`;
 
-    delete (annotations as any)[barId];
-    delete (annotations as any)[labelId];
+    //delete (annotations as any)[barId];
+    //delete (annotations as any)[labelId];
 
     tradesChart.update("none");
 }
@@ -1880,7 +1429,7 @@ function createZoneBox(zone: ZoneData): void {
     }
 
     // Add zone box to chart
-    addZoneToChart(zone);
+    //addZoneToChart(zone);
 }
 
 /**
@@ -1889,34 +1438,42 @@ function createZoneBox(zone: ZoneData): void {
 function updateZoneBox(zone: ZoneData): void {
     (activeZones as Map<string, ZoneData>).set(zone.id, zone);
 
+    /*
     // Update the chart annotation
-    if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        const tradesChartOptions = tradesChart.options as ChartOptions;
-        const annotation: ChartAnnotation | undefined =
-            tradesChartOptions.plugins?.annotation?.annotations[
+    if (
+        tradesChart &&
+        tradesChart.options &&
+        tradesChart.options.plugins &&
+        tradesChart.options.plugins.annotation &&
+        tradesChart.options.plugins.annotation.annotations
+    ) {
+        const annotation = tradesChart.options.plugins.annotation
+            .annotations as Record<string, AnnotationOptions<"box">>;
+
+        if (annotation && annotation[`zone_${zone.id}`]) {
+            const annotations = annotation[
                 `zone_${zone.id}`
-            ];
-        if (annotation) {
+            ] as AnnotationOptions<"box">;
             // Update zone properties
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
                 const price: number =
                     zone.priceRange.center ??
                     (zone.priceRange.min + zone.priceRange.max) / 2;
-                annotation.yMin = price;
-                annotation.yMax = price;
-                annotation.borderColor = getZoneBorderColor(zone);
+                annotations.yMin = price;
+                annotations.yMax = price;
+                annotations.borderColor = getZoneBorderColor(zone);
                 // Update end time for iceberg orders if zone has ended
                 if (zone.type === "iceberg" && zone.endTime) {
-                    annotation.xMax = zone.endTime;
+                    annotations.xMax = zone.endTime;
                 }
             } else {
-                annotation.yMin = zone.priceRange.min;
-                annotation.yMax = zone.priceRange.max;
-                annotation.backgroundColor = getZoneColor(zone);
-                annotation.borderColor = getZoneBorderColor(zone);
+                annotations.yMin = zone.priceRange.min;
+                annotations.yMax = zone.priceRange.max;
+                annotations.backgroundColor = getZoneColor(zone);
+                annotations.borderColor = getZoneBorderColor(zone);
             }
-            if (annotation.label) {
-                annotation.label.content = getZoneLabel(zone);
+            if (annotations.label) {
+                annotations.label.content = getZoneLabel(zone);
             }
 
             tradesChart.update("none");
@@ -1925,6 +1482,7 @@ function updateZoneBox(zone: ZoneData): void {
             addZoneToChart(zone);
         }
     }
+        */
 }
 
 /**
@@ -1933,31 +1491,38 @@ function updateZoneBox(zone: ZoneData): void {
 function completeZoneBox(zone: ZoneData): void {
     (activeZones as Map<string, ZoneData>).set(zone.id, zone);
 
-    if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        const tradesChartOptions = tradesChart.options as ChartOptions;
-        const annotation: ChartAnnotation | undefined =
-            tradesChartOptions.plugins?.annotation?.annotations[
+    /*
+    if (
+        tradesChart &&
+        tradesChart.options &&
+        tradesChart.options.plugins &&
+        tradesChart.options.plugins.annotation &&
+        tradesChart.options.plugins.annotation.annotations
+    ) {
+        const annotation = tradesChart.options.plugins.annotation
+            .annotations as Record<string, AnnotationOptions<"box">>;
+        if (annotation && annotation[`zone_${zone.id}`]) {
+            const annotations: AnnotationOptions<"box"> = annotation[
                 `zone_${zone.id}`
-            ];
-        if (annotation) {
+            ] as AnnotationOptions<"box">;
             // Change to completed zone style
             if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
-                annotation.borderColor = getCompletedZoneBorderColor(zone);
-                annotation.borderWidth = 2;
-                annotation.borderDash =
+                annotations.borderColor = getCompletedZoneBorderColor(zone);
+                annotations.borderWidth = 2;
+                annotations.borderDash =
                     zone.type === "iceberg" ? [3, 3] : [5, 5]; // Shorter dashes for iceberg
                 // Set final end time for iceberg orders
                 if (zone.type === "iceberg" && zone.endTime) {
-                    annotation.xMax = zone.endTime;
+                    annotations.xMax = zone.endTime;
                 }
             } else {
-                annotation.backgroundColor = getCompletedZoneColor(zone);
-                annotation.borderColor = getCompletedZoneBorderColor(zone);
-                annotation.borderWidth = 2;
-                annotation.borderDash = [5, 5];
+                annotations.backgroundColor = getCompletedZoneColor(zone);
+                annotations.borderColor = getCompletedZoneBorderColor(zone);
+                annotations.borderWidth = 2;
+                annotations.borderDash = [5, 5];
             }
-            if (annotation.label) {
-                annotation.label.content = getZoneLabel(zone) + " ✓";
+            if (annotations.label) {
+                annotations.label.content = getZoneLabel(zone) + " ✓";
             }
 
             tradesChart.update("none");
@@ -1971,6 +1536,7 @@ function completeZoneBox(zone: ZoneData): void {
             );
         }
     }
+        */
 }
 
 /**
@@ -1978,111 +1544,136 @@ function completeZoneBox(zone: ZoneData): void {
  */
 function removeZoneBox(zoneId: string): void {
     (activeZones as Map<string, ZoneData>).delete(zoneId);
+    /*
+    if (
+        tradesChart &&
+        tradesChart.options &&
+        tradesChart.options.plugins &&
+        tradesChart.options.plugins.annotation &&
+        tradesChart.options.plugins.annotation.annotations
+    ) {
+        const annotation = tradesChart.options.plugins.annotation
+            .annotations as Record<string, AnnotationOptions<"box">>;
+        if (annotation) {
+            delete annotation[`zone_${zoneId}`];
+        }
 
-    if (tradesChart?.options?.plugins?.annotation?.annotations) {
-        const tradesChartOptions = tradesChart.options as ChartOptions;
-        delete tradesChartOptions.plugins?.annotation?.annotations[
-            `zone_${zoneId}`
-        ];
         tradesChart.update("none");
     }
+        */
 }
 
 /**
  * Add zone as chart annotation
- */
+ * /
 function addZoneToChart(zone: ZoneData): void {
-    if (!tradesChart?.options?.plugins?.annotation?.annotations) return;
-    console.log("Adding zone to chart:", zone.type, zone.id, zone.priceRange);
-    const tradesChartOptions = tradesChart.options as ChartOptions;
-    let zoneAnnotation: ChartAnnotation;
+    if (
+        tradesChart &&
+        tradesChart.options &&
+        tradesChart.options.plugins &&
+        tradesChart.options.plugins.annotation &&
+        tradesChart.options.plugins.annotation.annotations
+    ) {
+        console.log(
+            "Adding zone to chart:",
+            zone.type,
+            zone.id,
+            zone.priceRange
+        );
+    
+        /*
 
-    if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
-        const price: number =
-            zone.priceRange.center ??
-            (zone.priceRange.min + zone.priceRange.max) / 2;
+        if (zone.type === "hidden_liquidity" || zone.type === "iceberg") {
+            const price: number =
+                zone.priceRange.center ??
+                (zone.priceRange.min + zone.priceRange.max) / 2;
 
-        // Calculate actual end time for iceberg orders based on zone duration
-        const endTime: number = zone.endTime || Date.now() + 5 * 60 * 1000;
+            // Calculate actual end time for iceberg orders based on zone duration
+            const endTime: number = zone.endTime || Date.now() + 5 * 60 * 1000;
 
-        const zoneAnnotationBase: ChartAnnotation = {
-            type: "line",
-            xMin: zone.startTime ?? Date.now(),
-            xMax: endTime,
-            yMin: price,
-            yMax: price,
-            borderColor: getZoneBorderColor(zone),
-            borderWidth: zone.type === "iceberg" ? 3 : 2, // Slightly thicker for iceberg
-            label: {
-                display: true,
-                content: getZoneLabel(zone),
-                position: "start",
-                font: {
-                    size: 10,
-                    weight: "bold",
+            const zoneAnnotationLine: AnnotationOptions<"line"> = {
+                type: "line",
+                xMin: zone.startTime ?? Date.now(),
+                xMax: endTime,
+                yMin: price,
+                yMax: price,
+                borderColor: getZoneBorderColor(zone),
+                borderWidth: zone.type === "iceberg" ? 3 : 2, // Slightly thicker for iceberg
+                label: {
+                    display: true,
+                    content: getZoneLabel(zone),
+                    position: "start",
+                    font: {
+                        size: 10,
+                        weight: "bold",
+                    },
+                    color: getZoneTextColor(zone),
+                    backgroundColor: "rgba(255, 255, 255, 0.8)",
+                    padding: 4,
+                    borderRadius: 3,
                 },
-                color: getZoneTextColor(zone),
-                backgroundColor: "rgba(255, 255, 255, 0.8)",
-                padding: 4,
-                borderRadius: 3,
-            },
-            enter: (_ctx: unknown, event: MouseEvent) => {
-                showZoneTooltip(zone, event);
-            },
-            leave: () => {
-                hideZoneTooltip();
-            },
-        };
+                enter: (_ctx: EventContext, event: ChartEvent) => {
+                    showZoneTooltip(zone, event);
+                },
+                leave: () => {
+                    hideZoneTooltip();
+                },
+            };
 
-        // Add borderDash only if it's defined
-        if (zone.type === "iceberg") {
-            zoneAnnotationBase.borderDash = [8, 4];
+            // Add borderDash only if it's defined
+            if (zone.type === "iceberg") {
+                zoneAnnotationLine.borderDash = [8, 4];
+            }
+            const annotation = tradesChart.options.plugins.annotation
+                .annotations as Record<string, AnnotationOptions<"line">>;
+            if (annotation) {
+                annotation[`zone_${zone.id}`] = zoneAnnotationLine;
+            }
+        } else {
+            const zoneAnnotation: AnnotationOptions<"box"> = {
+                type: "box",
+                xMin: zone.startTime ?? Date.now(),
+                xMax: Date.now() + 5 * 60 * 1000, // Extend 5 minutes into future
+                yMin: zone.priceRange.min,
+                yMax: zone.priceRange.max,
+                backgroundColor: getZoneColor(zone),
+                borderColor: getZoneBorderColor(zone),
+                borderWidth: 1,
+                label: {
+                    display: true,
+                    content: getZoneLabel(zone),
+                    position: "start",
+                    font: {
+                        size: 10,
+                        weight: "bold",
+                    },
+                    color: getZoneTextColor(zone),
+                    backgroundColor: "rgba(255, 255, 255, 0.8)",
+                    padding: 4,
+                    borderRadius: 3,
+                },
+                enter: (_ctx: EventContext, event: ChartEvent) => {
+                    showZoneTooltip(zone, event);
+                },
+                leave: () => {
+                    hideZoneTooltip();
+                },
+            } as AnnotationOptions<"box">;
+            const annotation = tradesChart.options.plugins.annotation
+                .annotations as Record<string, AnnotationOptions<"box">>;
+            if (annotation) {
+                annotation[`zone_${zone.id}`] = zoneAnnotation;
+            }
         }
-
-        zoneAnnotation = zoneAnnotationBase;
-    } else {
-        zoneAnnotation = {
-            type: "box",
-            xMin: zone.startTime ?? Date.now(),
-            xMax: Date.now() + 5 * 60 * 1000, // Extend 5 minutes into future
-            yMin: zone.priceRange.min,
-            yMax: zone.priceRange.max,
-            backgroundColor: getZoneColor(zone),
-            borderColor: getZoneBorderColor(zone),
-            borderWidth: 1,
-            label: {
-                display: true,
-                content: getZoneLabel(zone),
-                position: "start",
-                font: {
-                    size: 10,
-                    weight: "bold",
-                },
-                color: getZoneTextColor(zone),
-                backgroundColor: "rgba(255, 255, 255, 0.8)",
-                padding: 4,
-                borderRadius: 3,
-            },
-            enter: (_ctx: unknown, event: MouseEvent) => {
-                showZoneTooltip(zone, event);
-            },
-            leave: () => {
-                hideZoneTooltip();
-            },
-        };
+        tradesChart.update("none");
     }
-
-    if (tradesChartOptions.plugins?.annotation?.annotations) {
-        tradesChartOptions.plugins.annotation.annotations[`zone_${zone.id}`] =
-            zoneAnnotation;
-    }
-    tradesChart.update("none");
-}
+        */
+//}
 
 /**
  * Get zone background color based on type and strength
  */
-function getZoneColor(zone: ZoneData): string {
+export function getZoneColor(zone: ZoneData): string {
     const alpha: number = Math.max(
         ZONE_ALPHA_MIN_PERCENT,
         zone.strength * ZONE_ALPHA_MAX_PERCENT
@@ -2107,7 +1698,7 @@ function getZoneColor(zone: ZoneData): string {
 /**
  * Get zone border color
  */
-function getZoneBorderColor(zone: ZoneData): string {
+export function getZoneBorderColor(zone: ZoneData): string {
     switch (zone.type) {
         case "accumulation":
             return "rgba(34, 197, 94, 0.8)"; // Green
@@ -2127,7 +1718,7 @@ function getZoneBorderColor(zone: ZoneData): string {
 /**
  * Get completed zone colors (more muted)
  */
-function getCompletedZoneColor(zone: ZoneData): string {
+export function getCompletedZoneColor(zone: ZoneData): string {
     switch (zone.type) {
         case "accumulation":
             return "rgba(34, 197, 94, 0.2)"; // Lighter green
@@ -2144,7 +1735,7 @@ function getCompletedZoneColor(zone: ZoneData): string {
     }
 }
 
-function getCompletedZoneBorderColor(zone: ZoneData): string {
+export function getCompletedZoneBorderColor(zone: ZoneData): string {
     switch (zone.type) {
         case "accumulation":
             return "rgba(34, 197, 94, 0.5)"; // Muted green
@@ -2164,7 +1755,7 @@ function getCompletedZoneBorderColor(zone: ZoneData): string {
 /**
  * Get zone text color
  */
-function getZoneTextColor(zone: ZoneData): string {
+export function getZoneTextColor(zone: ZoneData): string {
     if (zone.type === "accumulation") {
         return "rgba(21, 128, 61, 1)"; // Dark green
     } else {
@@ -2206,7 +1797,7 @@ function getZoneLabel(zone: ZoneData): string {
 /**
  * Show zone tooltip on hover
  */
-function showZoneTooltip(zone: ZoneData, event: MouseEvent): void {
+export function showZoneTooltip(zone: ZoneData, event: ChartEvent): void {
     const tooltip: HTMLDivElement = document.createElement("div");
     tooltip.id = "zoneTooltip";
     tooltip.style.position = "fixed";
@@ -2304,18 +1895,18 @@ function showZoneTooltip(zone: ZoneData, event: MouseEvent): void {
     document.body.appendChild(tooltip);
 
     // Position tooltip
-    tooltip.style.left = `${event.clientX + 15}px`;
-    tooltip.style.top = `${event.clientY + 15}px`;
+    tooltip.style.left = `${event.x ?? +15}px`;
+    tooltip.style.top = `${event.y ?? +15}px`;
 }
 
-function hideZoneTooltip(): void {
+export function hideZoneTooltip(): void {
     const tooltip: HTMLElement | null = document.getElementById("zoneTooltip");
     if (tooltip) {
         tooltip.remove();
     }
 }
 
-function getAnomalyIcon(type: string | undefined): string {
+export function getAnomalyIcon(type: string | undefined): string {
     switch (type) {
         case "volume_anomaly":
             return "📊";
