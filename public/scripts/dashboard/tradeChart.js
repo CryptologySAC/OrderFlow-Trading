@@ -2,7 +2,7 @@ import { Chart, registerables, } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin from "chartjs-plugin-annotation";
 import * as Config from "../config.js";
-import { PADDING_FACTOR, NINETHY_MINUTES, FIFTEEN_MINUTES, PADDING_PERCENTAGE, } from "./state.js";
+import { PADDING_FACTOR, NINETHY_MINUTES, FIFTEEN_MINUTES, FIVE_MINUTES, ONE_MINUTE, PADDING_PERCENTAGE, } from "./state.js";
 Chart.register(...registerables, annotationPlugin);
 const TRADE_OPACITY_HIGH = 0.6;
 const TRADE_OPACITY_MEDIUM_HIGH = 0.5;
@@ -153,7 +153,7 @@ export class TradeChart {
                         }
                         return "";
                     },
-                    position: "end",
+                    position: "center",
                     xAdjust: -2,
                     yAdjust: 0,
                     backgroundColor: "rgba(0, 0, 255, 0.5)",
@@ -345,12 +345,16 @@ export class TradeChart {
         const min = latestTime - this._activeRange;
         const max = latestTime + padding;
         Object.keys(annotations).forEach((key) => {
-            if (!isNaN(Number(key)) &&
-                (Number(key) < min || Number(key) > max)) {
+            const intKey = parseInt(key);
+            if (!isNaN(intKey))
                 delete annotations[key];
-            }
         });
-        let time = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
+        const timeLines = this._activeRange >= NINETHY_MINUTES / 2
+            ? FIFTEEN_MINUTES
+            : this._activeRange >= FIFTEEN_MINUTES
+                ? FIVE_MINUTES
+                : ONE_MINUTE;
+        let time = Math.ceil(min / timeLines) * timeLines;
         while (time <= max) {
             if (!annotations[time.toFixed()]) {
                 annotations[time.toFixed()] = {
@@ -362,7 +366,7 @@ export class TradeChart {
                     z: 1,
                 };
             }
-            time += FIFTEEN_MINUTES;
+            time += timeLines;
         }
     }
     updatePriceLine(price) {

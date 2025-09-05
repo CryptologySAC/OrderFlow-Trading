@@ -6,7 +6,6 @@ import { PRICE_DEVIATION_THRESHOLD } from "./state.js";
 
 import {
     getCurrentTheme,
-    getSystemTheme,
     getDepletionVisualizationEnabled,
 } from "./theme.js";
 import type {
@@ -237,8 +236,8 @@ export class OrderBookChart {
 
         // Get current theme for depletion colors
         const currentTheme: string = getCurrentTheme();
-        const actualTheme: string =
-            currentTheme === "system" ? getSystemTheme() : currentTheme;
+        const actualTheme: string = currentTheme;
+            // TODO currentTheme === "system" ? getSystemTheme() : currentTheme;
 
         // Build chart data with depletion information
         const askColors: string[] = [];

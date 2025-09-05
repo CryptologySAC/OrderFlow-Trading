@@ -7,7 +7,13 @@ import {
 } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin, { AnnotationOptions } from "chartjs-plugin-annotation";
-import { PADDING_FACTOR, NINETHY_MINUTES, FIFTEEN_MINUTES } from "./state.js";
+import {
+    PADDING_FACTOR,
+    NINETHY_MINUTES,
+    FIFTEEN_MINUTES,
+    ONE_MINUTE,
+    FIVE_MINUTES,
+} from "./state.js";
 import type { RSIDataPoint } from "../frontend-types.js";
 
 Chart.register(...registerables, annotationPlugin);
@@ -145,6 +151,16 @@ export class RsiChart {
             },
         };
 
+        const midLine: AnnotationOptions<"line"> = {
+            type: "line",
+            yMin: 50,
+            yMax: 50,
+            borderColor: "rgba(255, 255, 255, 0.4)",
+            borderWidth: 1,
+            borderDash: [5, 5],
+            drawTime: "beforeDraw",
+        };
+
         (
             this.rsiChart.options.plugins!.annotation!.annotations as Record<
                 string,
@@ -157,6 +173,13 @@ export class RsiChart {
                 AnnotationOptions<"line">
             >
         )["oversoldLine"] = oversoldLine;
+
+        (
+            this.rsiChart.options.plugins!.annotation!.annotations as Record<
+                string,
+                AnnotationOptions<"line">
+            >
+        )["midLine"] = midLine;
 
         // Initialize time annotations
         if (this.activeRange !== null) {
@@ -275,7 +298,20 @@ export class RsiChart {
         const min: number = latestTime - this._activeRange;
         const max: number = latestTime + padding;
 
-        let time: number = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
+        Object.keys(annotations).forEach((key) => {
+            const intKey = parseInt(key);
+            if (!isNaN(intKey)) delete annotations[key];
+        });
+
+        const timeLines =
+            this._activeRange >= NINETHY_MINUTES / 2
+                ? FIFTEEN_MINUTES
+                : this._activeRange >= FIFTEEN_MINUTES
+                  ? FIVE_MINUTES
+                  : ONE_MINUTE;
+
+        let time: number = Math.ceil(min / timeLines) * timeLines;
+
         while (time <= max) {
             if (!annotations[time.toFixed()]) {
                 annotations[time.toFixed()] = {
@@ -287,7 +323,7 @@ export class RsiChart {
                     z: 1,
                 };
             }
-            time += FIFTEEN_MINUTES;
+            time += timeLines;
         }
     }
 

@@ -2,12 +2,10 @@ import {
     tradesChart,
     orderBookChart,
     rsiChart,
-    activeRange,
-    setActiveRange,
     GRID_SIZE,
     ITEM_MARGIN,
 } from "./state.js";
-import { saveColumnWidths, saveTimeRange } from "./persistence.js";
+import { saveColumnWidths } from "./persistence.js";
 
 function snap(value) {
     return Math.round(value / GRID_SIZE) * GRID_SIZE;
@@ -129,22 +127,6 @@ function scheduleLayoutAdjust(target) {
 }
 
 /**
- * Sets the time range for the trades chart.
- * @param {number|null} duration - Duration in milliseconds, or null for all data.
- */
-export function setRange(duration) {
-    // Apply the restored time range to the charts AFTER initialization
-        console.log(
-            "Applying time range after chart initialization:",
-            activeRange === null ? "ALL" : `${activeRange / 60000} minutes`
-        );
-    setActiveRange(duration);
-
-    // Save the new time range setting
-    saveTimeRange();
-}
-
-/**
  * Sets up column resizing capabilities using interact.js with localStorage persistence.
  * Elements are no longer draggable or individually resizable - only column width resizing is allowed.
  */
@@ -193,7 +175,6 @@ export function setupColumnResizing() {
                 // Debounced chart resize and save
                 clearTimeout(window.resizeTimeout);
                 window.resizeTimeout = setTimeout(() => {
-                    triggerChartResize();
                     saveColumnWidths();
                 }, 100);
             },
@@ -203,11 +184,4 @@ export function setupColumnResizing() {
             },
         },
     });
-}
-
-export function triggerChartResize() {
-    // Trigger chart resize after column resize
-    if (tradesChart) tradesChart.resize();
-    if (orderBookChart) orderBookChart.resize();
-    if (rsiChart) rsiChart.resize();
 }

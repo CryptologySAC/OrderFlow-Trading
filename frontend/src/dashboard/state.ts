@@ -196,6 +196,8 @@ export const PONG_WAIT_MS = 5000;
 export const PADDING_FACTOR = 18;
 export const FIFTEEN_MINUTES = 15 * 60 * 1000; // 15 minutes
 export const NINETHY_MINUTES = 90 * 60 * 1000; // 90 minutes
+export const FIVE_MINUTES = 5 * 60 * 1000; // 5 minutes
+export const ONE_MINUTE = 60 * 1000; //1 minute
 export const TRADE_TIMEOUT_MS = 10000; // 10 seconds
 export const GRID_SIZE = 25; // snapping grid for draggable/resizable elements
 export const ITEM_MARGIN = 20; // fixed space between dashboard items
@@ -334,10 +336,6 @@ export const trades: ChartDataPoint[] = [];
 // =============================================================================
 
 export let activeRange = NINETHY_MINUTES; // 90 minutes
-
-export function setActiveRange(range: number): void {
-    activeRange = range;
-}
 
 export function setAnomalyFilters(filters: Set<string>): void {
     anomalyFilters = filters;

@@ -39,6 +39,7 @@ import {
 import { TradeChart } from "./tradeChart.js";
 import { OrderBookChart } from "./orderBookChart.js";
 import { RsiChart } from "./rsiChart.js";
+import { HTMLActions } from "./htmlActions.js";
 
 import {
     renderAnomalyList,
@@ -47,19 +48,15 @@ import {
     //showSignalBundleBadge,
 } from "./render.js";
 import {
-    restoreColumnWidths,
     restoreAnomalyFilters,
-    restoreTimeRange,
     restoreVerticalLayout,
     resetAllSettings,
     saveAnomalyFilters,
 } from "./persistence.js";
-import { setupColumnResizing, setRange } from "./ui.js";
+import { setupColumnResizing } from "./ui.js";
 import {
     getCurrentTheme,
-    getSystemTheme,
     updateChartTheme,
-    restoreTheme,
     toggleTheme,
     updateThemeToggleButton,
     toggleDepletionVisualization,
@@ -140,6 +137,13 @@ if (!rsiCtx) {
 }
 const rsiChart = new RsiChart(rsiCtx, initialMin, initialMax, now);
 rsiChart.activeRange = activeRange;
+
+const htmlActions = new HTMLActions(
+    tradeChart,
+    rsiChart,
+    activeRange,
+    rangeSelector
+);
 
 // ============================================================================
 // GLOBAL UTILITIES
@@ -225,86 +229,22 @@ export function isValidZoneSignalData(data: ZoneSignalEvent): boolean {
     );
 }
 
-// ============================================================================
-// GLOBAL STATE
-// ============================================================================
-
-let unifiedMin = 0;
-let unifiedMax = 0;
-
 // let supportResistanceLevels: SupportResistanceLevel[] = []; // Not used in main.ts
 
 // ============================================================================
 // CORE FUNCTIONS
 // ============================================================================
-export function updateUnifiedTimeRange(
-    latestTime: number,
-    tradeChart: TradeChart,
-    rsiChart: RsiChart
-): void {
-    if (activeRange !== null) {
-        const padding = Math.ceil(activeRange / PADDING_FACTOR);
-        unifiedMin = latestTime - activeRange;
-        unifiedMax = latestTime + padding;
-
-        try {
-            tradeChart.setScaleX(unifiedMin, unifiedMax, latestTime);
-            rsiChart.setScaleX(unifiedMin, unifiedMax, latestTime);
-        } catch (error) {
-            console.error("updateUnifiedTimeRange Error: ", error);
-        }
-    }
-}
-
-function isValidRange(value: string): value is "5400000" | "2700000" | "900000" | "300000" {
-    return ["5400000", "2700000", "900000", "300000"].includes(value);
-}
 
 function initialize(): void {
     // Restore ALL saved settings FIRST, before any UI setup or rendering
-    restoreTheme();
-    restoreColumnWidths();
     restoreAnomalyFilters();
-    restoreTimeRange();
     restoreVerticalLayout();
 
     try {
-        // Setup range selector
-        if (rangeSelector) {
-            rangeSelector.addEventListener("click", (e: Event) => {
-                const target = e.target as HTMLElement;
-                if (target.tagName === "BUTTON") {
-                    const range = target.getAttribute("data-range") as
-                        | "5400000"
-                        | "2700000"
-                        | "900000"
-                        | "300000";
-                    if (!isValidRange(range)) {
-                        console.error(`Invalid range selected: ${range}`);
-                    } else {
-                        if (rangeSelector) {
-                            rangeSelector
-                                .querySelectorAll("button")
-                                .forEach((btn: HTMLButtonElement) =>
-                                    btn.classList.remove("active")
-                                );
-                        }
-                        target.classList.add("active");
-                        const newRange = parseInt(range);
-                        setRange(newRange);
-                        tradeChart.activeRange = newRange;
-                        rsiChart.activeRange = newRange;
-                        updateUnifiedTimeRange(
-                            Date.now(),
-                            tradeChart,
-                            rsiChart
-                        );
-                    }
-                }
-            });
-        } else {
-            console.warn("Range selector element not found");
-        }
+        htmlActions.restoreTheme();
+        htmlActions.restoreColumnWidths();
+        htmlActions.restoreTimeRange();
+        htmlActions.setRangeSelector();
     } catch (error) {
         console.error("Error in initializing charts: ", error);
         return;
@@ -359,7 +299,7 @@ function initialize(): void {
         mediaQuery.addEventListener("change", () => {
             const currentTheme = getCurrentTheme();
             if (currentTheme === "system") {
-                updateChartTheme(getSystemTheme());
+                updateChartTheme(htmlActions.getSystemTheme());
             }
         });
     }
@@ -396,7 +336,7 @@ function handleMessage(message: WebSocketMessage): void {
                 tradeChart.addTrade(trade);
                 const now = Date.now();
                 if (now - lastTradeUpdate > 2000 && tradeChart && rsiChart) {
-                    updateUnifiedTimeRange(now, tradeChart, rsiChart);
+                    htmlActions.updateUnifiedTimeRange(now);
                     lastTradeUpdate = now;
                 }
             }
@@ -577,11 +517,11 @@ const tradeWebsocket = new TradeWebSocket({
     url: Config.WEBSOCKET_URL,
     onBacklog: (backLog: TradeData[]) => {
         tradeChart.processTradeBacklog(backLog);
-        updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
+        htmlActions.updateUnifiedTimeRange(Date.now());
     },
     onRsiBacklog: (backLog: RSIDataPoint[]) => {
         rsiChart.processBacklog(backLog);
-        updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
+        htmlActions.updateUnifiedTimeRange(Date.now());
     },
     onMessage: (message: WebSocketMessage) => {
         if (isValidWebSocketMessage(message)) {
@@ -727,7 +667,7 @@ document.addEventListener("DOMContentLoaded", () => {
         () => {
             tradeChart.cleanOldTrades();
             rsiChart.cleanOldData();
-            updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
+            htmlActions.updateUnifiedTimeRange(Date.now());
         },
         10 * 60 * 1000
     );

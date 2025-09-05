@@ -1,7 +1,7 @@
 import { Chart, registerables, } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin from "chartjs-plugin-annotation";
-import { PADDING_FACTOR, NINETHY_MINUTES, FIFTEEN_MINUTES } from "./state.js";
+import { PADDING_FACTOR, NINETHY_MINUTES, FIFTEEN_MINUTES, ONE_MINUTE, FIVE_MINUTES, } from "./state.js";
 Chart.register(...registerables, annotationPlugin);
 const RSI_OVERBOUGHT = 70;
 const RSI_OVERSOLD = 30;
@@ -122,8 +122,18 @@ export class RsiChart {
                 padding: 4,
             },
         };
+        const midLine = {
+            type: "line",
+            yMin: 50,
+            yMax: 50,
+            borderColor: "rgba(255, 255, 255, 0.4)",
+            borderWidth: 1,
+            borderDash: [5, 5],
+            drawTime: "beforeDraw",
+        };
         this.rsiChart.options.plugins.annotation.annotations["overboughtLine"] = overboughtLine;
         this.rsiChart.options.plugins.annotation.annotations["oversoldLine"] = oversoldLine;
+        this.rsiChart.options.plugins.annotation.annotations["midLine"] = midLine;
         if (this.activeRange !== null) {
             this.updateTimeAnnotations(now);
         }
@@ -214,7 +224,17 @@ export class RsiChart {
         const padding = Math.ceil(this._activeRange / PADDING_FACTOR);
         const min = latestTime - this._activeRange;
         const max = latestTime + padding;
-        let time = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
+        Object.keys(annotations).forEach((key) => {
+            const intKey = parseInt(key);
+            if (!isNaN(intKey))
+                delete annotations[key];
+        });
+        const timeLines = this._activeRange >= NINETHY_MINUTES / 2
+            ? FIFTEEN_MINUTES
+            : this._activeRange >= FIFTEEN_MINUTES
+                ? FIVE_MINUTES
+                : ONE_MINUTE;
+        let time = Math.ceil(min / timeLines) * timeLines;
         while (time <= max) {
             if (!annotations[time.toFixed()]) {
                 annotations[time.toFixed()] = {
@@ -226,7 +246,7 @@ export class RsiChart {
                     z: 1,
                 };
             }
-            time += FIFTEEN_MINUTES;
+            time += timeLines;
         }
     }
     cleanOldData() {
