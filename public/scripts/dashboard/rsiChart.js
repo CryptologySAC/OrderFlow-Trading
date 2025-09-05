@@ -162,7 +162,7 @@ export class RsiChart {
         console.log(`${points} backlog RSI Points sent to RSI chart;`);
         this.rsiChart.update("default");
     }
-    setScaleX(min, max) {
+    setScaleX(min, max, latestTime) {
         if (!this.rsiChart ||
             !this.rsiChart.options ||
             !this.rsiChart.options.scales) {
@@ -170,6 +170,8 @@ export class RsiChart {
         }
         this.rsiChart.options.scales["x"].min = min;
         this.rsiChart.options.scales["x"].max = max;
+        this.updateTimeAnnotations(latestTime);
+        this.rsiChart.update("default");
     }
     addPoint(dataPoint, update = true) {
         if (this.isValidRSIData(dataPoint)) {

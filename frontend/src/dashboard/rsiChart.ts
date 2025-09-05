@@ -208,7 +208,7 @@ export class RsiChart {
         this.rsiChart.update("default");
     }
 
-    public setScaleX(min: number, max: number): void {
+    public setScaleX(min: number, max: number, latestTime: number): void {
         if (
             !this.rsiChart ||
             !this.rsiChart.options ||
@@ -218,6 +218,8 @@ export class RsiChart {
         }
         this.rsiChart.options!.scales!["x"]!.min = min;
         this.rsiChart.options!.scales!["x"]!.max = max;
+        this.updateTimeAnnotations(latestTime);
+        this.rsiChart.update("default");
     }
 
     public addPoint(dataPoint: RSIDataPoint, update: boolean = true): void {

@@ -1,11 +1,9 @@
 // frontend/src/main.ts
 // EXACT TYPE-SAFE FRONTEND IMPLEMENTATION
-// Recreates main.js functionality with ZERO unknown/any types
 // Uses exact backend message structures
 import {
     Chart,
     registerables,
-    //ChartOptions
 } from "chart.js";
 import "chartjs-adapter-date-fns";
 import * as Config from "../config.js";
@@ -20,32 +18,25 @@ import {
     tradesCanvas,
     orderBookCanvas,
     rsiCanvas,
-    //rangeSelector,
+    rangeSelector,
     anomalyFilters,
     signalFilters,
     //anomalyList,
     //signalsList,
-    //rsiData,
     activeRange,
     //dedupTolerance,
     PADDING_TIME,
-    //MAX_RSI_DATA,
-    //setRuntimeConfig,
 } from "./state.js";
 import {
     //initializeRSIChart,
     cleanupOldSupportResistanceLevels,
     cleanupOldZones,
 
-    //updateRSITimeAnnotations,
-    //scheduleTradesChartUpdate,
     //checkSupportResistanceBreaches,
     //buildSignalLabel,
     //handleSupportResistanceLevel,
     //handleZoneUpdate,
     //handleZoneSignal,
-    //updateOrderBookDisplay,
-    //safeUpdateRSIChart,
 } from "./charts.js";
 import { TradeChart } from "./tradeChart.js";
 import { OrderBookChart } from "./orderBookChart.js";
@@ -67,7 +58,7 @@ import {
 } from "./persistence.js";
 import {
     setupColumnResizing,
-    //setRange
+    setRange
 } from "./ui.js";
 import {
     getCurrentTheme,
@@ -102,7 +93,6 @@ import type {
 import type {
     //ChartAnnotation,
     //ChartInstance,
-    //ChartDataPoint,
     Anomaly,
 } from "../frontend-types.js";
 
@@ -261,8 +251,8 @@ export function updateUnifiedTimeRange(
         unifiedMax = latestTime + PADDING_TIME;
 
         try {
-            tradeChart.setScaleX(unifiedMin, unifiedMax);
-            rsiChart.setScaleX(unifiedMin, unifiedMax);
+            tradeChart.setScaleX(unifiedMin, unifiedMax, latestTime);
+            rsiChart.setScaleX(unifiedMin, unifiedMax, latestTime);
         } catch (error) {
             console.error("updateUnifiedTimeRange Error: ", error);
         }
@@ -277,29 +267,8 @@ function initialize(): void {
     restoreTimeRange();
     restoreVerticalLayout();
 
-    // Initialize charts first
     try {
-        //const now = Date.now();
-        //let initialMin: number, initialMax: number;
-        //if (activeRange !== null) {
-        //    initialMin = now - activeRange;
-        //    initialMax = now + PADDING_TIME;
-        //} else {
-        //    initialMin = now - 90 * 60000; // 90 minutes ago
-        //    initialMax = now + PADDING_TIME;
-        //}
-        /*
-        const rsiChart = initializeRSIChart(
-            rsiCtx,
-            initialMin,
-            initialMax,
-            now
-        );
-        if (!rsiChart) {
-            throw new Error("Failed to initialize RSI Chart.");
-        }
-
-        setRange(activeRange, tradeChart, rsiChart);
+        
 
         // Setup range selector
         if (rangeSelector) {
@@ -315,17 +284,21 @@ function initialize(): void {
                             );
                     }
                     target.classList.add("active");
+                    const newRange = range === "all" ? Number.MAX_SAFE_INTEGER : range ? parseInt(range) : Number.MAX_SAFE_INTEGER;
                     setRange(
-                        range === "all" ? null : range ? parseInt(range) : null,
-                        tradeChart,
-                        rsiChart
+                        newRange,
                     );
+                    tradeChart.activeRange = newRange;
+                    rsiChart.activeRange = newRange;
+                    updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
+
+                    
                 }
             });
         } else {
             console.warn("Range selector element not found");
         }
-            */
+        
     } catch (error) {
         console.error("Error in initializing charts: ", error);
         return;

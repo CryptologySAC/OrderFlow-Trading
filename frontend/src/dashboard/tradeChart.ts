@@ -237,7 +237,7 @@ export class TradeChart {
         return this._activeRange;
     }
 
-    public setScaleX(min: number, max: number): void {
+    public setScaleX(min: number, max: number, latestTime: number): void {
         if (
             !this.tradeChart ||
             !this.tradeChart.options ||
@@ -249,6 +249,9 @@ export class TradeChart {
         }
         this.tradeChart.options!.scales!["x"]!.min = min;
         this.tradeChart.options!.scales!["x"]!.max = max;
+        this.updateYAxisBounds();
+        this.updateTimeAnnotations(latestTime);
+        this.tradeChart.update("default");
     }
 
     public addTrade(trade: TradeData, update: boolean = true): void {
@@ -369,7 +372,8 @@ export class TradeChart {
 
         let points = 0;
         const now = Date.now();
-        for (const trade of backLog) {
+        const sortedBacklog = [...backLog].sort((a, b) => a.time - b.time);
+        for (const trade of sortedBacklog) {
             const isOldTrade = now - trade.time > NINETHY_MINUTES;
             if (!isOldTrade) {
                 this.addTrade(trade, false);
