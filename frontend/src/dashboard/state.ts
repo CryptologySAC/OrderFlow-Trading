@@ -250,13 +250,7 @@ export function setRsiChart(chart: Chart<"line"> | null): void {
 // ANOMALY MANAGEMENT
 // =============================================================================
 
-export const anomalyList: Anomaly[] = [];
-export const anomalySeverityOrder: readonly string[] = [
-    "critical",
-    "high",
-    "medium",
-    "info",
-];
+
 
 // =============================================================================
 // SIGNALS MANAGEMENT
@@ -335,6 +329,8 @@ export const trades: ChartDataPoint[] = [];
 // =============================================================================
 
 export let activeRange = NINETHY_MINUTES; // 90 minutes
+
+
 
 export function setRuntimeConfig(
     config: RuntimeConfig | null | undefined
