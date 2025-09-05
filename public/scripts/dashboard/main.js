@@ -1,17 +1,13 @@
-import { Chart, registerables } from "chart.js";
-import "chartjs-adapter-date-fns";
 import * as Config from "../config.js";
-Chart.register(...registerables);
-import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, anomalyFilters, signalFilters, activeRange, PADDING_FACTOR, NINETHY_MINUTES, } from "./state.js";
+import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, signalFilters, activeRange, PADDING_FACTOR, NINETHY_MINUTES, } from "./state.js";
 import { cleanupOldSupportResistanceLevels, cleanupOldZones, } from "./charts.js";
 import { TradeChart } from "./tradeChart.js";
 import { OrderBookChart } from "./orderBookChart.js";
 import { RsiChart } from "./rsiChart.js";
 import { HTMLActions } from "./htmlActions.js";
-import { renderAnomalyList, renderSignalsList, updateTradeDelayIndicator, } from "./render.js";
-import { restoreAnomalyFilters, restoreVerticalLayout, resetAllSettings, saveAnomalyFilters, } from "./persistence.js";
-import { setupColumnResizing } from "./ui.js";
-import { getCurrentTheme, updateChartTheme, toggleTheme, updateThemeToggleButton, toggleDepletionVisualization, updateDepletionToggleButton, } from "./theme.js";
+import { renderSignalsList, updateTradeDelayIndicator } from "./render.js";
+import { resetAllSettings } from "./persistence.js";
+import { toggleDepletionVisualization, updateDepletionToggleButton, } from "./theme.js";
 import { TradeWebSocket } from "../websocket.js";
 import { MessageType } from "../types.js";
 if (!tradesCanvas) {
@@ -107,13 +103,14 @@ export function isValidZoneSignalData(data) {
         typeof data.timestamp === "number");
 }
 function initialize() {
-    restoreAnomalyFilters();
-    restoreVerticalLayout();
     try {
         htmlActions.restoreTheme();
         htmlActions.restoreColumnWidths();
+        htmlActions.restoreAnomalyFilters();
+        htmlActions.restoreVerticalLayout();
         htmlActions.restoreTimeRange();
         htmlActions.setRangeSelector();
+        htmlActions.setupColumnResizing();
     }
     catch (error) {
         console.error("Error in initializing charts: ", error);
@@ -127,7 +124,6 @@ function initialize() {
         console.error("Failed to connect to web socket.", error);
         return;
     }
-    setupColumnResizing();
     const resetLayoutBtn = document.getElementById("resetLayout");
     if (resetLayoutBtn) {
         resetLayoutBtn.addEventListener("click", () => {
@@ -138,8 +134,8 @@ function initialize() {
     }
     const themeToggleBtn = document.getElementById("themeToggle");
     if (themeToggleBtn) {
-        themeToggleBtn.addEventListener("click", toggleTheme);
-        updateThemeToggleButton();
+        themeToggleBtn.addEventListener("click", htmlActions.toggleTheme);
+        htmlActions.updateThemeToggleButton();
     }
     const depletionToggleBtn = document.getElementById("depletionToggle");
     if (depletionToggleBtn) {
@@ -149,9 +145,9 @@ function initialize() {
     if (window.matchMedia) {
         const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
         mediaQuery.addEventListener("change", () => {
-            const currentTheme = getCurrentTheme();
+            const currentTheme = htmlActions.getCurrentTheme();
             if (currentTheme === "system") {
-                updateChartTheme(htmlActions.getSystemTheme());
+                htmlActions.updateChartTheme(htmlActions.getSystemTheme());
             }
         });
     }
@@ -246,11 +242,11 @@ document.addEventListener("DOMContentLoaded", () => {
             .forEach((box) => {
             box.addEventListener("change", () => {
                 if (box.checked)
-                    anomalyFilters.add(box.value);
+                    htmlActions.anomalyFilters.add(box.value);
                 else
-                    anomalyFilters.delete(box.value);
-                renderAnomalyList();
-                saveAnomalyFilters();
+                    htmlActions.anomalyFilters.delete(box.value);
+                htmlActions.renderAnomalyList();
+                htmlActions.saveAnomalyFilters();
             });
         });
     }

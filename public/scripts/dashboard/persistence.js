@@ -1,14 +1,9 @@
 import {
     activeRange,
-    setActiveRange,
-    anomalyFilters,
-    setAnomalyFilters,
 } from "./state.js";
-import { renderAnomalyList } from "./render.js";
 import {
     applySystemTheme,
     updateThemeToggleButton,
-    saveTheme,
 } from "./theme.js";
 
 /**
@@ -48,69 +43,9 @@ export function saveColumnWidths() {
 /**
  * Save anomaly filter settings to localStorage
  */
-export function saveAnomalyFilters() {
-    try {
-        const filterSettings = {
-            filters: Array.from(anomalyFilters),
-            timestamp: Date.now(),
-        };
 
-        localStorage.setItem(
-            "dashboardAnomalyFilters",
-            JSON.stringify(filterSettings)
-        );
-        console.log("Anomaly filters saved:", filterSettings);
-    } catch (error) {
-        console.warn("Failed to save anomaly filters to localStorage:", error);
-    }
-}
 
-/**
- * Restore anomaly filter settings from localStorage
- */
-export function restoreAnomalyFilters() {
-    try {
-        const savedFilters = localStorage.getItem("dashboardAnomalyFilters");
 
-        if (!savedFilters) {
-            console.log("No saved anomaly filters found, using defaults");
-            return;
-        }
-
-        const filterSettings = JSON.parse(savedFilters);
-
-        if (!filterSettings.filters || !Array.isArray(filterSettings.filters)) {
-            console.warn("Invalid saved anomaly filters, using defaults");
-            return;
-        }
-
-        // Update the anomaly filters set
-        setAnomalyFilters(new Set(filterSettings.filters));
-
-        // Update the UI checkboxes
-        const filterBox = document.querySelector(".anomaly-filter");
-        if (filterBox) {
-            filterBox
-                .querySelectorAll("input[type=checkbox]")
-                .forEach((checkbox) => {
-                    checkbox.checked = anomalyFilters.has(checkbox.value);
-                });
-        }
-
-        console.log("Anomaly filters restored:", {
-            filters: filterSettings.filters,
-            savedAt: new Date(filterSettings.timestamp).toLocaleString(),
-        });
-
-        // Re-render the anomaly list with restored filters
-        renderAnomalyList();
-    } catch (error) {
-        console.warn(
-            "Failed to restore anomaly filters from localStorage:",
-            error
-        );
-    }
-}
 
 /**
  * Save current time range setting to localStorage

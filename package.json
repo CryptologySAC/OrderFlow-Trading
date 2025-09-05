@@ -39,6 +39,7 @@
         "check:ci": "yarn lint && yarn typecheck && yarn build --if-present && yarn test:coverage"
     },
     "devDependencies": {
+        "@interactjs/types": "^1.10.27",
         "@types/better-sqlite3": "7.6.13",
         "@types/node": "^24.2.0",
         "@types/ws": "^8.18.1",
@@ -87,6 +88,7 @@
         "dotenv": "^17.2.1",
         "express": "^5.1.0",
         "fastpriorityqueue": "^0.7.5",
+        "interactjs": "^1.10.27",
         "lightweight-charts": "^5.0.8",
         "mqtt": "5.14.0",
         "openai": "^5.12.0",

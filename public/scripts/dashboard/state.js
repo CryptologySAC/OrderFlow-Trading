@@ -210,7 +210,6 @@ export const anomalySeverityOrder = [
     "medium",
     "info",
 ];
-export let anomalyFilters = new Set(["critical", "high"]);
 export const signalsList = [];
 export const signalFilters = new Set(["buy", "sell"]);
 export const activeSignalTooltip = null;
@@ -240,12 +239,6 @@ if (typeof window !== "undefined" &&
 }
 export const trades = [];
 export let activeRange = NINETHY_MINUTES;
-export function setActiveRange(range) {
-    activeRange = range;
-}
-export function setAnomalyFilters(filters) {
-    anomalyFilters = filters;
-}
 export function setRuntimeConfig(config) {
     if (config && typeof config === "object") {
         try {

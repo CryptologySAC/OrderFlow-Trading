@@ -4,10 +4,7 @@ import annotationPlugin from "chartjs-plugin-annotation";
 
 import { PRICE_DEVIATION_THRESHOLD } from "./state.js";
 
-import {
-    getCurrentTheme,
-    getDepletionVisualizationEnabled,
-} from "./theme.js";
+import { getDepletionVisualizationEnabled } from "./theme.js";
 import type {
     OrderBookData,
     OrderBookLevel,
@@ -235,9 +232,9 @@ export class OrderBookChart {
         );
 
         // Get current theme for depletion colors
-        const currentTheme: string = getCurrentTheme();
-        const actualTheme: string = currentTheme;
-            // TODO currentTheme === "system" ? getSystemTheme() : currentTheme;
+        const currentTheme: "light" | "dark" | "system" = "system"; // TODO getCurrentTheme();
+        const actualTheme: "light" | "dark" | "system" = currentTheme;
+        // TODO currentTheme === "system" ? getSystemTheme() : currentTheme;
 
         // Build chart data with depletion information
         const askColors: string[] = [];

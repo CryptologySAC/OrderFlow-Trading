@@ -257,7 +257,6 @@ export const anomalySeverityOrder: readonly string[] = [
     "medium",
     "info",
 ];
-export let anomalyFilters: Set<string> = new Set(["critical", "high"]);
 
 // =============================================================================
 // SIGNALS MANAGEMENT
@@ -336,10 +335,6 @@ export const trades: ChartDataPoint[] = [];
 // =============================================================================
 
 export let activeRange = NINETHY_MINUTES; // 90 minutes
-
-export function setAnomalyFilters(filters: Set<string>): void {
-    anomalyFilters = filters;
-}
 
 export function setRuntimeConfig(
     config: RuntimeConfig | null | undefined

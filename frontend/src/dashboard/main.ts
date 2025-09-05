@@ -1,24 +1,12 @@
 // frontend/src/main.ts
 // EXACT TYPE-SAFE FRONTEND IMPLEMENTATION
-// Uses exact backend message structures
-import { Chart, registerables } from "chart.js";
-import "chartjs-adapter-date-fns";
 import * as Config from "../config.js";
-
-//import annotationPlugin, {
-//    AnnotationOptions,
-//EventContext,
-//PartialEventContext,
-//} from "chartjs-plugin-annotation";
-Chart.register(...registerables);
 import {
     tradesCanvas,
     orderBookCanvas,
     rsiCanvas,
     rangeSelector,
-    anomalyFilters,
     signalFilters,
-    //anomalyList,
     //signalsList,
     activeRange,
     //dedupTolerance,
@@ -26,7 +14,6 @@ import {
     NINETHY_MINUTES,
 } from "./state.js";
 import {
-    //initializeRSIChart,
     cleanupOldSupportResistanceLevels,
     cleanupOldZones,
 
@@ -41,24 +28,9 @@ import { OrderBookChart } from "./orderBookChart.js";
 import { RsiChart } from "./rsiChart.js";
 import { HTMLActions } from "./htmlActions.js";
 
+import { renderSignalsList, updateTradeDelayIndicator } from "./render.js";
+import { resetAllSettings } from "./persistence.js";
 import {
-    renderAnomalyList,
-    renderSignalsList,
-    updateTradeDelayIndicator,
-    //showSignalBundleBadge,
-} from "./render.js";
-import {
-    restoreAnomalyFilters,
-    restoreVerticalLayout,
-    resetAllSettings,
-    saveAnomalyFilters,
-} from "./persistence.js";
-import { setupColumnResizing } from "./ui.js";
-import {
-    getCurrentTheme,
-    updateChartTheme,
-    toggleTheme,
-    updateThemeToggleButton,
     toggleDepletionVisualization,
     updateDepletionToggleButton,
 } from "./theme.js";
@@ -82,11 +54,7 @@ import type {
     SupportResistanceLevel,
     //ZoneData,
 } from "../frontend-types.js";
-import type {
-    //ChartAnnotation,
-    //ChartInstance,
-    Anomaly,
-} from "../frontend-types.js";
+import type { Anomaly } from "../frontend-types.js";
 
 // ============================================================================
 // VARIABLES
@@ -236,15 +204,14 @@ export function isValidZoneSignalData(data: ZoneSignalEvent): boolean {
 // ============================================================================
 
 function initialize(): void {
-    // Restore ALL saved settings FIRST, before any UI setup or rendering
-    restoreAnomalyFilters();
-    restoreVerticalLayout();
-
     try {
         htmlActions.restoreTheme();
         htmlActions.restoreColumnWidths();
+        htmlActions.restoreAnomalyFilters();
+        htmlActions.restoreVerticalLayout();
         htmlActions.restoreTimeRange();
         htmlActions.setRangeSelector();
+        htmlActions.setupColumnResizing();
     } catch (error) {
         console.error("Error in initializing charts: ", error);
         return;
@@ -260,7 +227,6 @@ function initialize(): void {
     }
 
     // Setup interact.js for column resizing
-    setupColumnResizing();
 
     // Setup reset layout button
     const resetLayoutBtn = document.getElementById("resetLayout");
@@ -279,8 +245,8 @@ function initialize(): void {
     // Setup theme toggle button
     const themeToggleBtn = document.getElementById("themeToggle");
     if (themeToggleBtn) {
-        themeToggleBtn.addEventListener("click", toggleTheme);
-        updateThemeToggleButton();
+        themeToggleBtn.addEventListener("click", htmlActions.toggleTheme);
+        htmlActions.updateThemeToggleButton();
     }
 
     // Setup depletion toggle button
@@ -297,9 +263,9 @@ function initialize(): void {
     if (window.matchMedia) {
         const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
         mediaQuery.addEventListener("change", () => {
-            const currentTheme = getCurrentTheme();
+            const currentTheme = htmlActions.getCurrentTheme();
             if (currentTheme === "system") {
-                updateChartTheme(htmlActions.getSystemTheme());
+                htmlActions.updateChartTheme(htmlActions.getSystemTheme());
             }
         });
     }
@@ -553,10 +519,10 @@ document.addEventListener("DOMContentLoaded", () => {
             .querySelectorAll<HTMLInputElement>("input[type=checkbox]")
             .forEach((box) => {
                 box.addEventListener("change", () => {
-                    if (box.checked) anomalyFilters.add(box.value);
-                    else anomalyFilters.delete(box.value);
-                    renderAnomalyList();
-                    saveAnomalyFilters();
+                    if (box.checked) htmlActions.anomalyFilters.add(box.value);
+                    else htmlActions.anomalyFilters.delete(box.value);
+                    htmlActions.renderAnomalyList();
+                    htmlActions.saveAnomalyFilters();
                 });
             });
     }

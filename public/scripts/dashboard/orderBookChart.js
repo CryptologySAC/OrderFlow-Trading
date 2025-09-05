@@ -2,7 +2,7 @@ import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin from "chartjs-plugin-annotation";
 import { PRICE_DEVIATION_THRESHOLD } from "./state.js";
-import { getCurrentTheme, getDepletionVisualizationEnabled, } from "./theme.js";
+import { getDepletionVisualizationEnabled } from "./theme.js";
 Chart.register(...registerables, annotationPlugin);
 const COLOR_RED_FULL = 255;
 const COLOR_RED_MEDIUM = 80;
@@ -168,7 +168,7 @@ export class OrderBookChart {
         const startIndex = Math.max(0, midIndex - halfLevels);
         const endIndex = Math.min(sortedLevels.length, startIndex + maxLevels);
         const displayLevels = sortedLevels.slice(startIndex, endIndex);
-        const currentTheme = getCurrentTheme();
+        const currentTheme = "system";
         const actualTheme = currentTheme;
         const askColors = [];
         const bidColors = [];
