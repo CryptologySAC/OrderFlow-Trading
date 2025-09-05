@@ -11,7 +11,6 @@ import {
     ITEM_MARGIN,
 } from "./state.js";
 import { saveColumnWidths, saveTimeRange } from "./persistence.js";
-import { updateRSITimeAnnotations } from "./charts.js";
 
 function snap(value) {
     return Math.round(value / GRID_SIZE) * GRID_SIZE;

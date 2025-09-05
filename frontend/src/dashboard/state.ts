@@ -18,9 +18,8 @@ import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin from "chartjs-plugin-annotation";
 import { format } from "date-fns";
-import zoomPlugin from "chartjs-plugin-zoom";
 
-Chart.register(...registerables, zoomPlugin, annotationPlugin);
+Chart.register(...registerables, annotationPlugin);
 // Register date adapter explicitly for Chart.js v4
 import { _adapters } from "chart.js";
 _adapters._date.override({
@@ -202,6 +201,7 @@ export const GRID_SIZE = 25; // snapping grid for draggable/resizable elements
 export const ITEM_MARGIN = 20; // fixed space between dashboard items
 export const MAX_RSI_DATA = 100;
 export const PADDING_PERCENTAGE = 0.05;
+export const PRICE_DEVIATION_THRESHOLD = 0.02;
 
 // =============================================================================
 // DOM REFERENCES

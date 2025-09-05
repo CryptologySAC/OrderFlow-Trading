@@ -1,7 +1,7 @@
 import { Chart, registerables, } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin from "chartjs-plugin-annotation";
-import { trades, PADDING_TIME, NINETHY_MINUTES, FIFTEEN_MINUTES, PADDING_PERCENTAGE, } from "./state.js";
+import { PADDING_TIME, NINETHY_MINUTES, FIFTEEN_MINUTES, PADDING_PERCENTAGE, } from "./state.js";
 Chart.register(...registerables, annotationPlugin);
 const TRADE_OPACITY_HIGH = 0.6;
 const TRADE_OPACITY_MEDIUM_HIGH = 0.5;
@@ -21,6 +21,7 @@ const POINT_RADIUS_MINIMAL = 2;
 export class TradeChart {
     tradeChart;
     lastTradeUpdate = Date.now();
+    lastTradeLongUpdate = Date.now();
     _activeRange = NINETHY_MINUTES;
     constructor(ctx, initialMin, initialMax, now) {
         this.tradeChart = new Chart(ctx, {
@@ -30,7 +31,7 @@ export class TradeChart {
                     {
                         label: "Trades",
                         parsing: false,
-                        data: trades,
+                        data: [],
                         backgroundColor: (context) => {
                             const dataPoint = context.raw;
                             const backgroundColor = dataPoint &&
@@ -144,7 +145,8 @@ export class TradeChart {
                     padding: 6,
                 },
             };
-            this.tradeChart.options.plugins.annotation.annotations["lastPriceLine"] = lastPriceLine;
+            this.tradeChart.options.plugins.annotation
+                .annotations["lastPriceLine"] = lastPriceLine;
         }
         catch (error) {
             console.error("Error loading annotations: ", error);
@@ -181,10 +183,14 @@ export class TradeChart {
             });
             const now = Date.now();
             if (update && now - this.lastTradeUpdate > 50) {
-                this.updateYAxisBounds();
                 this.updatePriceLine(trade.price);
                 this.tradeChart.update("none");
                 this.lastTradeUpdate = now;
+            }
+            if (update && now - this.lastTradeLongUpdate > 1000) {
+                this.updateYAxisBounds();
+                this.updateTimeAnnotations(now);
+                this.lastTradeLongUpdate = now;
             }
         }
     }
@@ -239,7 +245,10 @@ export class TradeChart {
             typeof trade["tradeId"] === "number");
     }
     processTradeBacklog(backLog) {
-        if (!this.tradeChart.data || !this.tradeChart.data.datasets || !this.tradeChart.data.datasets[0] || !this.tradeChart.data.datasets[0].data) {
+        if (!this.tradeChart.data ||
+            !this.tradeChart.data.datasets ||
+            !this.tradeChart.data.datasets[0] ||
+            !this.tradeChart.data.datasets[0].data) {
             throw new Error("Trade Chart dataset corrupted.");
         }
         if (backLog.length === 0)
@@ -257,7 +266,6 @@ export class TradeChart {
         this.tradeChart.update("none");
     }
     updateYAxisBounds() {
-        console.log("updateYAxisBounds START");
         const chartOptions = this.tradeChart.options;
         const xMin = chartOptions.scales["x"]?.min;
         const xMax = chartOptions.scales["x"]?.max;
@@ -269,7 +277,8 @@ export class TradeChart {
             this.tradeChart.data.datasets[0].data.length < 2)
             return;
         for (let i = this.tradeChart.data.datasets[0].data.length - 1; i >= 0; i--) {
-            const trade = trades[i];
+            const trade = this.tradeChart.data
+                .datasets[0].data[i];
             if (!trade)
                 continue;
             if (trade.x >= xMin && trade.x <= xMax) {
@@ -296,7 +305,6 @@ export class TradeChart {
         yScale.suggestedMax = yMax + padding;
         yScale.min = yMin - padding;
         yScale.max = yMax + padding;
-        console.log(`YSCALE: ${yScale.min}  - ${yScale.max} | ${yMin} - ${yMax}`);
     }
     updateTimeAnnotations(latestTime) {
         if (!this.tradeChart || !this.tradeChart.options) {
@@ -340,5 +348,16 @@ export class TradeChart {
                 line.yMax = price;
             }
         }
+    }
+    cleanOldTrades() {
+        const RETENTION_MINUTES = 90;
+        const cutoffTime = Date.now() - RETENTION_MINUTES * 60 * 1000;
+        const originalLength = this.tradeChart.data.datasets[0].data.length;
+        this.tradeChart.data.datasets.forEach((dataset) => {
+            dataset.data = dataset.data.filter((trade) => { return trade.x >= cutoffTime; });
+        });
+        this.updateYAxisBounds();
+        const removedCount = originalLength - this.tradeChart.data.datasets[0].data.length;
+        console.log(`Trade cleanup complete: filtered ${removedCount} old trades, ${this.tradeChart.data.datasets[0].data.length} remaining`);
     }
 }

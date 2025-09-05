@@ -4,7 +4,10 @@ import {
     type TradeData,
     type BacklogMessage,
     type PingMessage,
+    type RsiBacklogMessage,
 } from "./types.js";
+
+import type { RSIDataPoint } from "./frontend-types.js";
 
 // --- Configuration Interfaces ---
 interface TradeWebSocketConfig {
@@ -16,6 +19,7 @@ interface TradeWebSocketConfig {
     pongWait?: number;
     onMessage?: (message: WebSocketMessage) => void;
     onBacklog?: (data: TradeData[]) => void;
+    onRsiBacklog?: (data: RSIDataPoint[]) => void;
     onReconnectFail?: () => void;
     onTimeout?: () => void;
 }
@@ -31,6 +35,7 @@ export class TradeWebSocket {
 
     private onMessage: (message: WebSocketMessage) => void;
     private onBacklog: (data: TradeData[]) => void;
+    private onRsiBacklog: (data: RSIDataPoint[]) => void;
     private onReconnectFail: () => void;
 
     private ws: WebSocket | null = null;
@@ -47,6 +52,7 @@ export class TradeWebSocket {
         pongWait = 5000,
         onMessage = () => {},
         onBacklog = () => {},
+        onRsiBacklog = () => {},
         onReconnectFail = () => {},
     }: TradeWebSocketConfig) {
         this.url = url;
@@ -58,6 +64,7 @@ export class TradeWebSocket {
 
         this.onMessage = onMessage;
         this.onBacklog = onBacklog;
+        this.onRsiBacklog = onRsiBacklog;
         this.onReconnectFail = onReconnectFail;
     }
 
@@ -103,6 +110,9 @@ export class TradeWebSocket {
                 case MessageType.BACKLOG:
                     this.handleBacklog(message);
                     break;
+                case MessageType.RSI_BACKLOG:
+                    this.handleRsiBacklog(message);
+                    break;
                 default:
                     this.onMessage(message);
                     break;
@@ -117,6 +127,14 @@ export class TradeWebSocket {
             this.onBacklog(message.data);
         } else {
             console.warn("Received malformed backlog data:", message.data);
+        }
+    }
+
+    private handleRsiBacklog(message: RsiBacklogMessage): void {
+        if (Array.isArray(message.data)) {
+            this.onRsiBacklog(message.data);
+        } else {
+            console.warn("Received malformed RSI backlog data:", message.data);
         }
     }
 

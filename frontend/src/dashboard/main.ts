@@ -22,7 +22,6 @@ import {
     //rangeSelector,
     anomalyFilters,
     signalFilters,
-    trades,
     //anomalyList,
     //signalsList,
     //rsiData,
@@ -34,7 +33,6 @@ import {
 } from "./state.js";
 import {
     //initializeRSIChart,
-    initializeOrderBookChart,
     cleanupOldSupportResistanceLevels,
     cleanupOldZones,
 
@@ -49,6 +47,9 @@ import {
     //safeUpdateRSIChart,
 } from "./charts.js";
 import { TradeChart } from "./tradeChart.js";
+import { OrderBookChart } from "./orderBookChart.js";
+import { RsiChart } from "./rsiChart.js";
+
 import {
     renderAnomalyList,
     renderSignalsList,
@@ -94,13 +95,16 @@ import type {
 import type {
     //ChartAnnotation,
     //ChartInstance,
-    ChartDataPoint,
+    //ChartDataPoint,
     Anomaly,
 } from "../frontend-types.js";
 
 // ============================================================================
 // VARIABLES
 // ============================================================================
+if (!tradesCanvas) {
+    throw new Error("Trades chart canvas not found");
+}
 const tradesCtx = tradesCanvas ? tradesCanvas.getContext("2d") : null;
 if (!tradesCtx) {
     throw new Error("Could not get 2D context for trades chart");
@@ -123,6 +127,26 @@ const tradeChart: TradeChart = new TradeChart(
 );
 tradeChart.activeRange = activeRange;
 let lastTradeUpdate = now;
+
+if (!orderBookCanvas) {
+    throw new Error("Order book chart canvas not found");
+}
+
+const orderBookCtx = orderBookCanvas.getContext("2d");
+if (!orderBookCtx) {
+    throw new Error("Could not get 2D context for order book chart");
+}
+const orderBookChart = new OrderBookChart(orderBookCtx);
+
+if (!rsiCanvas) {
+    throw new Error("RSIchart canvas not found");
+}
+const rsiCtx = rsiCanvas?.getContext("2d");
+if (!rsiCtx) {
+    throw new Error("Could not get 2D context for RSI chart");
+}
+const rsiChart = new RsiChart(rsiCtx, initialMin, initialMax, now);
+rsiChart.activeRange = activeRange;
 
 // ============================================================================
 // GLOBAL UTILITIES
@@ -165,15 +189,6 @@ export function isValidOrderBookData(data: OrderBookData): boolean {
                 typeof level.bid === "number" &&
                 typeof level.ask === "number"
         )
-    );
-}
-
-export function isValidRSIData(data: RSIDataPoint): boolean {
-    return (
-        typeof data.time === "number" &&
-        typeof data.rsi === "number" &&
-        data.rsi >= 0 &&
-        data.rsi <= 100
     );
 }
 
@@ -224,18 +239,6 @@ export function isValidZoneSignalData(data: ZoneSignalEvent): boolean {
 let unifiedMin = 0;
 let unifiedMax = 0;
 
-/* let orderBookData: OrderBookData = {
-    priceLevels: [],
-    bestBid: 0,
-    bestAsk: 0,
-    spread: 0,
-    midPrice: 0,
-    totalBidVolume: 0,
-    totalAskVolume: 0,
-    imbalance: 0,
-    timestamp: 0,
-};
-*/
 // let supportResistanceLevels: SupportResistanceLevel[] = []; // Not used in main.ts
 
 const messageQueue: WebSocketMessage[] = [];
@@ -246,7 +249,8 @@ let isProcessingQueue = false;
 // ============================================================================
 export function updateUnifiedTimeRange(
     latestTime: number,
-    tradeChart: TradeChart
+    tradeChart: TradeChart,
+    rsiChart: RsiChart
 ): void {
     if (activeRange !== null) {
         unifiedMin = latestTime - activeRange;
@@ -254,22 +258,10 @@ export function updateUnifiedTimeRange(
 
         try {
             tradeChart.setScaleX(unifiedMin, unifiedMax);
+            rsiChart.setScaleX(unifiedMin, unifiedMax);
         } catch (error) {
             console.error("updateUnifiedTimeRange Error: ", error);
         }
-
-        /** 
-        if (
-            rsiChart &&
-            (rsiChart as ChartInstance).options &&
-            (rsiChart as ChartInstance).options.scales &&
-            (rsiChart as any).options.scales.x
-        ) {
-            (rsiChart as ChartInstance).options!.scales!["x"]!.min = unifiedMin;
-            (rsiChart as ChartInstance).options!.scales!["x"]!.max = unifiedMax;
-            updateRSITimeAnnotations(latestTime, activeRange);
-        }
-            */
     }
 }
 
@@ -281,33 +273,10 @@ function initialize(): void {
     restoreTimeRange();
     restoreVerticalLayout();
 
-    // Validate DOM elements
-    if (!tradesCanvas) {
-        console.error("Trades chart canvas not found");
-        return;
-    }
-    if (!orderBookCanvas) {
-        console.error("Order book chart canvas not found");
-        return;
-    }
-
-    const orderBookCtx = orderBookCanvas.getContext("2d");
-    if (!orderBookCtx) {
-        console.error("Could not get 2D context for order book chart");
-        return;
-    }
-
-    const rsiCtx = rsiCanvas?.getContext("2d");
-    if (!rsiCtx) {
-        console.error("Could not get 2D context for RSI chart");
-        return;
-    }
-
     // Initialize charts first
     try {
         //const now = Date.now();
         //let initialMin: number, initialMax: number;
-
         //if (activeRange !== null) {
         //    initialMin = now - activeRange;
         //    initialMax = now + PADDING_TIME;
@@ -315,8 +284,6 @@ function initialize(): void {
         //    initialMin = now - 90 * 60000; // 90 minutes ago
         //    initialMax = now + PADDING_TIME;
         //}
-
-        initializeOrderBookChart(orderBookCtx);
         /*
         const rsiChart = initializeRSIChart(
             rsiCtx,
@@ -549,15 +516,35 @@ function handleMessage(message: WebSocketMessage): void {
         // Proces an incomming trade
         case "trade":
             const trade: TradeData = message.data as TradeData;
-            tradeChart.addTrade(trade);
+
             if (tradeChart) {
+                tradeChart.addTrade(trade);
                 const now = Date.now();
-                if (now - lastTradeUpdate > 2000 && tradeChart) {
-                    updateUnifiedTimeRange(now, tradeChart);
+                if (now - lastTradeUpdate > 2000 && tradeChart && rsiChart) {
+                    updateUnifiedTimeRange(now, tradeChart, rsiChart);
                     lastTradeUpdate = now;
                 }
             }
             break;
+
+        case "orderbook":
+            const orderBook = message.data as OrderBookData;
+            if (isValidOrderBookData(orderBook)) {
+                orderBookChart.orderBookData = orderBook;
+
+                orderBookChart.updateOrderBookDisplay();
+            } else {
+                console.error("Invalid orderbook data");
+            }
+            break;
+
+        case "rsi":
+            const rsiDataPoint = message.data as RSIDataPoint;
+            if (rsiChart) {
+                rsiChart.addPoint(rsiDataPoint);
+            }
+            break;
+
         /*
         case "signal":
             const signal: Signal = message.data as Signal;
@@ -672,48 +659,9 @@ function handleMessage(message: WebSocketMessage): void {
             }
             break;
 
-        case "rsi":
-            const rsiDataPoint = message.data as RSIDataPoint;
-            if (isValidRSIData(rsiDataPoint)) {
-                rsiData.push(rsiDataPoint);
-                if (rsiData.length > MAX_RSI_DATA) {
-                    rsiData.shift();
-                }
-                if (!window.rsiUpdateTimeout) {
-                    window.rsiUpdateTimeout = setTimeout(() => {
-                        //const updateSuccess = safeUpdateRSIChart([...rsiData]);
-                        if (window.rsiUpdateTimeout) {
-                            clearTimeout(window.rsiUpdateTimeout);
-                            delete window.rsiUpdateTimeout;
-                        }
-                        //if (!updateSuccess) {
-                        //    console.error(
-                        //        "Failed to update RSI chart with batched data"
-                        //    );
-                        //}
-                    }, 100);
-                }
-            } else {
-                console.warn("Invalid RSI data received:", rsiDataPoint);
-            }
-            break;
+        
 
-        case "orderbook":
-            const orderBook = message.data as OrderBookData;
-            if (isValidOrderBookData(orderBook)) {
-                orderBookData = orderBook;
-                if (!window.orderbookInitialized) {
-                    console.log("📊 Orderbook initialized:", {
-                        levels: orderBookData.priceLevels.length,
-                        midPrice: orderBookData.midPrice,
-                    });
-                    window.orderbookInitialized = true;
-                }
-                updateOrderBookDisplay(orderBookData);
-            } else {
-                console.error("Invalid orderbook data");
-            }
-            break;
+        
 
         case "runtimeConfig":
             const config = message.data as Record<string, unknown>;
@@ -815,34 +763,11 @@ const tradeWebsocket = new TradeWebSocket({
     pongWait: 5000,
     onBacklog: (backLog: TradeData[]) => {
         tradeChart.processTradeBacklog(backLog);
-        updateUnifiedTimeRange(Date.now(), tradeChart);
-        
-        // if (trades.length > 0) {
-        //const latestTrade = trades[trades.length - 1];
-        //const latestTime = (latestTrade as { x: number; y: number }).x;
-        //const latestPrice = (latestTrade as { x: number; y: number }).y;
-        //if (tradeChart) {
-        //const chartInstance = tradeChart as Chart<"scatter">;
-        //const chartOptions = chartInstance.options;
-        //const plugins = chartOptions.plugins;
-        //const annotation = (plugins as any).annotation;
-        //const annotations = (annotation as any).annotations;
-        //if (annotations) {
-        //    const line = annotations[
-        //        "lastPriceLine"
-        //    ] as AnnotationOptions<"line">;
-        //    if (line) {
-        //        line.yMin = latestPrice;
-        //        line.yMax = latestPrice;
-        //    }
-        //}
-        //}
-        //(tradeChart.options.plugins?.annotation?.annotations as any)["lastPriceLine"].borderCapStyle = "butt";
-        //tradeChart.update("none");
-        //
-
-        //}
-        //scheduleTradesChartUpdate();
+        updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
+    },
+    onRsiBacklog: (backLog: RSIDataPoint[]) => {
+        rsiChart.processBacklog(backLog);
+        updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
     },
     onMessage: (message: unknown) => {
         // Convert websocket message to our expected format with proper validation
@@ -991,53 +916,14 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     }
 
-    // Trade cleanup every 30 minutes
+    // Charts cleanup every 10 minutes
     setInterval(
         () => {
-            const TRADE_RETENTION_MINUTES = 90;
-            const cutoffTime = Date.now() - TRADE_RETENTION_MINUTES * 60 * 1000;
-            const originalLength = trades.length;
-            let tradesToRemoveCount = trades.findIndex(
-                (t: ChartDataPoint) => (t as { x: number }).x >= cutoffTime
-            );
-            if (tradesToRemoveCount === -1 && originalLength > 0) {
-                tradesToRemoveCount = originalLength;
-            } else if (tradesToRemoveCount === -1) {
-                tradesToRemoveCount = 0;
-            }
-            if (tradesToRemoveCount > 1000) {
-                console.log(
-                    `Starting trade cleanup: ${tradesToRemoveCount} old trades detected`
-                );
-                const keptTrades = trades.slice(tradesToRemoveCount);
-                trades.length = 0;
-                trades.push(...keptTrades);
-                /*
-                if (tradesChart) {
-                    const chartInstance = tradesChart as ChartInstance;
-                    const chartData = chartInstance.data;
-                    if (
-                        chartData &&
-                        chartData.datasets &&
-                        chartData.datasets[0]
-                    ) {
-                        chartData.datasets[0].data = trades as {
-                            x: number;
-                            y: number;
-                            quantity?: number;
-                            orderType?: "BUY" | "SELL";
-                        }[];
-                        scheduleTradesChartUpdate();
-                    }
-                }
-                    */
-                const removedCount = originalLength - trades.length;
-                console.log(
-                    `Trade cleanup complete: filtered ${removedCount} old trades, ${trades.length} remaining`
-                );
-            }
+            tradeChart.cleanOldTrades();
+            rsiChart.cleanOldData();
+            updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
         },
-        30 * 60 * 1000
+        10 * 60 * 1000
     );
 });
 

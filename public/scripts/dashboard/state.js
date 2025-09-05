@@ -2,8 +2,7 @@ import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin from "chartjs-plugin-annotation";
 import { format } from "date-fns";
-import zoomPlugin from "chartjs-plugin-zoom";
-Chart.register(...registerables, zoomPlugin, annotationPlugin);
+Chart.register(...registerables, annotationPlugin);
 import { _adapters } from "chart.js";
 _adapters._date.override({
     formats: () => ({
@@ -179,6 +178,7 @@ export const GRID_SIZE = 25;
 export const ITEM_MARGIN = 20;
 export const MAX_RSI_DATA = 100;
 export const PADDING_PERCENTAGE = 0.05;
+export const PRICE_DEVIATION_THRESHOLD = 0.02;
 export const tradesCanvas = document.getElementById("tradesChart");
 export const orderBookCanvas = document.getElementById("orderBookChart");
 export const rsiCanvas = document.getElementById("rsiChart");

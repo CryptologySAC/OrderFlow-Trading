@@ -8,12 +8,13 @@ export class TradeWebSocket {
     pongWaitTime;
     onMessage;
     onBacklog;
+    onRsiBacklog;
     onReconnectFail;
     ws = null;
     pingInterval = null;
     pongTimeout = null;
     reconnectAttempts = 0;
-    constructor({ url, maxTrades = 10000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onReconnectFail = () => { }, }) {
+    constructor({ url, maxTrades = 10000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onRsiBacklog = () => { }, onReconnectFail = () => { }, }) {
         this.url = url;
         this.maxTrades = maxTrades;
         this.maxReconnectAttempts = maxReconnectAttempts;
@@ -22,6 +23,7 @@ export class TradeWebSocket {
         this.pongWaitTime = pongWait;
         this.onMessage = onMessage;
         this.onBacklog = onBacklog;
+        this.onRsiBacklog = onRsiBacklog;
         this.onReconnectFail = onReconnectFail;
     }
     connect() {
@@ -63,6 +65,9 @@ export class TradeWebSocket {
                 case MessageType.BACKLOG:
                     this.handleBacklog(message);
                     break;
+                case MessageType.RSI_BACKLOG:
+                    this.handleRsiBacklog(message);
+                    break;
                 default:
                     this.onMessage(message);
                     break;
@@ -78,6 +83,14 @@ export class TradeWebSocket {
         }
         else {
             console.warn("Received malformed backlog data:", message.data);
+        }
+    }
+    handleRsiBacklog(message) {
+        if (Array.isArray(message.data)) {
+            this.onRsiBacklog(message.data);
+        }
+        else {
+            console.warn("Received malformed RSI backlog data:", message.data);
         }
     }
     handleError(event) {
