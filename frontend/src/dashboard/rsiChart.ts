@@ -177,16 +177,21 @@ export class RsiChart {
 
         if (backLog.length === 0) return;
 
+        // reset the dataset
+        this.rsiChart.data.datasets.forEach((dataset) => {
+            dataset.data = [];
+        });
+
+        let points = 0;
         const now = Date.now();
         for (const rsiPoint of backLog) {
             const isOldRSI = now - rsiPoint.time > NINETHY_MINUTES;
             if (!isOldRSI) {
                 this.addPoint(rsiPoint, false);
+                points++;
             }
         }
-        console.log(
-            `${this.rsiChart.data.datasets[0].data.length} backlog RSI Points sent to RSI chart;`
-        );
+        console.log(`${points} backlog RSI Points sent to RSI chart;`);
 
         this.rsiChart.update("none");
     }
