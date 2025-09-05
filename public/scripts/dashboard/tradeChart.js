@@ -253,14 +253,19 @@ export class TradeChart {
         }
         if (backLog.length === 0)
             return;
+        this.tradeChart.data.datasets.forEach((dataset) => {
+            dataset.data = [];
+        });
+        let points = 0;
         const now = Date.now();
         for (const trade of backLog) {
             const isOldTrade = now - trade.time > NINETHY_MINUTES;
             if (!isOldTrade) {
                 this.addTrade(trade, false);
+                points++;
             }
         }
-        console.log(`${this.tradeChart.data.datasets[0].data.length} backlog trades sent to Trade chart;`);
+        console.log(`${points} backlog trades sent to Trade chart;`);
         this.updateYAxisBounds();
         this.updatePriceLine(backLog[0].price);
         this.tradeChart.update("none");
@@ -354,7 +359,9 @@ export class TradeChart {
         const cutoffTime = Date.now() - RETENTION_MINUTES * 60 * 1000;
         const originalLength = this.tradeChart.data.datasets[0].data.length;
         this.tradeChart.data.datasets.forEach((dataset) => {
-            dataset.data = dataset.data.filter((trade) => { return trade.x >= cutoffTime; });
+            dataset.data = dataset.data.filter((trade) => {
+                return trade.x >= cutoffTime;
+            });
         });
         this.updateYAxisBounds();
         const removedCount = originalLength - this.tradeChart.data.datasets[0].data.length;

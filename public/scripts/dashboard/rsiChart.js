@@ -134,14 +134,19 @@ export class RsiChart {
         }
         if (backLog.length === 0)
             return;
+        this.rsiChart.data.datasets.forEach((dataset) => {
+            dataset.data = [];
+        });
+        let points = 0;
         const now = Date.now();
         for (const rsiPoint of backLog) {
             const isOldRSI = now - rsiPoint.time > NINETHY_MINUTES;
             if (!isOldRSI) {
                 this.addPoint(rsiPoint, false);
+                points++;
             }
         }
-        console.log(`${this.rsiChart.data.datasets[0].data.length} backlog RSI Points sent to RSI chart;`);
+        console.log(`${points} backlog RSI Points sent to RSI chart;`);
         this.rsiChart.update("none");
     }
     setScaleX(min, max) {
@@ -241,7 +246,9 @@ export class RsiChart {
         const cutoffTime = Date.now() - RETENTION_MINUTES * 60 * 1000;
         const originalLength = this.rsiChart.data.datasets[0].data.length;
         this.rsiChart.data.datasets.forEach((dataset) => {
-            dataset.data = dataset.data.filter((dataPoint) => { return dataPoint.x >= cutoffTime; });
+            dataset.data = dataset.data.filter((dataPoint) => {
+                return dataPoint.x >= cutoffTime;
+            });
         });
         const removedCount = originalLength - this.rsiChart.data.datasets[0].data.length;
         console.log(`Trade cleanup complete: filtered ${removedCount} old RSI Points, ${this.rsiChart.data.datasets[0].data.length} remaining`);
