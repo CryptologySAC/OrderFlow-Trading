@@ -5,7 +5,6 @@ import {
     registerables,
     ChartOptions,
     LinearScaleOptions,
-    //Point,
 } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin, {
@@ -65,6 +64,7 @@ export class TradeChart {
                         label: "Trades",
                         parsing: false,
                         data: [],
+                        borderWidth: 1,
                         backgroundColor: (
                             context: ScriptableContext<"line">
                         ) => {
@@ -131,7 +131,7 @@ export class TradeChart {
                             lastPriceLine: {},
                         },
                     },
-                    legend: { display: false },
+                    legend: { display: false,  },
                     tooltip: {
                         callbacks: {
                             label: (context: TooltipItem<"scatter">) => {
@@ -159,6 +159,7 @@ export class TradeChart {
                 label: {
                     borderCapStyle: "butt",
                     borderJoinStyle: "miter",
+                    borderWidth: 1,
                     display: true,
                     content: (ctx: PartialEventContext) => {
                         if (

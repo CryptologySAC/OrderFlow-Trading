@@ -45,7 +45,8 @@ export class RsiChart {
                         borderWidth: 2,
                         fill: false,
                         pointRadius: 0,
-                        tension: 0.1,
+                        showLine: true,
+                        pointStyle: false,
                     },
                 ],
             },
@@ -73,7 +74,7 @@ export class RsiChart {
                         title: { display: true, text: "RSI" },
                         min: 0,
                         max: 100,
-                        ticks: { stepSize: 5 },
+                        ticks: { stepSize: 10 },
                         position: "right",
                         grace: 0,
                         offset: true,
@@ -193,7 +194,7 @@ export class RsiChart {
         }
         console.log(`${points} backlog RSI Points sent to RSI chart;`);
 
-        this.rsiChart.update("none");
+        this.rsiChart.update("active");
     }
 
     public setScaleX(min: number, max: number): void {
@@ -225,7 +226,7 @@ export class RsiChart {
 
             const now = Date.now();
             if (update && now - this.lastRsiUpdate > 50) {
-                this.rsiChart.update("none");
+                this.rsiChart.update("active");
                 this.lastRsiUpdate = now;
             }
 
@@ -260,15 +261,6 @@ export class RsiChart {
         const min: number = latestTime - this._activeRange;
         const max: number = latestTime + PADDING_TIME;
 
-        Object.keys(annotations).forEach((key: string) => {
-            if (
-                !isNaN(Number(key)) &&
-                (Number(key) < min || Number(key) > max)
-            ) {
-                delete annotations[key];
-            }
-        });
-
         let time: number = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
         while (time <= max) {
             if (!annotations[time.toFixed()]) {
@@ -289,11 +281,11 @@ export class RsiChart {
      * Gets the color for RSI line based on current value
      */
     private getRSIColor(context: ScriptableContext<"line">): string {
-        const data = context.raw as RSIDataPoint;
-        if (!data || typeof data.rsi !== "number")
+        const data = context.raw as Point;
+        if (!data || typeof data.y !== "number")
             return "rgba(102, 102, 102, 1)";
 
-        const rsi: number = data.rsi;
+        const rsi: number = data.y;
         if (rsi >= RSI_OVERBOUGHT) return "rgba(255, 0, 0, 1)"; // Red for overbought
         if (rsi <= RSI_OVERSOLD) return "rgba(0, 255, 0, 1)"; // Green for oversold
         return "rgba(102, 102, 102, 1)"; // Gray for neutral
@@ -303,11 +295,11 @@ export class RsiChart {
      * Gets the background color for RSI chart area
      */
     private getRSIBackgroundColor(context: ScriptableContext<"line">): string {
-        const data = context.raw as RSIDataPoint;
-        if (!data || typeof data.rsi !== "number")
+        const data = context.raw as Point;
+        if (!data || typeof data.y !== "number")
             return "rgba(102, 102, 102, 0.1)";
 
-        const rsi: number = data.rsi;
+        const rsi: number = data.y;
         if (rsi >= RSI_OVERBOUGHT) return "rgba(255, 0, 0, 0.1)"; // Light red for overbought
         if (rsi <= RSI_OVERSOLD) return "rgba(0, 255, 0, 0.1)"; // Light green for oversold
         return "rgba(102, 102, 102, 0.1)"; // Light gray for neutral

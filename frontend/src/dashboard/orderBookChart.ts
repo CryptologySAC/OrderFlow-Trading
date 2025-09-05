@@ -309,7 +309,7 @@ export class OrderBookChart {
         // Update border colors for better visibility
         this.updateOrderBookBorderColors(actualTheme);
 
-        this.orderBookChart.update("none");
+        this.orderBookChart.update("active");
     }
 
     /**

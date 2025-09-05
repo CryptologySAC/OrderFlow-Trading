@@ -24,7 +24,8 @@ export class RsiChart {
                         borderWidth: 2,
                         fill: false,
                         pointRadius: 0,
-                        tension: 0.1,
+                        showLine: true,
+                        pointStyle: false,
                     },
                 ],
             },
@@ -52,7 +53,7 @@ export class RsiChart {
                         title: { display: true, text: "RSI" },
                         min: 0,
                         max: 100,
-                        ticks: { stepSize: 5 },
+                        ticks: { stepSize: 10 },
                         position: "right",
                         grace: 0,
                         offset: true,
@@ -147,7 +148,7 @@ export class RsiChart {
             }
         }
         console.log(`${points} backlog RSI Points sent to RSI chart;`);
-        this.rsiChart.update("none");
+        this.rsiChart.update("active");
     }
     setScaleX(min, max) {
         if (!this.rsiChart ||
@@ -172,7 +173,7 @@ export class RsiChart {
             });
             const now = Date.now();
             if (update && now - this.lastRsiUpdate > 50) {
-                this.rsiChart.update("none");
+                this.rsiChart.update("active");
                 this.lastRsiUpdate = now;
             }
             if (update && now - this.lastRsiLongUpdate > 1000) {
@@ -198,12 +199,6 @@ export class RsiChart {
             return;
         const min = latestTime - this._activeRange;
         const max = latestTime + PADDING_TIME;
-        Object.keys(annotations).forEach((key) => {
-            if (!isNaN(Number(key)) &&
-                (Number(key) < min || Number(key) > max)) {
-                delete annotations[key];
-            }
-        });
         let time = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
         while (time <= max) {
             if (!annotations[time.toFixed()]) {
@@ -221,9 +216,9 @@ export class RsiChart {
     }
     getRSIColor(context) {
         const data = context.raw;
-        if (!data || typeof data.rsi !== "number")
+        if (!data || typeof data.y !== "number")
             return "rgba(102, 102, 102, 1)";
-        const rsi = data.rsi;
+        const rsi = data.y;
         if (rsi >= RSI_OVERBOUGHT)
             return "rgba(255, 0, 0, 1)";
         if (rsi <= RSI_OVERSOLD)
@@ -232,9 +227,9 @@ export class RsiChart {
     }
     getRSIBackgroundColor(context) {
         const data = context.raw;
-        if (!data || typeof data.rsi !== "number")
+        if (!data || typeof data.y !== "number")
             return "rgba(102, 102, 102, 0.1)";
-        const rsi = data.rsi;
+        const rsi = data.y;
         if (rsi >= RSI_OVERBOUGHT)
             return "rgba(255, 0, 0, 0.1)";
         if (rsi <= RSI_OVERSOLD)
