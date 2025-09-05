@@ -4,7 +4,6 @@
 import type {
     ChartInstance,
     RuntimeConfig,
-    Anomaly,
     Signal,
     SupportResistanceLevel,
     ZoneData,
@@ -250,8 +249,6 @@ export function setRsiChart(chart: Chart<"line"> | null): void {
 // ANOMALY MANAGEMENT
 // =============================================================================
 
-
-
 // =============================================================================
 // SIGNALS MANAGEMENT
 // =============================================================================
@@ -329,8 +326,6 @@ export const trades: ChartDataPoint[] = [];
 // =============================================================================
 
 export let activeRange = NINETHY_MINUTES; // 90 minutes
-
-
 
 export function setRuntimeConfig(
     config: RuntimeConfig | null | undefined

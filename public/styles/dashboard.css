@@ -105,6 +105,19 @@ body {
     max-width: 30%;
 }
 
+#tradesContainer {
+    flex-direction: column;
+    flex: 0 0 50%;
+    min-height: 50%;
+}
+
+#rsiContainer {
+    flex-direction: column;
+    flex: 0 0 50%;
+    max-height: 50%;
+    min-height: 200px;
+}
+
 .chart-container,
 .gauge-container,
 .signals-container,
@@ -395,12 +408,6 @@ body {
 }
 
 #orderBookContainer {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-#tradesContainer {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -777,6 +784,14 @@ canvas {
         width: 100%;
         max-width: none;
         min-width: auto;
+    }
+
+    #rsiContainer,
+    #tradesContainer {
+        flex: none;
+        height: 100%;
+        max-height: none;
+        min-height: auto;
     }
 
     .resize-handle {

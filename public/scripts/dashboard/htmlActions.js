@@ -113,7 +113,7 @@ export class HTMLActions {
             console.warn("Failed to restore theme from localStorage:", error);
         }
     }
-    restoreColumnWidths() {
+    restoreColumnDimensions() {
         try {
             const savedWidths = localStorage.getItem("dashboardColumnWidths");
             if (!savedWidths) {
@@ -136,6 +136,30 @@ export class HTMLActions {
                     column1: column1Width,
                     column3: column3Width,
                     savedAt: new Date(columnWidths.timestamp).toLocaleString(),
+                });
+            }
+            const savedHeights = localStorage.getItem("dashboardColumnHeights");
+            if (!savedHeights) {
+                console.log("No saved column heights found, using defaults");
+                return;
+            }
+            const columnHeights = JSON.parse(savedHeights);
+            if (!columnHeights.rsiContainer ||
+                !columnHeights.anomalyListContainer) {
+                console.warn("Invalid saved column heights, using defaults");
+                return;
+            }
+            const rsiContainer = document.getElementById("rsiContainer");
+            const anomalyListContainer = document.getElementById("anomalyListContainer");
+            if (rsiContainer && anomalyListContainer) {
+                const rsiContainerHeight = Math.min(Math.max(columnHeights.rsiContainer, 15), 50);
+                const anomalyListContainerHeight = Math.min(Math.max(columnHeights.rsiContainer, 15), 85);
+                rsiContainer.style.flex = `0 0 ${rsiContainerHeight}%`;
+                anomalyListContainer.style.flex = `0 0 ${anomalyListContainerHeight}%`;
+                console.log("Column widths restored:", {
+                    rsiContainer: rsiContainerHeight,
+                    anomalyListContainer: anomalyListContainerHeight,
+                    savedAt: new Date(columnHeights.timestamp).toLocaleString(),
                 });
             }
         }
@@ -368,28 +392,46 @@ export class HTMLActions {
     setAnomalyFilters(filters) {
         this.anomalyFilters = filters;
     }
-    saveColumnWidths() {
+    saveColumnDimensions() {
         try {
             const dashboard = document.querySelector(".dashboard");
             const column1 = document.getElementById("column1");
             const column3 = document.getElementById("column3");
-            if (dashboard && column1 && column3) {
+            const rsiContainer = document.getElementById("rsiContainer");
+            const anomalyListContainer = document.getElementById("anomalyListContainer");
+            if (dashboard &&
+                column1 &&
+                column3 &&
+                rsiContainer &&
+                anomalyListContainer) {
                 const dashboardRect = dashboard.getBoundingClientRect();
                 const column1Rect = column1.getBoundingClientRect();
                 const column3Rect = column3.getBoundingClientRect();
+                const rsiContainerRect = rsiContainer.getBoundingClientRect();
+                const anomalyListContainerRect = anomalyListContainer.getBoundingClientRect();
                 const column1Percent = (column1Rect.width / dashboardRect.width) * 100;
                 const column3Percent = (column3Rect.width / dashboardRect.width) * 100;
+                const rsiContainerPercent = (rsiContainerRect.height / dashboardRect.height) * 100;
+                const anomalyListContainerPercent = (anomalyListContainerRect.height / dashboardRect.height) *
+                    100;
                 const columnWidths = {
                     column1: column1Percent,
                     column3: column3Percent,
                     timestamp: Date.now(),
                 };
+                const columHeights = {
+                    rsiContainer: rsiContainerPercent,
+                    anomalyListContainer: anomalyListContainerPercent,
+                    timestamp: Date.now(),
+                };
                 localStorage.setItem("dashboardColumnWidths", JSON.stringify(columnWidths));
+                localStorage.setItem("dashboardColumnHeights", JSON.stringify(columHeights));
                 console.log("Column widths saved:", columnWidths);
+                console.log("Column heights saved:", columHeights);
             }
         }
         catch (error) {
-            console.warn("Failed to save column widths to localStorage:", error);
+            console.warn("Failed to save column dimensions to localStorage:", error);
         }
     }
     setupColumnResizing() {
@@ -398,7 +440,44 @@ export class HTMLActions {
             return;
         }
         const self = this;
-        interact(".resize-handle").draggable({
+        interact(".resize-handle-y").resizable({
+            listeners: {
+                move(event) {
+                    const handle = event.target;
+                    const handleId = handle.id;
+                    const dashboard = document.querySelector(".dashboard");
+                    if (dashboard) {
+                        const dashboardRect = dashboard.getBoundingClientRect();
+                        if (handleId === "resize-v1") {
+                            const rsiContainer = document.getElementById("rsiContainer");
+                            if (rsiContainer) {
+                                const rsiContainerRect = rsiContainer.getBoundingClientRect();
+                                const newHeight = Math.min(Math.max(rsiContainerRect.height - event.dy, 200), dashboardRect.height * 0.5);
+                                const newPercent = (newHeight / dashboardRect.height) * 100;
+                                rsiContainer.style.flex = `0 0 ${newPercent}%`;
+                                console.log(`INTERACT: ${event.dy} | ${newPercent}`);
+                            }
+                        }
+                        else if (handleId === "resize-v2") {
+                            const anomalyListContainer = document.getElementById("anomalyListContainer");
+                            if (anomalyListContainer) {
+                                const anomalyListContainerRect = anomalyListContainer.getBoundingClientRect();
+                                const newHeight = Math.min(Math.max(anomalyListContainerRect.height -
+                                    event.dy, 200), dashboardRect.height * 0.5);
+                                const newPercent = (newHeight / dashboardRect.height) * 100;
+                                anomalyListContainer.style.flex = `0 0 ${newPercent}%`;
+                                console.log(`INTERACT: ${event.dy} | ${newPercent}`);
+                            }
+                        }
+                    }
+                },
+                end(event) {
+                    void event;
+                    self.saveColumnDimensions();
+                },
+            },
+        });
+        interact(".resize-handle").resizable({
             listeners: {
                 move(event) {
                     const handle = event.target;
@@ -424,15 +503,20 @@ export class HTMLActions {
                                 column3.style.flex = `0 0 ${newPercent}%`;
                             }
                         }
-                        clearTimeout(window.resizeTimeout);
-                        window.resizeTimeout = setTimeout(() => {
-                            self.saveColumnWidths();
-                        }, 100);
+                        else if (handleId === "resize-v1") {
+                            console.log("INTERACT:");
+                            const tradesContainer = document.getElementById("tradesContainer");
+                            if (tradesContainer) {
+                                const tradesContainerRect = tradesContainer.getBoundingClientRect();
+                                const newHeight = Math.min(Math.max(tradesContainerRect.height + event.dy, 200), dashboardRect.height * 0.5);
+                                tradesContainer.style.flex = `0 0 0 ${newHeight}%`;
+                            }
+                        }
                     }
                 },
                 end(event) {
                     void event;
-                    self.saveColumnWidths();
+                    self.saveColumnDimensions();
                 },
             },
         });
@@ -562,32 +646,9 @@ export class HTMLActions {
             console.warn("Failed to save anomaly filters to localStorage:", error);
         }
     }
-    restoreVerticalLayout() {
-        try {
-            const savedLayout = localStorage.getItem("dashboardVerticalLayout");
-            if (!savedLayout) {
-                console.log("No saved vertical layout found, using default.");
-                return;
-            }
-            const layoutSettings = JSON.parse(savedLayout);
-            if (layoutSettings.isVertical) {
-                document.body.classList.add("vertical-layout");
-            }
-            else {
-                document.body.classList.remove("vertical-layout");
-            }
-            console.log("Vertical layout restored:", {
-                isVertical: layoutSettings.isVertical,
-                savedAt: new Date(layoutSettings.timestamp).toLocaleString(),
-            });
-        }
-        catch (error) {
-            console.warn("Failed to restore vertical layout from localStorage:", error);
-        }
-    }
     resetAllSettings() {
         try {
-            this.resetColumnWidths();
+            this.resetColumnDimensions();
             this.setAnomalyFilters(new Set(["critical", "high"]));
             localStorage.removeItem("dashboardAnomalyFilters");
             const filterBox = document.querySelector(".anomaly-filter");
@@ -623,15 +684,13 @@ export class HTMLActions {
             this.tradeChart.activeRange = this.activeRange;
             this.rsiChart.activeRange = this.activeRange;
             this.updateUnifiedTimeRange;
-            localStorage.removeItem("dashboardVerticalLayout");
-            document.body.classList.remove("vertical-layout");
             console.log("All dashboard settings reset to defaults");
         }
         catch (error) {
             console.warn("Failed to reset all settings:", error);
         }
     }
-    resetColumnWidths() {
+    resetColumnDimensions() {
         try {
             const column1 = document.getElementById("column1");
             const column3 = document.getElementById("column3");
@@ -641,9 +700,15 @@ export class HTMLActions {
                 localStorage.removeItem("dashboardColumnWidths");
                 console.log("Column widths reset to defaults");
             }
+            const rsiContainer = document.getElementById("rsiContainer");
+            if (rsiContainer) {
+                rsiContainer.style.flex = "0 0 50%";
+                localStorage.removeItem("dashboardColumnHeights");
+                console.log("Column heights reset to defaults");
+            }
         }
         catch (error) {
-            console.warn("Failed to reset column widths:", error);
+            console.warn("Failed to reset column dimensions:", error);
         }
     }
     applySystemTheme() {

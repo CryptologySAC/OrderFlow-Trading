@@ -29,7 +29,6 @@ import { RsiChart } from "./rsiChart.js";
 import { HTMLActions } from "./htmlActions.js";
 
 import { renderSignalsList, updateTradeDelayIndicator } from "./render.js";
-import { resetAllSettings } from "./persistence.js";
 import {
     toggleDepletionVisualization,
     updateDepletionToggleButton,
@@ -206,9 +205,8 @@ export function isValidZoneSignalData(data: ZoneSignalEvent): boolean {
 function initialize(): void {
     try {
         htmlActions.restoreTheme();
-        htmlActions.restoreColumnWidths();
+        htmlActions.restoreColumnDimensions();
         htmlActions.restoreAnomalyFilters();
-        htmlActions.restoreVerticalLayout();
         htmlActions.restoreTimeRange();
         htmlActions.setRangeSelector();
         htmlActions.setupColumnResizing();
@@ -237,7 +235,7 @@ function initialize(): void {
                     "Reset all dashboard settings to default? This will clear your saved layout, filter, and time range preferences."
                 )
             ) {
-                resetAllSettings();
+                htmlActions.resetAllSettings();
             }
         });
     }

@@ -203,13 +203,6 @@ export function setOrderBookChart(chart) {
 export function setRsiChart(chart) {
     rsiChart = chart;
 }
-export const anomalyList = [];
-export const anomalySeverityOrder = [
-    "critical",
-    "high",
-    "medium",
-    "info",
-];
 export const signalsList = [];
 export const signalFilters = new Set(["buy", "sell"]);
 export const activeSignalTooltip = null;
