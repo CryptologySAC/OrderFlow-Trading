@@ -1,6 +1,8 @@
+// frontend/src/websocket.ts
+
 import {
-    type WebSocketMessage,
     MessageType,
+    type WebSocketMessage,
     type TradeData,
     type BacklogMessage,
     type PingMessage,
@@ -8,55 +10,105 @@ import {
 } from "./types.js";
 
 import type { RSIDataPoint } from "./frontend-types.js";
+import * as Config from "./config.js";
 
-// --- Configuration Interfaces ---
+/**
+ * Configuration options for the TradeWebSocket class
+ * @interface TradeWebSocketConfig
+ */
 interface TradeWebSocketConfig {
+    /** WebSocket server URL to connect to */
     url: string;
-    maxTrades?: number;
+    /** Maximum number of backlog trades to request on connection */
+    maxBacklogTrades?: number;
+    /** Maximum number of reconnection attempts before giving up */
     maxReconnectAttempts?: number;
+    /** Base delay between reconnection attempts (exponential backoff) */
     reconnectDelay?: number;
+    /** Interval for sending ping messages to keep connection alive */
     pingInterval?: number;
+    /** Time to wait for pong response before considering connection dead */
     pongWait?: number;
+    /** Callback fired when a WebSocket message is received */
     onMessage?: (message: WebSocketMessage) => void;
+    /** Callback fired when backlog trade data is received */
     onBacklog?: (data: TradeData[]) => void;
+    /** Callback fired when RSI backlog data is received */
     onRsiBacklog?: (data: RSIDataPoint[]) => void;
+    /** Callback fired when reconnection attempts are exhausted */
     onReconnectFail?: () => void;
+    /** Callback fired when connection times out */
     onTimeout?: () => void;
+    /** Callback fired when a WebSocket error occurs */
+    onError?: () => void;
 }
 
-// --- Main Class ---
+/**
+ * WebSocket client for real-time trade and RSI data streaming
+ *
+ * Handles automatic reconnection, ping/pong keepalive, and backlog data requests.
+ * Provides robust error handling and connection state management.
+ *
+ * @example
+ * ```typescript
+ * const ws = new TradeWebSocket({
+ *     url: 'wss://api.example.com/trades',
+ *     onMessage: (msg) => console.log('Received:', msg),
+ *     onBacklog: (trades) => updateChart(trades)
+ * });
+ * ws.connect();
+ * ```
+ */
 export class TradeWebSocket {
+    /** WebSocket server URL */
     private readonly url: string;
-    private readonly maxTrades: number;
+    /** Maximum backlog trades to request */
+    private readonly maxBacklogTrades: number;
+    /** Maximum reconnection attempts */
     private readonly maxReconnectAttempts: number;
+    /** Base reconnection delay */
     private readonly reconnectDelay: number;
+    /** Ping interval duration */
     private readonly pingIntervalTime: number;
+    /** Pong response timeout */
     private readonly pongWaitTime: number;
 
+    /** Message handler callback */
     private onMessage: (message: WebSocketMessage) => void;
+    /** Backlog data handler callback */
     private onBacklog: (data: TradeData[]) => void;
+    /** RSI backlog data handler callback */
     private onRsiBacklog: (data: RSIDataPoint[]) => void;
+    /** Reconnection failure handler callback */
     private onReconnectFail: () => void;
 
+    /** Current WebSocket connection instance */
     private ws: WebSocket | null = null;
+    /** Ping interval timer */
     private pingInterval: NodeJS.Timeout | null = null;
+    /** Pong timeout timer */
     private pongTimeout: NodeJS.Timeout | null = null;
+    /** Current reconnection attempt count */
     private reconnectAttempts = 0;
 
+    /**
+     * Creates a new TradeWebSocket instance
+     * @param config - Configuration options for the WebSocket connection
+     */
     constructor({
         url,
-        maxTrades = 10000,
-        maxReconnectAttempts = 10,
-        reconnectDelay = 1000,
-        pingInterval = 10000,
-        pongWait = 5000,
+        maxBacklogTrades = Config.BACKLOG_TRADES_AMOUNT,
+        maxReconnectAttempts = Config.MAX_RECONNECT_ATTEMPTS,
+        reconnectDelay = Config.RECONNECT_DELAY_MS,
+        pingInterval = Config.PING_INTERVAL_MS,
+        pongWait = Config.PONG_WAIT_MS,
         onMessage = () => {},
         onBacklog = () => {},
         onRsiBacklog = () => {},
         onReconnectFail = () => {},
     }: TradeWebSocketConfig) {
         this.url = url;
-        this.maxTrades = maxTrades;
+        this.maxBacklogTrades = maxBacklogTrades;
         this.maxReconnectAttempts = maxReconnectAttempts;
         this.reconnectDelay = reconnectDelay;
         this.pingIntervalTime = pingInterval;
@@ -68,6 +120,10 @@ export class TradeWebSocket {
         this.onReconnectFail = onReconnectFail;
     }
 
+    /**
+     * Initiates WebSocket connection to the server
+     * Sets up event handlers and begins the connection process
+     */
     connect(): void {
         try {
             this.ws = new WebSocket(this.url);
@@ -83,18 +139,29 @@ export class TradeWebSocket {
         this.ws.onclose = this.handleClose.bind(this);
     }
 
+    /**
+     * Handles successful WebSocket connection
+     * Requests backlog data and starts ping interval
+     * @private
+     */
     private handleOpen(): void {
         console.log("WebSocket connected:", this.url);
         this.reconnectAttempts = 0;
         setTimeout(() => {
             this.sendMessage({
                 type: MessageType.BACKLOG,
-                data: { amount: this.maxTrades },
+                data: { amount: this.maxBacklogTrades },
             });
             this.startPing();
         }, 50);
     }
 
+    /**
+     * Processes incoming WebSocket messages
+     * Routes messages to appropriate handlers based on message type
+     * @param event - WebSocket message event
+     * @private
+     */
     private handleMessage(event: MessageEvent): void {
         try {
             const message = this.safeJsonParse(event.data as string);
@@ -122,6 +189,11 @@ export class TradeWebSocket {
         }
     }
 
+    /**
+     * Processes backlog trade data messages
+     * @param message - Backlog message containing trade data
+     * @private
+     */
     private handleBacklog(message: BacklogMessage): void {
         if (Array.isArray(message.data)) {
             this.onBacklog(message.data);
@@ -130,6 +202,11 @@ export class TradeWebSocket {
         }
     }
 
+    /**
+     * Processes RSI backlog data messages
+     * @param message - RSI backlog message containing RSI data
+     * @private
+     */
     private handleRsiBacklog(message: RsiBacklogMessage): void {
         if (Array.isArray(message.data)) {
             this.onRsiBacklog(message.data);
@@ -138,17 +215,31 @@ export class TradeWebSocket {
         }
     }
 
+    /**
+     * Handles WebSocket errors
+     * @param event - Error event
+     * @private
+     */
     private handleError(event: Event): void {
         console.error("WebSocket error:", event);
         this.stopPing();
     }
 
+    /**
+     * Handles WebSocket connection closure
+     * Initiates reconnection process
+     * @private
+     */
     private handleClose(): void {
         console.warn("WebSocket closed:", this.url);
         this.stopPing();
         this.handleReconnect();
     }
 
+    /**
+     * Manages reconnection attempts with exponential backoff
+     * @private
+     */
     private handleReconnect(): void {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
@@ -164,6 +255,10 @@ export class TradeWebSocket {
         }
     }
 
+    /**
+     * Starts the ping interval for connection keepalive
+     * @private
+     */
     private startPing(): void {
         this.stopPing(); // Ensure no multiple intervals are running
         this.pingInterval = setInterval(() => {
@@ -173,6 +268,10 @@ export class TradeWebSocket {
         }, this.pingIntervalTime);
     }
 
+    /**
+     * Starts pong timeout timer for connection health monitoring
+     * @private
+     */
     private startPongTimeout(): void {
         this.clearPongTimeout();
         this.pongTimeout = setTimeout(() => {
@@ -183,6 +282,10 @@ export class TradeWebSocket {
         }, this.pongWaitTime);
     }
 
+    /**
+     * Clears the pong timeout timer
+     * @private
+     */
     private clearPongTimeout(): void {
         if (this.pongTimeout) {
             clearTimeout(this.pongTimeout);
@@ -190,6 +293,10 @@ export class TradeWebSocket {
         }
     }
 
+    /**
+     * Stops the ping interval and clears pong timeout
+     * @private
+     */
     private stopPing(): void {
         if (this.pingInterval) {
             clearInterval(this.pingInterval);
@@ -198,6 +305,10 @@ export class TradeWebSocket {
         this.clearPongTimeout();
     }
 
+    /**
+     * Gracefully disconnects the WebSocket connection
+     * Stops ping interval and prevents automatic reconnection
+     */
     disconnect(): void {
         console.log("Disconnecting WebSocket.");
         this.stopPing();
@@ -207,6 +318,11 @@ export class TradeWebSocket {
         }
     }
 
+    /**
+     * Sends a message through the WebSocket connection
+     * @param message - Message to send (Ping or Backlog request)
+     * @returns true if message was sent successfully, false otherwise
+     */
     sendMessage(
         message:
             | PingMessage
@@ -230,7 +346,12 @@ export class TradeWebSocket {
         return false;
     }
 
-    // --- Data Safety & Validation ---
+    /**
+     * Validates if the received data is a valid WebSocket message
+     * @param data - Data to validate
+     * @returns true if data is a valid WebSocketMessage
+     * @private
+     */
     private isValidMessage(data: unknown): data is WebSocketMessage {
         if (typeof data !== "object" || data === null) {
             return false;
@@ -245,6 +366,12 @@ export class TradeWebSocket {
         return Object.values(MessageType).includes(obj["type"] as MessageType);
     }
 
+    /**
+     * Safely parses JSON string with error handling
+     * @param str - JSON string to parse
+     * @returns parsed object or null if parsing failed
+     * @private
+     */
     private safeJsonParse(str: string): unknown {
         try {
             return JSON.parse(str);
@@ -254,6 +381,12 @@ export class TradeWebSocket {
         }
     }
 
+    /**
+     * Safely stringifies object to JSON with circular reference protection
+     * @param obj - Object to stringify
+     * @returns JSON string or null if stringification failed
+     * @private
+     */
     private safeJsonStringify(obj: unknown): string | null {
         const cache = new Set();
         return JSON.stringify(obj, (_key, value) => {

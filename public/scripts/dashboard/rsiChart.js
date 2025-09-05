@@ -19,8 +19,7 @@ export class RsiChart {
                         label: "RSI",
                         parsing: false,
                         data: [],
-                        borderColor: this.getRSIColor,
-                        backgroundColor: this.getRSIBackgroundColor,
+                        borderColor: "rgba(102, 102, 102, 1)",
                         borderWidth: 2,
                         fill: false,
                         pointRadius: 0,
@@ -64,8 +63,7 @@ export class RsiChart {
                                 size: 11,
                                 family: 'monospace'
                             },
-                            padding: 10,
-                            format: {}
+                            padding: 20,
                         },
                         position: "right",
                         grace: 0,
@@ -90,37 +88,37 @@ export class RsiChart {
         });
         const overboughtLine = {
             type: "line",
-            yMin: 70,
-            yMax: 70,
+            yMin: RSI_OVERBOUGHT,
+            yMax: RSI_OVERBOUGHT,
             borderColor: "rgba(255, 0, 0, 0.8)",
             borderWidth: 1,
             borderDash: [5, 5],
-            drawTime: "beforeDatasetsDraw",
+            drawTime: "beforeDraw",
             label: {
                 display: true,
-                content: "Overbought (70)",
-                position: "end",
-                backgroundColor: "rgba(255, 0, 0, 0.8)",
+                content: "Overbought",
+                position: "center",
+                backgroundColor: "rgba(255, 0, 0, 0.5)",
                 color: "white",
-                font: { size: 10 },
+                font: { size: 10, family: 'monospace' },
                 padding: 4,
             },
         };
         const oversoldLine = {
             type: "line",
-            yMin: 30,
-            yMax: 30,
+            yMin: RSI_OVERSOLD,
+            yMax: RSI_OVERSOLD,
             borderColor: "rgba(0, 255, 0, 0.8)",
             borderWidth: 1,
             borderDash: [5, 5],
-            drawTime: "beforeDatasetsDraw",
+            drawTime: "beforeDraw",
             label: {
                 display: true,
-                content: "Oversold (30)",
-                position: "start",
-                backgroundColor: "rgba(0, 255, 0, 0.8)",
+                content: "Oversold",
+                position: "center",
+                backgroundColor: "rgba(0, 255, 0, 0.5)",
                 color: "white",
-                font: { size: 10 },
+                font: { size: 10, family: 'monospace' },
                 padding: 4,
             },
         };
@@ -227,28 +225,6 @@ export class RsiChart {
             }
             time += FIFTEEN_MINUTES;
         }
-    }
-    getRSIColor(context) {
-        const data = context.raw;
-        if (!data || typeof data.y !== "number")
-            return "rgba(102, 102, 102, 1)";
-        const rsi = data.y;
-        if (rsi >= RSI_OVERBOUGHT)
-            return "rgba(255, 0, 0, 1)";
-        if (rsi <= RSI_OVERSOLD)
-            return "rgba(0, 255, 0, 1)";
-        return "rgba(102, 102, 102, 1)";
-    }
-    getRSIBackgroundColor(context) {
-        const data = context.raw;
-        if (!data || typeof data.y !== "number")
-            return "rgba(102, 102, 102, 0.1)";
-        const rsi = data.y;
-        if (rsi >= RSI_OVERBOUGHT)
-            return "rgba(255, 0, 0, 0.1)";
-        if (rsi <= RSI_OVERSOLD)
-            return "rgba(0, 255, 0, 0.1)";
-        return "rgba(102, 102, 102, 0.1)";
     }
     cleanOldData() {
         const RETENTION_MINUTES = 90;

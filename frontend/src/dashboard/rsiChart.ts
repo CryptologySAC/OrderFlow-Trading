@@ -1,7 +1,6 @@
 import {
     Chart,
     TooltipItem,
-    ScriptableContext,
     registerables,
     ChartOptions,
     Point,
@@ -40,8 +39,7 @@ export class RsiChart {
                         label: "RSI",
                         parsing: false,
                         data: [], // Start with empty data - will be populated by real RSI data
-                        borderColor: this.getRSIColor,
-                        backgroundColor: this.getRSIBackgroundColor,
+                        borderColor: "rgba(102, 102, 102, 1)",
                         borderWidth: 2,
                         fill: false,
                         pointRadius: 0,
@@ -69,33 +67,28 @@ export class RsiChart {
                             color: "rgba(102, 102, 102, 0.1)",
                         },
                         alignToPixels: true,
-                        bounds: "ticks"
+                        bounds: "ticks",
                     },
                     y: {
                         type: "linear",
-                        title: { 
-                            display: true, 
+                        title: {
+                            display: true,
                             text: "RSI",
-                            
                         },
                         min: 0,
                         max: 100,
-                        ticks: { 
+                        ticks: {
                             stepSize: 10,
                             font: {
                                 size: 11,
-                                family: 'monospace'
+                                family: "monospace",
                             },
-                            padding: 10,  
-                            format: {
-
-                            }
+                            padding: 20,
                         },
                         position: "right",
                         grace: 0,
                         offset: true,
-                        alignToPixels: true
-                        
+                        alignToPixels: true,
                     },
                 },
                 plugins: {
@@ -116,38 +109,38 @@ export class RsiChart {
 
         const overboughtLine: AnnotationOptions<"line"> = {
             type: "line",
-            yMin: 70,
-            yMax: 70,
+            yMin: RSI_OVERBOUGHT,
+            yMax: RSI_OVERBOUGHT,
             borderColor: "rgba(255, 0, 0, 0.8)",
             borderWidth: 1,
             borderDash: [5, 5],
-            drawTime: "beforeDatasetsDraw",
+            drawTime: "beforeDraw",
             label: {
                 display: true,
-                content: "Overbought (70)",
-                position: "end",
-                backgroundColor: "rgba(255, 0, 0, 0.8)",
+                content: "Overbought",
+                position: "center",
+                backgroundColor: "rgba(255, 0, 0, 0.5)",
                 color: "white",
-                font: { size: 10 },
+                font: { size: 10, family: "monospace" },
                 padding: 4,
             },
         };
 
         const oversoldLine: AnnotationOptions<"line"> = {
             type: "line",
-            yMin: 30,
-            yMax: 30,
+            yMin: RSI_OVERSOLD,
+            yMax: RSI_OVERSOLD,
             borderColor: "rgba(0, 255, 0, 0.8)",
             borderWidth: 1,
             borderDash: [5, 5],
-            drawTime: "beforeDatasetsDraw",
+            drawTime: "beforeDraw",
             label: {
                 display: true,
-                content: "Oversold (30)",
-                position: "start",
-                backgroundColor: "rgba(0, 255, 0, 0.8)",
+                content: "Oversold",
+                position: "center",
+                backgroundColor: "rgba(0, 255, 0, 0.5)",
                 color: "white",
-                font: { size: 10 },
+                font: { size: 10, family: "monospace" },
                 padding: 4,
             },
         };
@@ -293,34 +286,6 @@ export class RsiChart {
             }
             time += FIFTEEN_MINUTES;
         }
-    }
-
-    /**
-     * Gets the color for RSI line based on current value
-     */
-    private getRSIColor(context: ScriptableContext<"line">): string {
-        const data = context.raw as Point;
-        if (!data || typeof data.y !== "number")
-            return "rgba(102, 102, 102, 1)";
-
-        const rsi: number = data.y;
-        if (rsi >= RSI_OVERBOUGHT) return "rgba(255, 0, 0, 1)"; // Red for overbought
-        if (rsi <= RSI_OVERSOLD) return "rgba(0, 255, 0, 1)"; // Green for oversold
-        return "rgba(102, 102, 102, 1)"; // Gray for neutral
-    }
-
-    /**
-     * Gets the background color for RSI chart area
-     */
-    private getRSIBackgroundColor(context: ScriptableContext<"line">): string {
-        const data = context.raw as Point;
-        if (!data || typeof data.y !== "number")
-            return "rgba(102, 102, 102, 0.1)";
-
-        const rsi: number = data.y;
-        if (rsi >= RSI_OVERBOUGHT) return "rgba(255, 0, 0, 0.1)"; // Light red for overbought
-        if (rsi <= RSI_OVERSOLD) return "rgba(0, 255, 0, 0.1)"; // Light green for oversold
-        return "rgba(102, 102, 102, 0.1)"; // Light gray for neutral
     }
 
     public cleanOldData() {

@@ -1,7 +1,8 @@
 import { MessageType, } from "./types.js";
+import * as Config from "./config.js";
 export class TradeWebSocket {
     url;
-    maxTrades;
+    maxBacklogTrades;
     maxReconnectAttempts;
     reconnectDelay;
     pingIntervalTime;
@@ -14,9 +15,9 @@ export class TradeWebSocket {
     pingInterval = null;
     pongTimeout = null;
     reconnectAttempts = 0;
-    constructor({ url, maxTrades = 10000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onRsiBacklog = () => { }, onReconnectFail = () => { }, }) {
+    constructor({ url, maxBacklogTrades = Config.BACKLOG_TRADES_AMOUNT, maxReconnectAttempts = Config.MAX_RECONNECT_ATTEMPTS, reconnectDelay = Config.RECONNECT_DELAY_MS, pingInterval = Config.PING_INTERVAL_MS, pongWait = Config.PONG_WAIT_MS, onMessage = () => { }, onBacklog = () => { }, onRsiBacklog = () => { }, onReconnectFail = () => { }, }) {
         this.url = url;
-        this.maxTrades = maxTrades;
+        this.maxBacklogTrades = maxBacklogTrades;
         this.maxReconnectAttempts = maxReconnectAttempts;
         this.reconnectDelay = reconnectDelay;
         this.pingIntervalTime = pingInterval;
@@ -46,7 +47,7 @@ export class TradeWebSocket {
         setTimeout(() => {
             this.sendMessage({
                 type: MessageType.BACKLOG,
-                data: { amount: this.maxTrades },
+                data: { amount: this.maxBacklogTrades },
             });
             this.startPing();
         }, 50);

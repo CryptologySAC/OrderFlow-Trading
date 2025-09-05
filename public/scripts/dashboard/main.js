@@ -1,5 +1,6 @@
 import { Chart, registerables, } from "chart.js";
 import "chartjs-adapter-date-fns";
+import * as Config from "../config.js";
 Chart.register(...registerables);
 import { tradesCanvas, orderBookCanvas, rsiCanvas, anomalyFilters, signalFilters, activeRange, PADDING_TIME, } from "./state.js";
 import { cleanupOldSupportResistanceLevels, cleanupOldZones, } from "./charts.js";
@@ -242,12 +243,7 @@ function handleMessage(message) {
     }
 }
 const tradeWebsocket = new TradeWebSocket({
-    url: "ws://localhost:3001",
-    maxTrades: 10000,
-    maxReconnectAttempts: 10,
-    reconnectDelay: 1000,
-    pingInterval: 10000,
-    pongWait: 5000,
+    url: Config.WEBSOCKET_URL,
     onBacklog: (backLog) => {
         tradeChart.processTradeBacklog(backLog);
         updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);

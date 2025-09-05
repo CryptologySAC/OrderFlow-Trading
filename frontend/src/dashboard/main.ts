@@ -8,6 +8,7 @@ import {
     //ChartOptions
 } from "chart.js";
 import "chartjs-adapter-date-fns";
+import * as Config from "../config.js";
 
 //import annotationPlugin, {
 //    AnnotationOptions,
@@ -755,12 +756,7 @@ function handleMessage(message: WebSocketMessage): void {
 // ============================================================================
 
 const tradeWebsocket = new TradeWebSocket({
-    url: "ws://localhost:3001",
-    maxTrades: 10000,
-    maxReconnectAttempts: 10,
-    reconnectDelay: 1000,
-    pingInterval: 10000,
-    pongWait: 5000,
+    url: Config.WEBSOCKET_URL,
     onBacklog: (backLog: TradeData[]) => {
         tradeChart.processTradeBacklog(backLog);
         updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
