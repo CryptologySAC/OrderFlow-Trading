@@ -208,7 +208,7 @@ export class OrderBookChart {
                 bidColors;
         }
         this.updateOrderBookBorderColors(actualTheme);
-        this.orderBookChart.update("active");
+        this.orderBookChart.update("default");
     }
     validateDepletionLevel(level, midPrice, currentTime) {
         if (!level || typeof level.price !== "number") {

@@ -194,7 +194,7 @@ export class RsiChart {
         }
         console.log(`${points} backlog RSI Points sent to RSI chart;`);
 
-        this.rsiChart.update("active");
+        this.rsiChart.update("default");
     }
 
     public setScaleX(min: number, max: number): void {
@@ -226,7 +226,7 @@ export class RsiChart {
 
             const now = Date.now();
             if (update && now - this.lastRsiUpdate > 50) {
-                this.rsiChart.update("active");
+                this.rsiChart.update("default");
                 this.lastRsiUpdate = now;
             }
 

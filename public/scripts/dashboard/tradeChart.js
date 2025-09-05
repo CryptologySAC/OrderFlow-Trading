@@ -186,7 +186,7 @@ export class TradeChart {
             const now = Date.now();
             if (update && now - this.lastTradeUpdate > 50) {
                 this.updatePriceLine(trade.price);
-                this.tradeChart.update("none");
+                this.tradeChart.update("default");
                 this.lastTradeUpdate = now;
             }
             if (update && now - this.lastTradeLongUpdate > 1000) {
@@ -270,7 +270,7 @@ export class TradeChart {
         console.log(`${points} backlog trades sent to Trade chart;`);
         this.updateYAxisBounds();
         this.updatePriceLine(backLog[0].price);
-        this.tradeChart.update("none");
+        this.tradeChart.update("default");
     }
     updateYAxisBounds() {
         const chartOptions = this.tradeChart.options;
