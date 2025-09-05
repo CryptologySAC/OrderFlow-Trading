@@ -68,16 +68,34 @@ export class RsiChart {
                             display: true,
                             color: "rgba(102, 102, 102, 0.1)",
                         },
+                        alignToPixels: true,
+                        bounds: "ticks"
                     },
                     y: {
                         type: "linear",
-                        title: { display: true, text: "RSI" },
+                        title: { 
+                            display: true, 
+                            text: "RSI",
+                            
+                        },
                         min: 0,
                         max: 100,
-                        ticks: { stepSize: 10 },
+                        ticks: { 
+                            stepSize: 10,
+                            font: {
+                                size: 11,
+                                family: 'monospace'
+                            },
+                            padding: 10,  
+                            format: {
+
+                            }
+                        },
                         position: "right",
                         grace: 0,
                         offset: true,
+                        alignToPixels: true
+                        
                     },
                 },
                 plugins: {

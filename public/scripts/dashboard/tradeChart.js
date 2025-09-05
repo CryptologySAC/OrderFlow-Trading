@@ -76,14 +76,28 @@ export class TradeChart {
                             display: true,
                             color: "rgba(102, 102, 102, 0.1)",
                         },
+                        alignToPixels: true,
+                        bounds: "ticks"
                     },
                     y: {
                         type: "linear",
-                        title: { display: true, text: "USDT" },
-                        ticks: { stepSize: 0.05, precision: 2 },
+                        title: {
+                            display: true,
+                            text: "USDT"
+                        },
+                        ticks: {
+                            stepSize: 0.05,
+                            precision: 5,
+                            font: {
+                                size: 11,
+                                family: 'monospace'
+                            },
+                            padding: 10,
+                        },
                         position: "right",
-                        grace: 0.1,
+                        grace: 0,
                         offset: true,
+                        alignToPixels: true,
                     },
                 },
                 plugins: {
