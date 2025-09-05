@@ -47,7 +47,7 @@ export class RsiChart {
                             color: "rgba(102, 102, 102, 0.1)",
                         },
                         alignToPixels: true,
-                        bounds: "ticks"
+                        bounds: "ticks",
                     },
                     y: {
                         type: "linear",
@@ -61,14 +61,14 @@ export class RsiChart {
                             stepSize: 10,
                             font: {
                                 size: 11,
-                                family: 'monospace'
+                                family: "monospace",
                             },
                             padding: 20,
                         },
                         position: "right",
                         grace: 0,
                         offset: true,
-                        alignToPixels: true
+                        alignToPixels: true,
                     },
                 },
                 plugins: {
@@ -100,7 +100,7 @@ export class RsiChart {
                 position: "center",
                 backgroundColor: "rgba(255, 0, 0, 0.5)",
                 color: "white",
-                font: { size: 10, family: 'monospace' },
+                font: { size: 10, family: "monospace" },
                 padding: 4,
             },
         };
@@ -118,7 +118,7 @@ export class RsiChart {
                 position: "center",
                 backgroundColor: "rgba(0, 255, 0, 0.5)",
                 color: "white",
-                font: { size: 10, family: 'monospace' },
+                font: { size: 10, family: "monospace" },
                 padding: 4,
             },
         };

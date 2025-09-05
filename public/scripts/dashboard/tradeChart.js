@@ -77,20 +77,20 @@ export class TradeChart {
                             color: "rgba(102, 102, 102, 0.1)",
                         },
                         alignToPixels: true,
-                        bounds: "ticks"
+                        bounds: "ticks",
                     },
                     y: {
                         type: "linear",
                         title: {
                             display: true,
-                            text: "USDT"
+                            text: "USDT",
                         },
                         ticks: {
                             stepSize: 0.05,
                             precision: 5,
                             font: {
                                 size: 11,
-                                family: 'monospace'
+                                family: "monospace",
                             },
                             padding: 10,
                         },
@@ -106,7 +106,7 @@ export class TradeChart {
                             lastPriceLine: {},
                         },
                     },
-                    legend: { display: false, },
+                    legend: { display: false },
                     tooltip: {
                         callbacks: {
                             label: (context) => {
