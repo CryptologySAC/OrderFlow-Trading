@@ -1,7 +1,7 @@
 import { Chart, registerables, } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin from "chartjs-plugin-annotation";
-import { PADDING_TIME, NINETHY_MINUTES, FIFTEEN_MINUTES } from "./state.js";
+import { PADDING_FACTOR, NINETHY_MINUTES, FIFTEEN_MINUTES } from "./state.js";
 Chart.register(...registerables, annotationPlugin);
 const RSI_OVERBOUGHT = 70;
 const RSI_OVERSOLD = 30;
@@ -211,8 +211,9 @@ export class RsiChart {
             ?.annotations;
         if (!annotations)
             return;
+        const padding = Math.ceil(this._activeRange / PADDING_FACTOR);
         const min = latestTime - this._activeRange;
-        const max = latestTime + PADDING_TIME;
+        const max = latestTime + padding;
         let time = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
         while (time <= max) {
             if (!annotations[time.toFixed()]) {

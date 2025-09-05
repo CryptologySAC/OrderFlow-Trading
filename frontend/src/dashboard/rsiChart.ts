@@ -7,7 +7,7 @@ import {
 } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin, { AnnotationOptions } from "chartjs-plugin-annotation";
-import { PADDING_TIME, NINETHY_MINUTES, FIFTEEN_MINUTES } from "./state.js";
+import { PADDING_FACTOR, NINETHY_MINUTES, FIFTEEN_MINUTES } from "./state.js";
 import type { RSIDataPoint } from "../frontend-types.js";
 
 Chart.register(...registerables, annotationPlugin);
@@ -271,8 +271,9 @@ export class RsiChart {
             ?.annotations as Record<string, AnnotationOptions<"line">>;
         if (!annotations) return;
 
+        const padding = Math.ceil(this._activeRange / PADDING_FACTOR);
         const min: number = latestTime - this._activeRange;
-        const max: number = latestTime + PADDING_TIME;
+        const max: number = latestTime + padding;
 
         let time: number = Math.ceil(min / FIFTEEN_MINUTES) * FIFTEEN_MINUTES;
         while (time <= max) {

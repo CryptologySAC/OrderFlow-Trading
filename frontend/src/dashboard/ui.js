@@ -2,11 +2,8 @@ import {
     tradesChart,
     orderBookChart,
     rsiChart,
-    trades,
-    rsiData,
     activeRange,
     setActiveRange,
-    PADDING_TIME,
     GRID_SIZE,
     ITEM_MARGIN,
 } from "./state.js";
@@ -142,31 +139,6 @@ export function setRange(duration) {
             activeRange === null ? "ALL" : `${activeRange / 60000} minutes`
         );
     setActiveRange(duration);
-
-    // Use EXACT same timestamp for both charts to ensure perfect synchronization
-    const now = Date.now();
-
-    if (duration !== null) {
-        // Calculate time range ONCE and use for both charts
-        const minTime = now - duration;
-        const maxTime = now + PADDING_TIME;
-
-        console.log(
-            `Setting IDENTICAL time range for both charts: ${new Date(minTime).toLocaleTimeString()} - ${new Date(maxTime).toLocaleTimeString()}`
-        );
-            
-    } else {
-        // For "ALL" range, use a simple approach: both charts show last 90 minutes
-        // This ensures they always show the same time range
-        const now = Date.now();
-        const allRangeMin = now - 90 * 60000; // 90 minutes ago
-        const allRangeMax = now + PADDING_TIME;
-
-        console.log("Setting ALL range to last 90 minutes:", {
-            min: new Date(allRangeMin).toLocaleTimeString(),
-            max: new Date(allRangeMax).toLocaleTimeString(),
-        });
-    }
 
     // Save the new time range setting
     saveTimeRange();

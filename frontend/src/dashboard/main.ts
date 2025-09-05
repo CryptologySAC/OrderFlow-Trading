@@ -1,10 +1,7 @@
 // frontend/src/main.ts
 // EXACT TYPE-SAFE FRONTEND IMPLEMENTATION
 // Uses exact backend message structures
-import {
-    Chart,
-    registerables,
-} from "chart.js";
+import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-date-fns";
 import * as Config from "../config.js";
 
@@ -25,7 +22,8 @@ import {
     //signalsList,
     activeRange,
     //dedupTolerance,
-    PADDING_TIME,
+    PADDING_FACTOR,
+    NINETHY_MINUTES,
 } from "./state.js";
 import {
     //initializeRSIChart,
@@ -56,10 +54,7 @@ import {
     resetAllSettings,
     saveAnomalyFilters,
 } from "./persistence.js";
-import {
-    setupColumnResizing,
-    setRange
-} from "./ui.js";
+import { setupColumnResizing, setRange } from "./ui.js";
 import {
     getCurrentTheme,
     getSystemTheme,
@@ -110,11 +105,12 @@ let now = Date.now();
 let initialMin: number, initialMax: number;
 
 if (activeRange !== null) {
+    const padding = Math.ceil(activeRange / PADDING_FACTOR);
     initialMin = now - activeRange;
-    initialMax = now + PADDING_TIME;
+    initialMax = now + padding;
 } else {
     initialMin = now - 90 * 60000; // 90 minutes ago
-    initialMax = now + PADDING_TIME;
+    initialMax = Math.ceil(NINETHY_MINUTES / PADDING_FACTOR);
 }
 const tradeChart: TradeChart = new TradeChart(
     tradesCtx,
@@ -247,8 +243,9 @@ export function updateUnifiedTimeRange(
     rsiChart: RsiChart
 ): void {
     if (activeRange !== null) {
+        const padding = Math.ceil(activeRange / PADDING_FACTOR);
         unifiedMin = latestTime - activeRange;
-        unifiedMax = latestTime + PADDING_TIME;
+        unifiedMax = latestTime + padding;
 
         try {
             tradeChart.setScaleX(unifiedMin, unifiedMax, latestTime);
@@ -257,6 +254,10 @@ export function updateUnifiedTimeRange(
             console.error("updateUnifiedTimeRange Error: ", error);
         }
     }
+}
+
+function isValidRange(value: string): value is "5400000" | "2700000" | "900000" | "300000" {
+    return ["5400000", "2700000", "900000", "300000"].includes(value);
 }
 
 function initialize(): void {
@@ -268,37 +269,42 @@ function initialize(): void {
     restoreVerticalLayout();
 
     try {
-        
-
         // Setup range selector
         if (rangeSelector) {
             rangeSelector.addEventListener("click", (e: Event) => {
                 const target = e.target as HTMLElement;
                 if (target.tagName === "BUTTON") {
-                    const range = target.getAttribute("data-range");
-                    if (rangeSelector) {
-                        rangeSelector
-                            .querySelectorAll("button")
-                            .forEach((btn: HTMLButtonElement) =>
-                                btn.classList.remove("active")
-                            );
+                    const range = target.getAttribute("data-range") as
+                        | "5400000"
+                        | "2700000"
+                        | "900000"
+                        | "300000";
+                    if (!isValidRange(range)) {
+                        console.error(`Invalid range selected: ${range}`);
+                    } else {
+                        if (rangeSelector) {
+                            rangeSelector
+                                .querySelectorAll("button")
+                                .forEach((btn: HTMLButtonElement) =>
+                                    btn.classList.remove("active")
+                                );
+                        }
+                        target.classList.add("active");
+                        const newRange = parseInt(range);
+                        setRange(newRange);
+                        tradeChart.activeRange = newRange;
+                        rsiChart.activeRange = newRange;
+                        updateUnifiedTimeRange(
+                            Date.now(),
+                            tradeChart,
+                            rsiChart
+                        );
                     }
-                    target.classList.add("active");
-                    const newRange = range === "all" ? Number.MAX_SAFE_INTEGER : range ? parseInt(range) : Number.MAX_SAFE_INTEGER;
-                    setRange(
-                        newRange,
-                    );
-                    tradeChart.activeRange = newRange;
-                    rsiChart.activeRange = newRange;
-                    updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
-
-                    
                 }
             });
         } else {
             console.warn("Range selector element not found");
         }
-        
     } catch (error) {
         console.error("Error in initializing charts: ", error);
         return;

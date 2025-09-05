@@ -5,3 +5,4 @@ export const MAX_RECONNECT_ATTEMPTS = 10;
 export const RECONNECT_DELAY_MS = 1000;
 export const PING_INTERVAL_MS = 10000;
 export const PONG_WAIT_MS = 5000;
+export const MIN_TRADE_SIZE = 0.5;

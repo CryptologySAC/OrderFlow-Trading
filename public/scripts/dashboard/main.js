@@ -1,8 +1,8 @@
-import { Chart, registerables, } from "chart.js";
+import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-date-fns";
 import * as Config from "../config.js";
 Chart.register(...registerables);
-import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, anomalyFilters, signalFilters, activeRange, PADDING_TIME, } from "./state.js";
+import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, anomalyFilters, signalFilters, activeRange, PADDING_FACTOR, NINETHY_MINUTES, } from "./state.js";
 import { cleanupOldSupportResistanceLevels, cleanupOldZones, } from "./charts.js";
 import { TradeChart } from "./tradeChart.js";
 import { OrderBookChart } from "./orderBookChart.js";
@@ -23,12 +23,13 @@ if (!tradesCtx) {
 let now = Date.now();
 let initialMin, initialMax;
 if (activeRange !== null) {
+    const padding = Math.ceil(activeRange / PADDING_FACTOR);
     initialMin = now - activeRange;
-    initialMax = now + PADDING_TIME;
+    initialMax = now + padding;
 }
 else {
     initialMin = now - 90 * 60000;
-    initialMax = now + PADDING_TIME;
+    initialMax = Math.ceil(NINETHY_MINUTES / PADDING_FACTOR);
 }
 const tradeChart = new TradeChart(tradesCtx, initialMin, initialMax, now);
 tradeChart.activeRange = activeRange;
@@ -107,8 +108,9 @@ let unifiedMin = 0;
 let unifiedMax = 0;
 export function updateUnifiedTimeRange(latestTime, tradeChart, rsiChart) {
     if (activeRange !== null) {
+        const padding = Math.ceil(activeRange / PADDING_FACTOR);
         unifiedMin = latestTime - activeRange;
-        unifiedMax = latestTime + PADDING_TIME;
+        unifiedMax = latestTime + padding;
         try {
             tradeChart.setScaleX(unifiedMin, unifiedMax, latestTime);
             rsiChart.setScaleX(unifiedMin, unifiedMax, latestTime);
@@ -117,6 +119,9 @@ export function updateUnifiedTimeRange(latestTime, tradeChart, rsiChart) {
             console.error("updateUnifiedTimeRange Error: ", error);
         }
     }
+}
+function isValidRange(value) {
+    return ["5400000", "2700000", "900000", "300000"].includes(value);
 }
 function initialize() {
     restoreTheme();
@@ -130,17 +135,22 @@ function initialize() {
                 const target = e.target;
                 if (target.tagName === "BUTTON") {
                     const range = target.getAttribute("data-range");
-                    if (rangeSelector) {
-                        rangeSelector
-                            .querySelectorAll("button")
-                            .forEach((btn) => btn.classList.remove("active"));
+                    if (!isValidRange(range)) {
+                        console.error(`Invalid range selected: ${range}`);
                     }
-                    target.classList.add("active");
-                    const newRange = range === "all" ? Number.MAX_SAFE_INTEGER : range ? parseInt(range) : Number.MAX_SAFE_INTEGER;
-                    setRange(newRange);
-                    tradeChart.activeRange = newRange;
-                    rsiChart.activeRange = newRange;
-                    updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
+                    else {
+                        if (rangeSelector) {
+                            rangeSelector
+                                .querySelectorAll("button")
+                                .forEach((btn) => btn.classList.remove("active"));
+                        }
+                        target.classList.add("active");
+                        const newRange = parseInt(range);
+                        setRange(newRange);
+                        tradeChart.activeRange = newRange;
+                        rsiChart.activeRange = newRange;
+                        updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
+                    }
                 }
             });
         }

@@ -1,7 +1,8 @@
 import { Chart, registerables, } from "chart.js";
 import "chartjs-adapter-date-fns";
 import annotationPlugin from "chartjs-plugin-annotation";
-import { PADDING_TIME, NINETHY_MINUTES, FIFTEEN_MINUTES, PADDING_PERCENTAGE, } from "./state.js";
+import * as Config from "../config.js";
+import { PADDING_FACTOR, NINETHY_MINUTES, FIFTEEN_MINUTES, PADDING_PERCENTAGE, } from "./state.js";
 Chart.register(...registerables, annotationPlugin);
 const TRADE_OPACITY_HIGH = 0.6;
 const TRADE_OPACITY_MEDIUM_HIGH = 0.5;
@@ -258,7 +259,7 @@ export class TradeChart {
         return (typeof trade["time"] === "number" &&
             typeof trade["price"] === "number" &&
             typeof trade["quantity"] === "number" &&
-            trade["quantity"] > 1 &&
+            trade["quantity"] > Config.MIN_TRADE_SIZE &&
             (trade["orderType"] === "BUY" || trade["orderType"] === "SELL") &&
             typeof trade["symbol"] === "string" &&
             typeof trade["tradeId"] === "number");
@@ -340,8 +341,9 @@ export class TradeChart {
             ?.annotations;
         if (!annotations)
             return;
+        const padding = Math.ceil(this._activeRange / PADDING_FACTOR);
         const min = latestTime - this._activeRange;
-        const max = latestTime + PADDING_TIME;
+        const max = latestTime + padding;
         Object.keys(annotations).forEach((key) => {
             if (!isNaN(Number(key)) &&
                 (Number(key) < min || Number(key) > max)) {

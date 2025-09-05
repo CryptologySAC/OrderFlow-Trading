@@ -11,9 +11,9 @@ import annotationPlugin, {
     AnnotationOptions,
     PartialEventContext,
 } from "chartjs-plugin-annotation";
-
+import * as Config from "../config.js";
 import {
-    PADDING_TIME,
+    PADDING_FACTOR,
     NINETHY_MINUTES,
     FIFTEEN_MINUTES,
     PADDING_PERCENTAGE,
@@ -346,7 +346,7 @@ export class TradeChart {
             typeof trade["time"] === "number" &&
             typeof trade["price"] === "number" &&
             typeof trade["quantity"] === "number" &&
-            trade["quantity"] > 1 &&
+            trade["quantity"] > Config.MIN_TRADE_SIZE &&
             (trade["orderType"] === "BUY" || trade["orderType"] === "SELL") &&
             typeof trade["symbol"] === "string" &&
             typeof trade["tradeId"] === "number"
@@ -457,8 +457,9 @@ export class TradeChart {
             ?.annotations as Record<string, AnnotationOptions<"line">>;
         if (!annotations) return;
 
+        const padding = Math.ceil(this._activeRange / PADDING_FACTOR);
         const min: number = latestTime - this._activeRange;
-        const max: number = latestTime + PADDING_TIME;
+        const max: number = latestTime + padding;
 
         Object.keys(annotations).forEach((key: string) => {
             if (
