@@ -309,18 +309,20 @@ export class RsiChart {
     }
 
     public cleanOldData() {
-            const RETENTION_MINUTES = 90;
-            const cutoffTime = Date.now() - RETENTION_MINUTES * 60 * 1000;
-    
-            const originalLength = this.rsiChart.data!.datasets![0]!.data!.length;
-            this.rsiChart.data.datasets.forEach((dataset) => {
-                dataset.data = dataset.data.filter((dataPoint) => { return (dataPoint as Point).x >= cutoffTime});
+        const RETENTION_MINUTES = 90;
+        const cutoffTime = Date.now() - RETENTION_MINUTES * 60 * 1000;
+
+        const originalLength = this.rsiChart.data!.datasets![0]!.data!.length;
+        this.rsiChart.data.datasets.forEach((dataset) => {
+            dataset.data = dataset.data.filter((dataPoint) => {
+                return (dataPoint as Point).x >= cutoffTime;
             });
-    
-            const removedCount =
-                originalLength - this.rsiChart.data!.datasets![0]!.data!.length;
-            console.log(
-                `Trade cleanup complete: filtered ${removedCount} old RSI Points, ${this.rsiChart.data!.datasets![0]!.data!.length} remaining`
-            );
-        }
+        });
+
+        const removedCount =
+            originalLength - this.rsiChart.data!.datasets![0]!.data!.length;
+        console.log(
+            `Trade cleanup complete: filtered ${removedCount} old RSI Points, ${this.rsiChart.data!.datasets![0]!.data!.length} remaining`
+        );
+    }
 }

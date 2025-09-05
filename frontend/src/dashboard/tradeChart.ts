@@ -481,7 +481,9 @@ export class TradeChart {
 
         const originalLength = this.tradeChart.data!.datasets![0]!.data!.length;
         this.tradeChart.data.datasets.forEach((dataset) => {
-            dataset.data = dataset.data.filter((trade) => {return (trade as ChartDataPoint).x >= cutoffTime});
+            dataset.data = dataset.data.filter((trade) => {
+                return (trade as ChartDataPoint).x >= cutoffTime;
+            });
         });
         this.updateYAxisBounds();
         const removedCount =
