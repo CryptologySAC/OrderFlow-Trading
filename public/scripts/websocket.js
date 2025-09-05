@@ -3,6 +3,7 @@ import * as Config from "./config.js";
 export class TradeWebSocket {
     url;
     maxBacklogTrades;
+    maxBacklogRsi;
     maxReconnectAttempts;
     reconnectDelay;
     pingIntervalTime;
@@ -15,9 +16,10 @@ export class TradeWebSocket {
     pingInterval = null;
     pongTimeout = null;
     reconnectAttempts = 0;
-    constructor({ url, maxBacklogTrades = Config.BACKLOG_TRADES_AMOUNT, maxReconnectAttempts = Config.MAX_RECONNECT_ATTEMPTS, reconnectDelay = Config.RECONNECT_DELAY_MS, pingInterval = Config.PING_INTERVAL_MS, pongWait = Config.PONG_WAIT_MS, onMessage = () => { }, onBacklog = () => { }, onRsiBacklog = () => { }, onReconnectFail = () => { }, }) {
+    constructor({ url, maxBacklogTrades = Config.BACKLOG_TRADES_AMOUNT, maxBacklogRsi = Config.BACKLOG_RSI_AMOUNT, maxReconnectAttempts = Config.MAX_RECONNECT_ATTEMPTS, reconnectDelay = Config.RECONNECT_DELAY_MS, pingInterval = Config.PING_INTERVAL_MS, pongWait = Config.PONG_WAIT_MS, onMessage = () => { }, onBacklog = () => { }, onRsiBacklog = () => { }, onReconnectFail = () => { }, }) {
         this.url = url;
         this.maxBacklogTrades = maxBacklogTrades;
+        this.maxBacklogRsi = maxBacklogRsi;
         this.maxReconnectAttempts = maxReconnectAttempts;
         this.reconnectDelay = reconnectDelay;
         this.pingIntervalTime = pingInterval;
@@ -49,6 +51,7 @@ export class TradeWebSocket {
                 type: MessageType.BACKLOG,
                 data: { amount: this.maxBacklogTrades },
             });
+            void this.maxBacklogRsi;
             this.startPing();
         }, 50);
     }
@@ -118,7 +121,7 @@ export class TradeWebSocket {
     startPing() {
         this.stopPing();
         this.pingInterval = setInterval(() => {
-            if (this.sendMessage({ type: MessageType.PING })) {
+            if (this.sendMessage({ type: MessageType.PING, now: Date.now() })) {
                 this.startPongTimeout();
             }
         }, this.pingIntervalTime);

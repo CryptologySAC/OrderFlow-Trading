@@ -311,22 +311,6 @@ export function isValidZoneSignalMessage(
 // =============================================================================
 // DATA TRANSFORMATION FUNCTIONS
 // =============================================================================
-
-// Transform WebSocket trade data to internal trade format
-export function transformTradeData(wsData: TradeMessage["data"]): {
-    time: number;
-    price: number;
-    quantity: number;
-    orderType: string;
-} {
-    return {
-        time: wsData.t,
-        price: parseFloat(wsData.p),
-        quantity: parseFloat(wsData.q),
-        orderType: wsData["m"] ? "sell" : "buy", // m=true means buyer is maker (sell order)
-    };
-}
-
 // Transform WebSocket signal data to internal signal format
 export function transformSignalData(wsData: SignalMessage["data"]): SignalData {
     return {

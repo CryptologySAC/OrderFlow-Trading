@@ -25,6 +25,7 @@ export enum MessageType {
 // --- Base Message Interface ---
 interface BaseMessage {
     type: MessageType;
+    now: number;
 }
 
 // --- Specific Message Interfaces ---
@@ -32,13 +33,7 @@ interface BaseMessage {
 // Trade message
 export interface TradeMessage extends BaseMessage {
     type: MessageType.TRADE;
-    data: {
-        id: number;
-        p: string; // price
-        q: string; // quantity
-        t: number; // timestamp
-        m: boolean; // isBuyerMaker
-    };
+    data: TradeData;
 }
 
 // Signal message

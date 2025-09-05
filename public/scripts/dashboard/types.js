@@ -1,31 +1,3 @@
-export function isValidWebSocketMessage(data) {
-    if (!data || typeof data !== "object")
-        return false;
-    const msg = data;
-    if (typeof msg["type"] !== "string")
-        return false;
-    if (typeof msg["now"] !== "number")
-        return false;
-    const validTypes = [
-        "pong",
-        "backlog",
-        "signal_backlog",
-        "rsi_backlog",
-        "trade",
-        "orderbook",
-        "signal",
-        "anomaly",
-        "rsi",
-        "supportResistanceLevel",
-        "zoneUpdate",
-        "zoneSignal",
-        "error",
-        "test",
-        "stats",
-        "connection_status",
-    ];
-    return validTypes.includes(msg["type"]);
-}
 export function isValidOrderBookData(data) {
     if (!data || typeof data !== "object")
         return false;
@@ -172,9 +144,6 @@ export function isValidSupportResistanceData(data) {
         typeof level["firstDetected"] === "number" &&
         typeof level["lastTouched"] === "number" &&
         typeof level["volumeAtLevel"] === "number");
-}
-export function validateAndCastWebSocketMessage(data) {
-    return isValidWebSocketMessage(data) ? data : null;
 }
 export function validateAndCastOrderBookData(data) {
     return isValidOrderBookData(data) ? data : null;

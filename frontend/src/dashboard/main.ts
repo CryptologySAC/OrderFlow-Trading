@@ -81,15 +81,21 @@ import {
 } from "./theme.js";
 import { TradeWebSocket } from "../websocket.js";
 import type {
-    WebSocketMessage,
     RSIDataPoint,
     ZoneUpdateEvent,
     ZoneSignalEvent,
 } from "./types.js";
-import type { TradeData } from "../types.js";
+import type {
+    TradeData,
+    WebSocketMessage,
+    TradeMessage,
+    OrderbookMessage,
+    OrderBookData,
+    RsiMessage,
+} from "../types.js";
+import { MessageType } from "../types.js";
 import type {
     Signal,
-    OrderBookData,
     SupportResistanceLevel,
     //ZoneData,
 } from "../frontend-types.js";
@@ -242,9 +248,6 @@ let unifiedMax = 0;
 
 // let supportResistanceLevels: SupportResistanceLevel[] = []; // Not used in main.ts
 
-const messageQueue: WebSocketMessage[] = [];
-let isProcessingQueue = false;
-
 // ============================================================================
 // CORE FUNCTIONS
 // ============================================================================
@@ -388,30 +391,6 @@ function initialize(): void {
 
     // Setup periodic update for signal times display
     setInterval(renderSignalsList, 60000); // Update every minute
-
-    // Start the message queue processor
-    processMessageQueue();
-}
-
-function processMessageQueue(): void {
-    if (messageQueue.length === 0) {
-        isProcessingQueue = false;
-        requestAnimationFrame(processMessageQueue);
-        return;
-    }
-
-    isProcessingQueue = true;
-    const message = messageQueue.shift();
-
-    try {
-        if (message) {
-            handleMessage(message);
-        }
-    } catch (error) {
-        console.error("Error processing message from queue:", error);
-    }
-
-    requestAnimationFrame(processMessageQueue);
 }
 
 function handleMessage(message: WebSocketMessage): void {
@@ -429,94 +408,10 @@ function handleMessage(message: WebSocketMessage): void {
     }
 
     switch (message.type) {
-        /*
-        case "signal_backlog":
-            const backlogSignals = message.data as Signal[];
-            console.log(`${backlogSignals.length} backlog signals received.`);
-            for (const signal of backlogSignals.reverse()) {
-                if (isValidSignalData(signal)) {
-                    const normalizedSignal: Signal = signal;
-                    signalsList.unshift(normalizedSignal);
-                    const signalLabel = buildSignalLabel(normalizedSignal);
-                    const signalId = signal.id;
-                    if (tradesChart) {
-                        const chartInstance = tradesChart as ChartInstance;
-                        const chartOptions = chartInstance.options;
-                        const plugins = chartOptions.plugins;
-                        const annotation = (plugins as any).annotation;
-                        const annotations = (annotation as any).annotations;
-                        if (annotations) {
-                            annotations[signalId] = {
-                                type: "label",
-                                xValue: normalizedSignal.time,
-                                yValue: normalizedSignal.price,
-                                content: signalLabel,
-                                backgroundColor: "rgba(90, 50, 255, 0.4)",
-                                color: "white",
-                                font: {
-                                    size: 12,
-                                    family: "monospace",
-                                },
-                                borderRadius: 4,
-                                padding: 8,
-                                position: {
-                                    x: "center",
-                                    y: "center",
-                                },
-                            };
-                        }
-                    }
-                }
-            }
-            if (signalsList.length > 50) {
-                signalsList.length = 50;
-            }
-            renderSignalsList();
-            if (tradesChart) {
-                (tradesChart as ChartInstance).update("none");
-            }
-            console.log(
-                `${backlogSignals.length} backlog signals added to chart and list`
-            );
-            break;
-
-        case "rsi_backlog":
-            const rsiBacklog = message.data as RSIDataPoint[];
-            console.log(`${rsiBacklog.length} RSI backlog data received.`);
-            const backlogData: RSIDataPoint[] = [];
-            for (const rsiPoint of rsiBacklog) {
-                if (isValidRSIData(rsiPoint)) {
-                    backlogData.push(rsiPoint);
-                }
-            }
-            if (backlogData.length > 0) {
-                rsiData.length = 0;
-                rsiData.push(...backlogData);
-                if (rsiChart) {
-                    const rsiChartInstance = rsiChart as ChartInstance;
-                    if (
-                        rsiChartInstance.data &&
-                        rsiChartInstance.data.datasets &&
-                        rsiChartInstance.data.datasets[0]
-                    ) {
-                        rsiChartInstance.data.datasets[0].data = (
-                            rsiData as { time: number; rsi: number }[]
-                        ).map((point) => ({
-                            x: point.time,
-                            y: point.rsi,
-                        }));
-                        rsiChartInstance.update("none");
-                    }
-                }
-                console.log(
-                    `${backlogData.length} RSI backlog points loaded and chart updated`
-                );
-            }
-            break;
-*/
         // Proces an incomming trade
         case "trade":
-            const trade: TradeData = message.data as TradeData;
+            const trade: TradeData = (message as TradeMessage)
+                .data as TradeData;
 
             if (tradeChart) {
                 tradeChart.addTrade(trade);
@@ -529,7 +424,8 @@ function handleMessage(message: WebSocketMessage): void {
             break;
 
         case "orderbook":
-            const orderBook = message.data as OrderBookData;
+            const orderBook: OrderBookData = (message as OrderbookMessage)
+                .data as OrderBookData;
             if (isValidOrderBookData(orderBook)) {
                 orderBookChart.orderBookData = orderBook;
 
@@ -540,7 +436,8 @@ function handleMessage(message: WebSocketMessage): void {
             break;
 
         case "rsi":
-            const rsiDataPoint = message.data as RSIDataPoint;
+            const rsiDataPoint: RSIDataPoint = (message as RsiMessage)
+                .data as RSIDataPoint;
             if (rsiChart) {
                 rsiChart.addPoint(rsiDataPoint);
             }
@@ -586,60 +483,6 @@ function handleMessage(message: WebSocketMessage): void {
                     }
                 }
                 console.log("Signal label added:", label);
-            }
-            break;
-
-        case "signal_bundle":
-            const signalBundle = message.data as Signal[];
-            if (Array.isArray(signalBundle) && signalBundle.length) {
-                const filtered = signalBundle.filter((s: Signal) => {
-                    if (isValidSignalData(s)) {
-                        const last = signalsList[0] as Signal;
-                        if (!last) return true;
-                        const diff = Math.abs(s.price - last.price);
-                        return diff > last.price * dedupTolerance;
-                    }
-                    return false;
-                });
-                filtered.forEach((signal: Signal) => {
-                    signalsList.unshift(signal);
-                    const label = buildSignalLabel(signal);
-                    if (tradesChart) {
-                        const chartInstance = tradesChart as ChartInstance;
-                        const chartOptions = chartInstance.options;
-                        const plugins = chartOptions.plugins;
-                        const annotation = (plugins as any).annotation;
-                        const annotations = (annotation as any).annotations;
-                        if (annotations) {
-                            annotations[signal.id] = {
-                                type: "label",
-                                xValue: signal.time,
-                                yValue: signal.price,
-                                content: label,
-                                backgroundColor: "rgba(90, 50, 255, 0.5)",
-                                color: "white",
-                                font: {
-                                    size: 12,
-                                    family: "monospace",
-                                },
-                                borderRadius: 4,
-                                padding: 8,
-                                position: {
-                                    x: "center",
-                                    y: "center",
-                                },
-                            } as ChartAnnotation;
-                        }
-                    }
-                });
-                if (signalsList.length > 50) {
-                    signalsList.length = 50;
-                }
-                renderSignalsList();
-                if (tradesChart) {
-                    (tradesChart as ChartInstance).update("none");
-                }
-                showSignalBundleBadge(filtered);
             }
             break;
 
@@ -741,10 +584,6 @@ function handleMessage(message: WebSocketMessage): void {
         case "stats":
             break;
 
-        case "connection_status":
-            console.log("Connection status:", message.data);
-            break;
-
         default:
             //console.warn("Unknown message type:", message.type);
             break;
@@ -765,30 +604,22 @@ const tradeWebsocket = new TradeWebSocket({
         rsiChart.processBacklog(backLog);
         updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
     },
-    onMessage: (message: unknown) => {
-        // Convert websocket message to our expected format with proper validation
-        if (typeof message === "object" && message !== null) {
-            const msg = message as Record<string, unknown>;
-            if (
-                typeof msg["type"] === "string" &&
-                typeof msg["data"] !== "undefined"
-            ) {
-                const convertedMessage: WebSocketMessage = {
-                    type: msg["type"] as WebSocketMessage["type"],
-                    data: msg["data"],
-                    now:
-                        typeof msg["now"] === "number"
-                            ? msg["now"]
-                            : Date.now(),
-                };
-                messageQueue.push(convertedMessage);
-                if (!isProcessingQueue) {
-                    processMessageQueue();
-                }
-            }
+    onMessage: (message: WebSocketMessage) => {
+        if (isValidWebSocketMessage(message)) {
+            handleMessage(message);
         }
     },
 });
+
+function isValidWebSocketMessage(data: unknown): data is WebSocketMessage {
+    if (!data || typeof data !== "object") return false;
+    const msg = data as Record<string, unknown>;
+
+    if (typeof msg["type"] !== "string") return false;
+    if (typeof msg["now"] !== "number") return false;
+
+    return Object.values(MessageType).includes(msg["type"] as MessageType);
+}
 
 // ============================================================================
 // DOM EVENT HANDLERS

@@ -155,14 +155,6 @@ export function isValidZoneSignalMessage(msg) {
     const message = msg;
     return message["type"] === "zoneSignal";
 }
-export function transformTradeData(wsData) {
-    return {
-        time: wsData.t,
-        price: parseFloat(wsData.p),
-        quantity: parseFloat(wsData.q),
-        orderType: wsData["m"] ? "sell" : "buy",
-    };
-}
 export function transformSignalData(wsData) {
     return {
         id: wsData["id"],

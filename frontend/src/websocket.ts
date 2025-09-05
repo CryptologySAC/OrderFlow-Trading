@@ -21,6 +21,8 @@ interface TradeWebSocketConfig {
     url: string;
     /** Maximum number of backlog trades to request on connection */
     maxBacklogTrades?: number;
+    /** Maximum number of backlog RSI points to request on connection */
+    maxBacklogRsi?: number;
     /** Maximum number of reconnection attempts before giving up */
     maxReconnectAttempts?: number;
     /** Base delay between reconnection attempts (exponential backoff) */
@@ -64,6 +66,8 @@ export class TradeWebSocket {
     private readonly url: string;
     /** Maximum backlog trades to request */
     private readonly maxBacklogTrades: number;
+    /** Maximum backlog Rsi points to request */
+    private readonly maxBacklogRsi: number;
     /** Maximum reconnection attempts */
     private readonly maxReconnectAttempts: number;
     /** Base reconnection delay */
@@ -98,6 +102,7 @@ export class TradeWebSocket {
     constructor({
         url,
         maxBacklogTrades = Config.BACKLOG_TRADES_AMOUNT,
+        maxBacklogRsi = Config.BACKLOG_RSI_AMOUNT,
         maxReconnectAttempts = Config.MAX_RECONNECT_ATTEMPTS,
         reconnectDelay = Config.RECONNECT_DELAY_MS,
         pingInterval = Config.PING_INTERVAL_MS,
@@ -109,6 +114,7 @@ export class TradeWebSocket {
     }: TradeWebSocketConfig) {
         this.url = url;
         this.maxBacklogTrades = maxBacklogTrades;
+        this.maxBacklogRsi = maxBacklogRsi;
         this.maxReconnectAttempts = maxReconnectAttempts;
         this.reconnectDelay = reconnectDelay;
         this.pingIntervalTime = pingInterval;
@@ -152,6 +158,11 @@ export class TradeWebSocket {
                 type: MessageType.BACKLOG,
                 data: { amount: this.maxBacklogTrades },
             });
+            //this.sendMessage({ //TODO
+            //    type: MessageType.RSI_BACKLOG,
+            //    data: { amount: this.maxBacklogRsi },
+            //});
+            void this.maxBacklogRsi; // TODO
             this.startPing();
         }, 50);
     }
@@ -262,7 +273,7 @@ export class TradeWebSocket {
     private startPing(): void {
         this.stopPing(); // Ensure no multiple intervals are running
         this.pingInterval = setInterval(() => {
-            if (this.sendMessage({ type: MessageType.PING })) {
+            if (this.sendMessage({ type: MessageType.PING, now: Date.now() })) {
                 this.startPongTimeout();
             }
         }, this.pingIntervalTime);
@@ -327,6 +338,7 @@ export class TradeWebSocket {
         message:
             | PingMessage
             | { type: MessageType.BACKLOG; data: { amount: number } }
+            | { type: MessageType.RSI_BACKLOG; data: { amount: number } }
     ): boolean {
         if (this.ws?.readyState === WebSocket.OPEN) {
             try {

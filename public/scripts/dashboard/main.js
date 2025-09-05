@@ -12,6 +12,7 @@ import { restoreColumnWidths, restoreAnomalyFilters, restoreTimeRange, restoreVe
 import { setupColumnResizing, } from "./ui.js";
 import { getCurrentTheme, getSystemTheme, updateChartTheme, restoreTheme, toggleTheme, updateThemeToggleButton, toggleDepletionVisualization, updateDepletionToggleButton, } from "./theme.js";
 import { TradeWebSocket } from "../websocket.js";
+import { MessageType } from "../types.js";
 if (!tradesCanvas) {
     throw new Error("Trades chart canvas not found");
 }
@@ -104,8 +105,6 @@ export function isValidZoneSignalData(data) {
 }
 let unifiedMin = 0;
 let unifiedMax = 0;
-const messageQueue = [];
-let isProcessingQueue = false;
 export function updateUnifiedTimeRange(latestTime, tradeChart, rsiChart) {
     if (activeRange !== null) {
         unifiedMin = latestTime - activeRange;
@@ -170,25 +169,6 @@ function initialize() {
     setInterval(cleanupOldSupportResistanceLevels, 300000);
     setInterval(cleanupOldZones, 300000);
     setInterval(renderSignalsList, 60000);
-    processMessageQueue();
-}
-function processMessageQueue() {
-    if (messageQueue.length === 0) {
-        isProcessingQueue = false;
-        requestAnimationFrame(processMessageQueue);
-        return;
-    }
-    isProcessingQueue = true;
-    const message = messageQueue.shift();
-    try {
-        if (message) {
-            handleMessage(message);
-        }
-    }
-    catch (error) {
-        console.error("Error processing message from queue:", error);
-    }
-    requestAnimationFrame(processMessageQueue);
 }
 function handleMessage(message) {
     if (!message) {
@@ -203,7 +183,8 @@ function handleMessage(message) {
     }
     switch (message.type) {
         case "trade":
-            const trade = message.data;
+            const trade = message
+                .data;
             if (tradeChart) {
                 tradeChart.addTrade(trade);
                 const now = Date.now();
@@ -214,7 +195,8 @@ function handleMessage(message) {
             }
             break;
         case "orderbook":
-            const orderBook = message.data;
+            const orderBook = message
+                .data;
             if (isValidOrderBookData(orderBook)) {
                 orderBookChart.orderBookData = orderBook;
                 orderBookChart.updateOrderBookDisplay();
@@ -224,7 +206,8 @@ function handleMessage(message) {
             }
             break;
         case "rsi":
-            const rsiDataPoint = message.data;
+            const rsiDataPoint = message
+                .data;
             if (rsiChart) {
                 rsiChart.addPoint(rsiDataPoint);
             }
@@ -234,9 +217,6 @@ function handleMessage(message) {
             console.error("WebSocket error:", errorData.message);
             break;
         case "stats":
-            break;
-        case "connection_status":
-            console.log("Connection status:", message.data);
             break;
         default:
             break;
@@ -253,25 +233,21 @@ const tradeWebsocket = new TradeWebSocket({
         updateUnifiedTimeRange(Date.now(), tradeChart, rsiChart);
     },
     onMessage: (message) => {
-        if (typeof message === "object" && message !== null) {
-            const msg = message;
-            if (typeof msg["type"] === "string" &&
-                typeof msg["data"] !== "undefined") {
-                const convertedMessage = {
-                    type: msg["type"],
-                    data: msg["data"],
-                    now: typeof msg["now"] === "number"
-                        ? msg["now"]
-                        : Date.now(),
-                };
-                messageQueue.push(convertedMessage);
-                if (!isProcessingQueue) {
-                    processMessageQueue();
-                }
-            }
+        if (isValidWebSocketMessage(message)) {
+            handleMessage(message);
         }
     },
 });
+function isValidWebSocketMessage(data) {
+    if (!data || typeof data !== "object")
+        return false;
+    const msg = data;
+    if (typeof msg["type"] !== "string")
+        return false;
+    if (typeof msg["now"] !== "number")
+        return false;
+    return Object.values(MessageType).includes(msg["type"]);
+}
 document.addEventListener("DOMContentLoaded", initialize);
 document.addEventListener("DOMContentLoaded", () => {
     const filterBox = document.querySelector(".anomaly-filter");

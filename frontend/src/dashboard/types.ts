@@ -1,39 +1,4 @@
 // ============================================================================
-// STRICT 100% TYPE-SAFE FRONTEND INTERFACES
-// Based on backend data structures - NO ASSUMPTIONS, NO GUESSING
-// ============================================================================
-import type { TradeData } from "../types.js";
-// ============================================================================
-// CORE WEB SOCKET MESSAGE TYPES (from backend/src/utils/interfaces.ts)
-// ============================================================================
-
-export type WebSocketMessageType =
-    | "pong"
-    | "backlog"
-    | "signal_backlog"
-    | "rsi_backlog"
-    | "trade"
-    | "orderbook"
-    | "signal"
-    | "signal_bundle"
-    | "anomaly"
-    | "rsi"
-    | "supportResistanceLevel"
-    | "zoneUpdate"
-    | "zoneSignal"
-    | "runtimeConfig"
-    | "error"
-    | "test"
-    | "stats"
-    | "connection_status";
-
-export interface WebSocketMessage {
-    type: WebSocketMessageType;
-    data: unknown;
-    now: number;
-}
-
-// ============================================================================
 // ORDERBOOK DATA TYPES
 // ============================================================================
 
@@ -674,38 +639,6 @@ export interface SupportResistanceLevel {
 // VALIDATION FUNCTIONS - STRICT 100% TYPE SAFETY
 // ============================================================================
 
-export function isValidWebSocketMessage(
-    data: unknown
-): data is WebSocketMessage {
-    if (!data || typeof data !== "object") return false;
-    const msg = data as Record<string, unknown>;
-
-    if (typeof msg["type"] !== "string") return false;
-    if (typeof msg["now"] !== "number") return false;
-
-    // Validate message type
-    const validTypes: WebSocketMessageType[] = [
-        "pong",
-        "backlog",
-        "signal_backlog",
-        "rsi_backlog",
-        "trade",
-        "orderbook",
-        "signal",
-        "anomaly",
-        "rsi",
-        "supportResistanceLevel",
-        "zoneUpdate",
-        "zoneSignal",
-        "error",
-        "test",
-        "stats",
-        "connection_status",
-    ];
-
-    return validTypes.includes(msg["type"] as WebSocketMessageType);
-}
-
 export function isValidOrderBookData(data: unknown): data is OrderBookData {
     if (!data || typeof data !== "object") return false;
     const ob = data as Record<string, unknown>;
@@ -885,12 +818,6 @@ export function isValidSupportResistanceData(
 // TYPE GUARDS FOR RUNTIME VALIDATION
 // ============================================================================
 
-export function validateAndCastWebSocketMessage(
-    data: unknown
-): WebSocketMessage | null {
-    return isValidWebSocketMessage(data) ? data : null;
-}
-
 export function validateAndCastOrderBookData(
     data: unknown
 ): OrderBookData | null {
@@ -932,25 +859,6 @@ export function validateAndCastSupportResistanceData(
 // ============================================================================
 // UTILITY TYPES FOR TYPE-SAFE DATA HANDLING
 // ============================================================================
-
-export type ValidatedWebSocketData<T extends WebSocketMessageType> =
-    T extends "trade"
-        ? TradeData
-        : T extends "orderbook"
-          ? OrderBookData
-          : T extends "signal"
-            ? Signal
-            : T extends "anomaly"
-              ? MarketAnomaly
-              : T extends "rsi"
-                ? RSIDataPoint
-                : T extends "zoneUpdate"
-                  ? ZoneUpdateEvent
-                  : T extends "zoneSignal"
-                    ? ZoneSignalEvent
-                    : T extends "supportResistanceLevel"
-                      ? SupportResistanceLevel
-                      : unknown;
 
 export interface ValidationResult<T> {
     isValid: boolean;
