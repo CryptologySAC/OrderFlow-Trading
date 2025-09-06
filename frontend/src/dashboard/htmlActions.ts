@@ -55,14 +55,10 @@ export class HTMLActions {
                         this.rangeSelector
                             .querySelectorAll("button")
                             .forEach((btn: HTMLButtonElement) =>
-                                requestAnimationFrame(() => {
-                                    btn.classList.remove("active");
-                                })
+                                btn.classList.remove("active")
                             );
                     }
-                    requestAnimationFrame(() => {
-                        target.classList.add("active");
-                    });
+                    target.classList.add("active");
                     const newRange = parseInt(range);
                     this.setRange(newRange);
                     this.tradeChart.activeRange = newRange;
@@ -117,13 +113,11 @@ export class HTMLActions {
                             ? NINETHY_MINUTES
                             : parseInt(buttonRange);
 
-                    requestAnimationFrame(() => {
-                        if (buttonRangeValue === this.activeRange) {
-                            button.classList.add("active");
-                        } else {
-                            button.classList.remove("active");
-                        }
-                    });
+                    if (buttonRangeValue === this.activeRange) {
+                        button.classList.add("active");
+                    } else {
+                        button.classList.remove("active");
+                    }
                 });
             }
 
@@ -190,10 +184,8 @@ export class HTMLActions {
                     30
                 ); // 10-30%
 
-                requestAnimationFrame(() => {
-                    column1.style.flex = `0 0 ${column1Width}%`;
-                    column3.style.flex = `0 0 ${column3Width}%`;
-                });
+                column1.style.flex = `0 0 ${column1Width}%`;
+                column3.style.flex = `0 0 ${column3Width}%`;
 
                 console.log("Column widths restored:", {
                     column1: column1Width,
@@ -237,10 +229,8 @@ export class HTMLActions {
                     85
                 );
 
-                requestAnimationFrame(() => {
-                    rsiContainer.style.flex = `0 0 ${rsiContainerHeight}%`;
-                    anomalyListContainer.style.flex = `0 0 ${anomalyListContainerHeight}%`;
-                });
+                rsiContainer.style.flex = `0 0 ${rsiContainerHeight}%`;
+                anomalyListContainer.style.flex = `0 0 ${anomalyListContainerHeight}%`;
 
                 console.log("Column widths restored:", {
                     rsiContainer: rsiContainerHeight,
@@ -364,44 +354,40 @@ export class HTMLActions {
             row.title = this.getAnomalySummary(anomaly);
 
             // Create spans efficiently
-            requestAnimationFrame(() => {
-                const iconSpan = document.createElement("span");
-                iconSpan.className = "anomaly-icon";
-                iconSpan.textContent = this.getAnomalyIcon(anomaly.type || "");
+            const iconSpan = document.createElement("span");
+            iconSpan.className = "anomaly-icon";
+            iconSpan.textContent = this.getAnomalyIcon(anomaly.type || "");
 
-                const labelSpan = document.createElement("span");
-                labelSpan.className = "anomaly-label";
-                labelSpan.textContent = this.getAnomalyLabel(
-                    anomaly.type || ""
-                );
+            const labelSpan = document.createElement("span");
+            labelSpan.className = "anomaly-label";
+            labelSpan.textContent = this.getAnomalyLabel(anomaly.type || "");
 
-                const priceSpan = document.createElement("span");
-                priceSpan.className = "anomaly-price";
-                priceSpan.textContent = anomaly.affectedPriceRange
-                    ? `${anomaly.affectedPriceRange.min.toFixed(2)}-${anomaly.affectedPriceRange.max.toFixed(2)}`
-                    : `${anomaly.price?.toFixed(2) || "N/A"}`;
+            const priceSpan = document.createElement("span");
+            priceSpan.className = "anomaly-price";
+            priceSpan.textContent = anomaly.affectedPriceRange
+                ? `${anomaly.affectedPriceRange.min.toFixed(2)}-${anomaly.affectedPriceRange.max.toFixed(2)}`
+                : `${anomaly.price?.toFixed(2) || "N/A"}`;
 
-                const actionSpan = document.createElement("span");
-                actionSpan.className = "anomaly-action";
-                actionSpan.textContent = this.getReadableAction(
-                    anomaly.recommendedAction
-                );
+            const actionSpan = document.createElement("span");
+            actionSpan.className = "anomaly-action";
+            actionSpan.textContent = this.getReadableAction(
+                anomaly.recommendedAction
+            );
 
-                const timeSpan = document.createElement("span");
-                timeSpan.className = "anomaly-time";
-                timeSpan.textContent = this.formatAgo(
-                    anomaly.detectedAt || anomaly.timestamp || Date.now()
-                );
+            const timeSpan = document.createElement("span");
+            timeSpan.className = "anomaly-time";
+            timeSpan.textContent = this.formatAgo(
+                anomaly.detectedAt || anomaly.timestamp || Date.now()
+            );
 
-                // Append all spans to row
-                row.appendChild(iconSpan);
-                row.appendChild(labelSpan);
-                row.appendChild(priceSpan);
-                row.appendChild(actionSpan);
-                row.appendChild(timeSpan);
+            // Append all spans to row
+            row.appendChild(iconSpan);
+            row.appendChild(labelSpan);
+            row.appendChild(priceSpan);
+            row.appendChild(actionSpan);
+            row.appendChild(timeSpan);
 
-                fragment.appendChild(row);
-            });
+            fragment.appendChild(row);
         }
 
         // Single DOM insertion
@@ -639,9 +625,7 @@ export class HTMLActions {
                                 const newPercent =
                                     (newHeight / dashboardRect.height) * 100;
 
-                                requestAnimationFrame(() => {
-                                    rsiContainer.style.flex = `0 0 ${newPercent}%`;
-                                });
+                                rsiContainer.style.flex = `0 0 ${newPercent}%`;
                                 console.log(
                                     `INTERACT: ${event.dy} | ${newPercent}`
                                 );
@@ -664,9 +648,7 @@ export class HTMLActions {
                                 const newPercent =
                                     (newHeight / dashboardRect.height) * 100;
 
-                                requestAnimationFrame(() => {
-                                    anomalyListContainer.style.flex = `0 0 ${newPercent}%`;
-                                });
+                                anomalyListContainer.style.flex = `0 0 ${newPercent}%`;
                                 console.log(
                                     `INTERACT: ${event.dy} | ${newPercent}`
                                 );
@@ -705,9 +687,7 @@ export class HTMLActions {
                                 const newPercent =
                                     (newWidth / dashboardRect.width) * 100;
 
-                                requestAnimationFrame(() => {
-                                    column1.style.flex = `0 0 ${newPercent}%`;
-                                });
+                                column1.style.flex = `0 0 ${newPercent}%`;
                             }
                         } else if (handleId === "resize2") {
                             // Resizing between column 2 and column 3
@@ -722,9 +702,7 @@ export class HTMLActions {
                                 );
                                 const newPercent =
                                     (newWidth / dashboardRect.width) * 100;
-                                requestAnimationFrame(() => {
-                                    column3.style.flex = `0 0 ${newPercent}%`;
-                                });
+                                column3.style.flex = `0 0 ${newPercent}%`;
                             }
                         } else if (handleId === "resize-v1") {
                             console.log("INTERACT:");
@@ -741,9 +719,7 @@ export class HTMLActions {
                                     ),
                                     dashboardRect.height * 0.5
                                 );
-                                requestAnimationFrame(() => {
-                                    tradesContainer.style.flex = `0 0 0 ${newHeight}%`;
-                                });
+                                tradesContainer.style.flex = `0 0 0 ${newHeight}%`;
                             }
                         }
                     }
@@ -879,10 +855,8 @@ export class HTMLActions {
             dark: "Dark",
         };
 
-        requestAnimationFrame(() => {
-            button.innerHTML = `${icons[current]} ${labels[current]}`;
-            button.title = `Current theme: ${labels[current]}. Click to cycle through themes.`;
-        });
+        button.innerHTML = `${icons[current]} ${labels[current]}`;
+        button.title = `Current theme: ${labels[current]}. Click to cycle through themes.`;
     }
 
     /**
@@ -981,13 +955,11 @@ export class HTMLActions {
             color = "#fb8c00"; // orange
         }
 
-        requestAnimationFrame(() => {
-            badge.style.background = color;
-            badge.innerHTML = `${top.side.toUpperCase()} @ ${top.price.toFixed(2)} (${(
-                (top.confidence || 0) * 100
-            ).toFixed(0)}%)`;
-            document.body.appendChild(badge);
-        });
+        badge.style.background = color;
+        badge.innerHTML = `${top.side.toUpperCase()} @ ${top.price.toFixed(2)} (${(
+            (top.confidence || 0) * 100
+        ).toFixed(0)}%)`;
+        document.body.appendChild(badge);
         this.latestBadgeElem = badge;
         if (this.badgeTimeout) clearTimeout(this.badgeTimeout);
         this.badgeTimeout = setTimeout(() => {
@@ -1052,13 +1024,11 @@ export class HTMLActions {
                         ? parseInt(buttonRange)
                         : NINETHY_MINUTES;
 
-                    requestAnimationFrame(() => {
-                        if (buttonRangeValue === this.activeRange) {
-                            button.classList.add("active");
-                        } else {
-                            button.classList.remove("active");
-                        }
-                    });
+                    if (buttonRangeValue === this.activeRange) {
+                        button.classList.add("active");
+                    } else {
+                        button.classList.remove("active");
+                    }
                 });
             }
 
@@ -1084,10 +1054,8 @@ export class HTMLActions {
             const column3 = document.getElementById("column3");
 
             if (column1 && column3) {
-                requestAnimationFrame(() => {
-                    column1.style.flex = "0 0 25%";
-                    column3.style.flex = "0 0 15%";
-                });
+                column1.style.flex = "0 0 25%";
+                column3.style.flex = "0 0 15%";
                 localStorage.removeItem("dashboardColumnWidths");
 
                 console.log("Column widths reset to defaults");
@@ -1098,10 +1066,8 @@ export class HTMLActions {
                 "anomalyListContainer"
             );
             if (rsiContainer && anomalyListContainer) {
-                requestAnimationFrame(() => {
-                    rsiContainer.style.flex = "0 0 50%";
-                    anomalyListContainer.style.flex = "0 0 50%";
-                });
+                rsiContainer.style.flex = "0 0 50%";
+                anomalyListContainer.style.flex = "0 0 50%";
                 localStorage.removeItem("dashboardColumnHeights");
 
                 console.log("Column heights reset to defaults");

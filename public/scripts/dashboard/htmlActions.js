@@ -37,13 +37,9 @@ export class HTMLActions {
                     if (this.rangeSelector) {
                         this.rangeSelector
                             .querySelectorAll("button")
-                            .forEach((btn) => requestAnimationFrame(() => {
-                            btn.classList.remove("active");
-                        }));
+                            .forEach((btn) => btn.classList.remove("active"));
                     }
-                    requestAnimationFrame(() => {
-                        target.classList.add("active");
-                    });
+                    target.classList.add("active");
                     const newRange = parseInt(range);
                     this.setRange(newRange);
                     this.tradeChart.activeRange = newRange;
@@ -85,14 +81,12 @@ export class HTMLActions {
                     const buttonRangeValue = buttonRange === "all" || !buttonRange
                         ? NINETHY_MINUTES
                         : parseInt(buttonRange);
-                    requestAnimationFrame(() => {
-                        if (buttonRangeValue === this.activeRange) {
-                            button.classList.add("active");
-                        }
-                        else {
-                            button.classList.remove("active");
-                        }
-                    });
+                    if (buttonRangeValue === this.activeRange) {
+                        button.classList.add("active");
+                    }
+                    else {
+                        button.classList.remove("active");
+                    }
                 });
             }
             console.log("Time range restored:", {
@@ -136,10 +130,8 @@ export class HTMLActions {
             if (column1 && column3) {
                 const column1Width = Math.min(Math.max(columnWidths.column1, 15), 50);
                 const column3Width = Math.min(Math.max(columnWidths.column3, 10), 30);
-                requestAnimationFrame(() => {
-                    column1.style.flex = `0 0 ${column1Width}%`;
-                    column3.style.flex = `0 0 ${column3Width}%`;
-                });
+                column1.style.flex = `0 0 ${column1Width}%`;
+                column3.style.flex = `0 0 ${column3Width}%`;
                 console.log("Column widths restored:", {
                     column1: column1Width,
                     column3: column3Width,
@@ -162,10 +154,8 @@ export class HTMLActions {
             if (rsiContainer && anomalyListContainer) {
                 const rsiContainerHeight = Math.min(Math.max(columnHeights.rsiContainer, 15), 50);
                 const anomalyListContainerHeight = Math.min(Math.max(columnHeights.rsiContainer, 15), 85);
-                requestAnimationFrame(() => {
-                    rsiContainer.style.flex = `0 0 ${rsiContainerHeight}%`;
-                    anomalyListContainer.style.flex = `0 0 ${anomalyListContainerHeight}%`;
-                });
+                rsiContainer.style.flex = `0 0 ${rsiContainerHeight}%`;
+                anomalyListContainer.style.flex = `0 0 ${anomalyListContainerHeight}%`;
                 console.log("Column widths restored:", {
                     rsiContainer: rsiContainerHeight,
                     anomalyListContainer: anomalyListContainerHeight,
@@ -246,31 +236,29 @@ export class HTMLActions {
             const row = document.createElement("div");
             row.className = `anomaly-row ${anomaly.severity}`;
             row.title = this.getAnomalySummary(anomaly);
-            requestAnimationFrame(() => {
-                const iconSpan = document.createElement("span");
-                iconSpan.className = "anomaly-icon";
-                iconSpan.textContent = this.getAnomalyIcon(anomaly.type || "");
-                const labelSpan = document.createElement("span");
-                labelSpan.className = "anomaly-label";
-                labelSpan.textContent = this.getAnomalyLabel(anomaly.type || "");
-                const priceSpan = document.createElement("span");
-                priceSpan.className = "anomaly-price";
-                priceSpan.textContent = anomaly.affectedPriceRange
-                    ? `${anomaly.affectedPriceRange.min.toFixed(2)}-${anomaly.affectedPriceRange.max.toFixed(2)}`
-                    : `${anomaly.price?.toFixed(2) || "N/A"}`;
-                const actionSpan = document.createElement("span");
-                actionSpan.className = "anomaly-action";
-                actionSpan.textContent = this.getReadableAction(anomaly.recommendedAction);
-                const timeSpan = document.createElement("span");
-                timeSpan.className = "anomaly-time";
-                timeSpan.textContent = this.formatAgo(anomaly.detectedAt || anomaly.timestamp || Date.now());
-                row.appendChild(iconSpan);
-                row.appendChild(labelSpan);
-                row.appendChild(priceSpan);
-                row.appendChild(actionSpan);
-                row.appendChild(timeSpan);
-                fragment.appendChild(row);
-            });
+            const iconSpan = document.createElement("span");
+            iconSpan.className = "anomaly-icon";
+            iconSpan.textContent = this.getAnomalyIcon(anomaly.type || "");
+            const labelSpan = document.createElement("span");
+            labelSpan.className = "anomaly-label";
+            labelSpan.textContent = this.getAnomalyLabel(anomaly.type || "");
+            const priceSpan = document.createElement("span");
+            priceSpan.className = "anomaly-price";
+            priceSpan.textContent = anomaly.affectedPriceRange
+                ? `${anomaly.affectedPriceRange.min.toFixed(2)}-${anomaly.affectedPriceRange.max.toFixed(2)}`
+                : `${anomaly.price?.toFixed(2) || "N/A"}`;
+            const actionSpan = document.createElement("span");
+            actionSpan.className = "anomaly-action";
+            actionSpan.textContent = this.getReadableAction(anomaly.recommendedAction);
+            const timeSpan = document.createElement("span");
+            timeSpan.className = "anomaly-time";
+            timeSpan.textContent = this.formatAgo(anomaly.detectedAt || anomaly.timestamp || Date.now());
+            row.appendChild(iconSpan);
+            row.appendChild(labelSpan);
+            row.appendChild(priceSpan);
+            row.appendChild(actionSpan);
+            row.appendChild(timeSpan);
+            fragment.appendChild(row);
         }
         listElem.appendChild(fragment);
     }
@@ -466,9 +454,7 @@ export class HTMLActions {
                                 const rsiContainerRect = rsiContainer.getBoundingClientRect();
                                 const newHeight = Math.min(Math.max(rsiContainerRect.height - event.dy, 200), dashboardRect.height * 0.5);
                                 const newPercent = (newHeight / dashboardRect.height) * 100;
-                                requestAnimationFrame(() => {
-                                    rsiContainer.style.flex = `0 0 ${newPercent}%`;
-                                });
+                                rsiContainer.style.flex = `0 0 ${newPercent}%`;
                                 console.log(`INTERACT: ${event.dy} | ${newPercent}`);
                             }
                         }
@@ -479,9 +465,7 @@ export class HTMLActions {
                                 const newHeight = Math.min(Math.max(anomalyListContainerRect.height -
                                     event.dy, 200), dashboardRect.height * 0.5);
                                 const newPercent = (newHeight / dashboardRect.height) * 100;
-                                requestAnimationFrame(() => {
-                                    anomalyListContainer.style.flex = `0 0 ${newPercent}%`;
-                                });
+                                anomalyListContainer.style.flex = `0 0 ${newPercent}%`;
                                 console.log(`INTERACT: ${event.dy} | ${newPercent}`);
                             }
                         }
@@ -507,9 +491,7 @@ export class HTMLActions {
                                 const column1Rect = column1.getBoundingClientRect();
                                 const newWidth = Math.min(Math.max(column1Rect.width + event.dx, 200), dashboardRect.width * 0.5);
                                 const newPercent = (newWidth / dashboardRect.width) * 100;
-                                requestAnimationFrame(() => {
-                                    column1.style.flex = `0 0 ${newPercent}%`;
-                                });
+                                column1.style.flex = `0 0 ${newPercent}%`;
                             }
                         }
                         else if (handleId === "resize2") {
@@ -518,9 +500,7 @@ export class HTMLActions {
                                 const column3Rect = column3.getBoundingClientRect();
                                 const newWidth = Math.min(Math.max(column3Rect.width - event.dx, 150), dashboardRect.width * 0.3);
                                 const newPercent = (newWidth / dashboardRect.width) * 100;
-                                requestAnimationFrame(() => {
-                                    column3.style.flex = `0 0 ${newPercent}%`;
-                                });
+                                column3.style.flex = `0 0 ${newPercent}%`;
                             }
                         }
                         else if (handleId === "resize-v1") {
@@ -529,9 +509,7 @@ export class HTMLActions {
                             if (tradesContainer) {
                                 const tradesContainerRect = tradesContainer.getBoundingClientRect();
                                 const newHeight = Math.min(Math.max(tradesContainerRect.height + event.dy, 200), dashboardRect.height * 0.5);
-                                requestAnimationFrame(() => {
-                                    tradesContainer.style.flex = `0 0 0 ${newHeight}%`;
-                                });
+                                tradesContainer.style.flex = `0 0 0 ${newHeight}%`;
                             }
                         }
                     }
@@ -563,10 +541,8 @@ export class HTMLActions {
             light: "Light",
             dark: "Dark",
         };
-        requestAnimationFrame(() => {
-            button.innerHTML = `${icons[current]} ${labels[current]}`;
-            button.title = `Current theme: ${labels[current]}. Click to cycle through themes.`;
-        });
+        button.innerHTML = `${icons[current]} ${labels[current]}`;
+        button.title = `Current theme: ${labels[current]}. Click to cycle through themes.`;
     }
     setRange(duration) {
         console.log("Applying time range after chart initialization:", duration === null ? "ALL" : `${duration / 60000} minutes`);
@@ -646,11 +622,9 @@ export class HTMLActions {
         else if (top.confidence && top.confidence >= 0.75) {
             color = "#fb8c00";
         }
-        requestAnimationFrame(() => {
-            badge.style.background = color;
-            badge.innerHTML = `${top.side.toUpperCase()} @ ${top.price.toFixed(2)} (${((top.confidence || 0) * 100).toFixed(0)}%)`;
-            document.body.appendChild(badge);
-        });
+        badge.style.background = color;
+        badge.innerHTML = `${top.side.toUpperCase()} @ ${top.price.toFixed(2)} (${((top.confidence || 0) * 100).toFixed(0)}%)`;
+        document.body.appendChild(badge);
         this.latestBadgeElem = badge;
         if (this.badgeTimeout)
             clearTimeout(this.badgeTimeout);
@@ -696,14 +670,12 @@ export class HTMLActions {
                     const buttonRangeValue = buttonRange
                         ? parseInt(buttonRange)
                         : NINETHY_MINUTES;
-                    requestAnimationFrame(() => {
-                        if (buttonRangeValue === this.activeRange) {
-                            button.classList.add("active");
-                        }
-                        else {
-                            button.classList.remove("active");
-                        }
-                    });
+                    if (buttonRangeValue === this.activeRange) {
+                        button.classList.add("active");
+                    }
+                    else {
+                        button.classList.remove("active");
+                    }
                 });
             }
             localStorage.removeItem("dashboardTheme");
@@ -723,20 +695,16 @@ export class HTMLActions {
             const column1 = document.getElementById("column1");
             const column3 = document.getElementById("column3");
             if (column1 && column3) {
-                requestAnimationFrame(() => {
-                    column1.style.flex = "0 0 25%";
-                    column3.style.flex = "0 0 15%";
-                });
+                column1.style.flex = "0 0 25%";
+                column3.style.flex = "0 0 15%";
                 localStorage.removeItem("dashboardColumnWidths");
                 console.log("Column widths reset to defaults");
             }
             const rsiContainer = document.getElementById("rsiContainer");
             const anomalyListContainer = document.getElementById("anomalyListContainer");
             if (rsiContainer && anomalyListContainer) {
-                requestAnimationFrame(() => {
-                    rsiContainer.style.flex = "0 0 50%";
-                    anomalyListContainer.style.flex = "0 0 50%";
-                });
+                rsiContainer.style.flex = "0 0 50%";
+                anomalyListContainer.style.flex = "0 0 50%";
                 localStorage.removeItem("dashboardColumnHeights");
                 console.log("Column heights reset to defaults");
             }
