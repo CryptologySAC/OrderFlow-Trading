@@ -153,7 +153,7 @@ export class HTMLActions {
             const anomalyListContainer = document.getElementById("anomalyListContainer");
             if (rsiContainer && anomalyListContainer) {
                 const rsiContainerHeight = Math.min(Math.max(columnHeights.rsiContainer, 15), 50);
-                const anomalyListContainerHeight = Math.min(Math.max(columnHeights.rsiContainer, 15), 85);
+                const anomalyListContainerHeight = Math.min(Math.max(columnHeights.anomalyListContainer, 15), 85);
                 rsiContainer.style.flex = `0 0 ${rsiContainerHeight}%`;
                 anomalyListContainer.style.flex = `0 0 ${anomalyListContainerHeight}%`;
                 console.log("Column widths restored:", {
@@ -334,6 +334,7 @@ export class HTMLActions {
                 return "Reserve Order";
             case "algorithmic_stealth":
                 return "Algorithmic Stealth";
+            case "api_connectivity":
             default:
                 return type
                     .replace(/_/g, " ")
@@ -370,24 +371,12 @@ export class HTMLActions {
                 return "⚖️";
             case "flow_imbalance":
                 return "⇄";
+            case "api_connectivity":
+                return "⚠︎";
             default:
+                console.log(`ANOMALY TYPE: ${type}`);
                 return "•";
         }
-    }
-    showAnomalyBadge(anomaly) {
-        if (this.latestBadgeElem)
-            this.latestBadgeElem.remove();
-        const badge = document.createElement("div");
-        badge.className = `anomaly-badge ${anomaly.severity}`;
-        badge.innerHTML = `${this.getAnomalyIcon(anomaly.type || "")} ${this.getAnomalyLabel(anomaly.type || "")} @ ${anomaly.price?.toFixed(2) || "N/A"}`;
-        document.body.appendChild(badge);
-        this.latestBadgeElem = badge;
-        if (this.badgeTimeout)
-            clearTimeout(this.badgeTimeout);
-        this.badgeTimeout = setTimeout(() => {
-            badge.remove();
-            this.latestBadgeElem = null;
-        }, BADGE_TIMEOUT_MS);
     }
     setAnomalyFilters(filters) {
         this.anomalyFilters = filters;
@@ -439,10 +428,9 @@ export class HTMLActions {
             console.error("Interact.js not loaded");
             return;
         }
-        const self = this;
         interact(".resize-handle-y").resizable({
             listeners: {
-                move(event) {
+                move: (event) => {
                     const handle = event.target;
                     const handleId = handle.id;
                     const dashboard = document.querySelector(".dashboard");
@@ -471,15 +459,15 @@ export class HTMLActions {
                         }
                     }
                 },
-                end(event) {
+                end: (event) => {
                     void event;
-                    self.saveColumnDimensions();
+                    this.saveColumnDimensions();
                 },
             },
         });
         interact(".resize-handle").resizable({
             listeners: {
-                move(event) {
+                move: (event) => {
                     const handle = event.target;
                     const handleId = handle.id;
                     const dashboard = document.querySelector(".dashboard");
@@ -514,9 +502,9 @@ export class HTMLActions {
                         }
                     }
                 },
-                end(event) {
+                end: (event) => {
                     void event;
-                    self.saveColumnDimensions();
+                    this.saveColumnDimensions();
                 },
             },
         });
@@ -749,5 +737,25 @@ export class HTMLActions {
         this.applyTheme(next);
         this.saveTheme(next);
         this.updateThemeToggleButton();
+    }
+    isValidAnomalyData(data) {
+        return (typeof data.type === "string" &&
+            typeof data.detectedAt === "number" &&
+            ["low", "medium", "high", "critical", "info"].includes(data.severity) &&
+            typeof data.affectedPriceRange === "object" &&
+            data.affectedPriceRange !== null &&
+            typeof data.affectedPriceRange.min === "number" &&
+            typeof data.affectedPriceRange.max === "number" &&
+            typeof data.recommendedAction === "string" &&
+            typeof data.details === "object");
+    }
+    addAnomaly(anomaly) {
+        if (!this.isValidAnomalyData(anomaly))
+            return;
+        this.anomalyList.unshift(anomaly);
+        if (this.anomalyList.length > 100) {
+            this.anomalyList.length = 100;
+        }
+        this.renderAnomalyList();
     }
 }

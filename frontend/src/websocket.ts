@@ -4,12 +4,13 @@ import {
     MessageType,
     type WebSocketMessage,
     type TradeData,
+    type OrderBookData,
     type BacklogMessage,
     type PingMessage,
     type RsiBacklogMessage,
 } from "./types.js";
 
-import type { RSIDataPoint } from "./frontend-types.js";
+import type { RSIDataPoint, Signal, Anomaly } from "./frontend-types.js";
 import * as Config from "./config.js";
 
 /**
@@ -37,6 +38,16 @@ interface TradeWebSocketConfig {
     onBacklog?: (data: TradeData[]) => void;
     /** Callback fired when RSI backlog data is received */
     onRsiBacklog?: (data: RSIDataPoint[]) => void;
+    /** Callback fired when trade data is received */
+    onTrade?: (data: TradeData) => void;
+    /** Callback fired when RSI data is received */
+    onRsi?: (data: RSIDataPoint) => void;
+    /** Callback fired when Order book data is received */
+    onOrderBook?: (data: OrderBookData) => void;
+    /** Callback fired when Signal data is received */
+    onSignal?: (data: Signal) => void;
+    /** Callback fired when Anomaly data is received */
+    onAnomaly?: (data: Anomaly) => void;
     /** Callback fired when reconnection attempts are exhausted */
     onReconnectFail?: () => void;
     /** Callback fired when connection times out */

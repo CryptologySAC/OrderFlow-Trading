@@ -55,17 +55,6 @@ export function isValidSignalData(data) {
         typeof data.price === "number" &&
         (data.side === "buy" || data.side === "sell"));
 }
-export function isValidAnomalyData(data) {
-    return (typeof data.type === "string" &&
-        typeof data.detectedAt === "number" &&
-        ["low", "medium", "high", "critical", "info"].includes(data.severity) &&
-        typeof data.affectedPriceRange === "object" &&
-        data.affectedPriceRange !== null &&
-        typeof data.affectedPriceRange.min === "number" &&
-        typeof data.affectedPriceRange.max === "number" &&
-        typeof data.recommendedAction === "string" &&
-        typeof data.details === "object");
-}
 export function isValidOrderBookData(data) {
     return (Array.isArray(data.priceLevels) &&
         data.priceLevels.every((level) => typeof level.price === "number" &&
@@ -195,9 +184,9 @@ function handleMessage(message) {
                 rsiChart.addPoint(rsiDataPoint);
             }
             break;
-        case "error":
-            const errorData = message.data;
-            console.error("WebSocket error:", errorData.message);
+        case "anomaly":
+            const anomaly = message.data;
+            htmlActions.addAnomaly(anomaly);
             break;
         case "stats":
             break;

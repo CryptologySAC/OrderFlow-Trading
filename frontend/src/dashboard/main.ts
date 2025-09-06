@@ -46,6 +46,11 @@ import type {
     OrderbookMessage,
     OrderBookData,
     RsiMessage,
+    SignalMessage,
+    AnomalyMessage,
+    //SupportResistanceLevelMessage,
+    //ZoneUpdateMessage,
+    //ZoneSignalMessage,
 } from "../types.js";
 import { MessageType } from "../types.js";
 import type {
@@ -127,20 +132,6 @@ export function isValidSignalData(data: Signal): boolean {
         typeof data.time === "number" &&
         typeof data.price === "number" &&
         (data.side === "buy" || data.side === "sell")
-    );
-}
-
-export function isValidAnomalyData(data: Anomaly): boolean {
-    return (
-        typeof data.type === "string" &&
-        typeof data.detectedAt === "number" &&
-        ["low", "medium", "high", "critical", "info"].includes(data.severity) &&
-        typeof data.affectedPriceRange === "object" &&
-        data.affectedPriceRange !== null &&
-        typeof data.affectedPriceRange.min === "number" &&
-        typeof data.affectedPriceRange.max === "number" &&
-        typeof data.recommendedAction === "string" &&
-        typeof data.details === "object"
     );
 }
 
@@ -326,9 +317,14 @@ function handleMessage(message: WebSocketMessage): void {
             }
             break;
 
+        case "anomaly":
+            const anomaly = (message as AnomalyMessage).data as Anomaly;
+            htmlActions.addAnomaly(anomaly);
+            break;
+
         /*
         case "signal":
-            const signal: Signal = message.data as Signal;
+            const signal: Signal = (message as SignalMessage).data as Signal;
             if (isValidSignalData(signal)) {
                 const label = buildSignalLabel(signal);
                 const id = signal.id;
@@ -369,33 +365,7 @@ function handleMessage(message: WebSocketMessage): void {
             }
             break;
 
-        case "anomaly":
-            const anomaly = message.data as Anomaly;
-            if (isValidAnomalyData(anomaly)) {
-                anomalyList.unshift(anomaly);
-                if (anomalyList.length > 100) {
-                    anomalyList.length = 100;
-                }
-                renderAnomalyList();
-                if (
-                    anomaly.severity === "high" ||
-                    anomaly.severity === "critical"
-                ) {
-                    // Badge functionality would be implemented here
-                }
-            }
-            break;
-
-        
-
-        
-
-        case "runtimeConfig":
-            const config = message.data as Record<string, unknown>;
-            if (config && typeof config === "object") {
-                setRuntimeConfig(config);
-            }
-            break;
+        /*
 
         case "supportResistanceLevel":
             const level = message.data as SupportResistanceLevel;
@@ -459,11 +429,6 @@ function handleMessage(message: WebSocketMessage): void {
             }
             break;
 */
-        case "error":
-            const errorData = message.data as { message: string };
-            console.error("WebSocket error:", errorData.message);
-            break;
-
         case "stats":
             break;
 
