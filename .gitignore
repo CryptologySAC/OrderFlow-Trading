@@ -23,3 +23,7 @@ logs/
 analysis/reports/*
 *.log
 1*.bak
+.claude/
+.cursor/
+.husky/
+.vscode/
