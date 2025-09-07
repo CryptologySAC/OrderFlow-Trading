@@ -114,7 +114,7 @@
 ### **3. Absorption Detector**
 
 - **Purpose**: Support/resistance confirmation & institutional accumulation
-- **File**: `src/indicators/absorptionDetector.ts`
+- **File**: `backend/src/indicators/absorptionDetector.ts`
 - **Configuration**: `config.json → symbols.LTCUSDT.absorption`
 
 #### **How It Works**
@@ -130,11 +130,30 @@ Detects large order absorption at key price levels by analyzing:
 
 ```json
 {
-    "minAggVolume": 175, // Minimum aggressive volume for signal
-    "windowMs": 60000, // Analysis window (60 seconds)
-    "zoneTicks": 5, // Price zone size in ticks
-    "absorptionThreshold": 0.6, // Passive/aggressive ratio threshold
-    "priceEfficiencyThreshold": 0.02 // Maximum price movement per volume
+    "enabled": true,
+    "abTestingEnabled": true,
+    "minAggVolume": 174,
+    "passiveAbsorptionThreshold": 0.85,
+    "passiveAbsorptionThresholdElite": 0.98,
+    "priceEfficiencyThreshold": 0.002,
+    "maxPriceImpactRatio": 0.00007,
+    "minPassiveMultiplier": 15,
+    "balanceThreshold": 0.1,
+    "priceStabilityTicks": 5,
+    "maxVolumeMultiplierRatio": 2.5,
+    "rollingWindowSize": 750,
+    "timeWindowIndex": 1,
+    "eventCooldownMs": 5000,
+    "expectedMovementScalingFactor": 10,
+    "maxZoneCountForScoring": 5,
+    "maxZonesPerSide": 5,
+    "zoneHistoryWindowMs": 60000,
+    "absorptionZoneThreshold": 1.5,
+    "minPassiveVolumeForZone": 50,
+    "minAbsorptionEvents": 2,
+    "absorptionDirectionThreshold": 0.6,
+    "minPassiveVolumeForDirection": 10,
+    "useZoneSpecificPassiveVolume": true
 }
 ```
 

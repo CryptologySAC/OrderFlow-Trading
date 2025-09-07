@@ -24,7 +24,7 @@
 }
 ```
 
-### ✅ Code Configuration (src/core/config.ts)
+### ✅ Code Configuration (backend/src/core/config.ts)
 
 - Added standardized zone configuration support
 - Integrated performance-optimized defaults

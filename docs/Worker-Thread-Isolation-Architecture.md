@@ -37,7 +37,7 @@ The system uses a dedicated worker thread architecture with **absolute separatio
 All workers use shared proxy implementations instead of direct infrastructure imports:
 
 ```
-src/multithreading/shared/
+backend/src/multithreading/shared/
 ├── workerInterfaces.ts          # Interface contracts
 ├── workerMetricsProxy.ts        # Metrics collection with batching
 ├── workerCircuitBreakerProxy.ts # Circuit breaker with BigInt support
@@ -79,7 +79,7 @@ export interface IWorkerCircuitBreaker {
 
 ## Worker Thread Implementations
 
-### Binance Worker (`src/multithreading/workers/binanceWorker.ts`)
+### Binance Worker (`backend/src/multithreading/workers/binanceWorker.ts`)
 
 **Responsibilities:**
 
@@ -109,7 +109,7 @@ const circuitBreaker: IWorkerCircuitBreaker = new WorkerCircuitBreakerProxy(
 - Enhanced monitoring with correlation ID tracking
 - Graceful shutdown with cleanup procedures
 
-### Communication Worker (`src/multithreading/workers/communicationWorker.ts`)
+### Communication Worker (`backend/src/multithreading/workers/communicationWorker.ts`)
 
 **Responsibilities:**
 
@@ -135,7 +135,7 @@ const rateLimiter = new WorkerRateLimiterProxy(60000, 100);
 - Client-specific backlog delivery
 - Connection monitoring and cleanup
 
-### Storage Worker (`src/multithreading/workers/storageWorker.ts`)
+### Storage Worker (`backend/src/multithreading/workers/storageWorker.ts`)
 
 **Responsibilities:**
 
@@ -158,7 +158,7 @@ const metrics: IWorkerMetricsCollector = new WorkerMetricsProxy("storage");
 - Database WAL mode optimization
 - Enhanced error handling and monitoring
 
-### Thread Manager (`src/multithreading/threadManager.ts`)
+### Thread Manager (`backend/src/multithreading/threadManager.ts`)
 
 **Responsibilities:**
 

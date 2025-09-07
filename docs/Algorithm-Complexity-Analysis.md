@@ -25,7 +25,7 @@ This document provides comprehensive analysis of algorithm complexity, performan
 #### **🎯 Core Algorithm: Price Efficiency Calculation**
 
 ```typescript
-// Location: src/indicators/absorptionDetector.ts:876-922
+// Location: backend/src/indicators/absorptionDetector.ts:876-922
 const priceMovement = Math.max(...prices) - Math.min(...prices);
 const volumePressure = totalVolume / avgPassiveVolume;
 const expectedMovement = volumePressure * tickSize * scalingFactor;
@@ -89,7 +89,7 @@ graph TD
 #### **🎯 Core Algorithm: Multi-Factor Liquidity Analysis**
 
 ```typescript
-// Location: src/indicators/exhaustionDetector.ts (12-factor scoring)
+// Location: backend/src/indicators/exhaustionDetector.ts (12-factor scoring)
 const exhaustionScore = factors.reduce((score, factor, index) => {
     return score + factor.value * SCORING_WEIGHTS[index]; // O(12) = O(1)
 }, 0);
@@ -152,7 +152,7 @@ graph TD
 #### **🎯 Core Algorithm: Multi-Timeframe CVD Analysis**
 
 ```typescript
-// Location: src/indicators/deltaCVDConfirmation.ts
+// Location: backend/src/indicators/deltaCVDConfirmation.ts
 // Multi-window processing (O(w·n) where w = windows, n = trades)
 for (const windowSec of this.windowsSec) {
     const cvdValue = calculateCVD(windowData); // O(n)
@@ -222,7 +222,7 @@ graph TD
 #### **🎯 Core Algorithm: Multi-Factor Pattern Matching**
 
 ```typescript
-// Location: src/services/icebergDetector.ts
+// Location: backend/src/services/icebergDetector.ts
 // Pattern analysis (O(p²) for piece-wise comparison)
 const sizeConsistency = this.calculateSizeConsistency(pieces); // O(p)
 const priceStability = this.calculatePriceStability(pieces); // O(p)
@@ -290,7 +290,7 @@ graph TD
 #### **🎯 Core Algorithm: Wall Pattern & Cancellation Analysis**
 
 ```typescript
-// Location: src/services/spoofingDetector.ts
+// Location: backend/src/services/spoofingDetector.ts
 // Multi-pattern detection (O(b·h·p) where b=band, h=history, p=patterns)
 const layeringResult = this.detectLayering(price, size); // O(b·h)
 const ghostLiquidity = this.detectGhostLiquidity(price); // O(h)

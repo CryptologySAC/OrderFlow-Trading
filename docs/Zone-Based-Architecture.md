@@ -27,10 +27,10 @@ WebSocket Broadcasting → Dashboard Visualization
 
 **Key Files:**
 
-- `src/types/zoneTypes.ts` - Zone type definitions
-- `src/trading/zoneManager.ts` - Zone lifecycle management
-- `src/indicators/accumulationZoneDetector.ts` - Accumulation zone detection
-- `src/indicators/distributionZoneDetector.ts` - Distribution zone detection
+- `backend/src/types/zoneTypes.ts` - Zone type definitions
+- `backend/src/trading/zoneManager.ts` - Zone lifecycle management
+- `backend/src/indicators/accumulationZoneDetector.ts` - Accumulation zone detection
+- `backend/src/indicators/distributionZoneDetector.ts` - Distribution zone detection
 
 ### Zone vs Legacy Detectors
 

@@ -1,30 +1,33 @@
 import { MessageType, } from "./types.js";
+import * as Config from "./config.js";
 export class TradeWebSocket {
     url;
-    maxTrades;
+    maxBacklogTrades;
+    maxBacklogRsi;
     maxReconnectAttempts;
     reconnectDelay;
     pingIntervalTime;
     pongWaitTime;
     onMessage;
     onBacklog;
+    onRsiBacklog;
     onReconnectFail;
-    onTimeout;
     ws = null;
     pingInterval = null;
     pongTimeout = null;
     reconnectAttempts = 0;
-    constructor({ url, maxTrades = 50000, maxReconnectAttempts = 10, reconnectDelay = 1000, pingInterval = 10000, pongWait = 5000, onMessage = () => { }, onBacklog = () => { }, onReconnectFail = () => { }, onTimeout = () => { }, }) {
+    constructor({ url, maxBacklogTrades = Config.BACKLOG_TRADES_AMOUNT, maxBacklogRsi = Config.BACKLOG_RSI_AMOUNT, maxReconnectAttempts = Config.MAX_RECONNECT_ATTEMPTS, reconnectDelay = Config.RECONNECT_DELAY_MS, pingInterval = Config.PING_INTERVAL_MS, pongWait = Config.PONG_WAIT_MS, onMessage = () => { }, onBacklog = () => { }, onRsiBacklog = () => { }, onReconnectFail = () => { }, }) {
         this.url = url;
-        this.maxTrades = maxTrades;
+        this.maxBacklogTrades = maxBacklogTrades;
+        this.maxBacklogRsi = maxBacklogRsi;
         this.maxReconnectAttempts = maxReconnectAttempts;
         this.reconnectDelay = reconnectDelay;
         this.pingIntervalTime = pingInterval;
         this.pongWaitTime = pongWait;
         this.onMessage = onMessage;
         this.onBacklog = onBacklog;
+        this.onRsiBacklog = onRsiBacklog;
         this.onReconnectFail = onReconnectFail;
-        this.onTimeout = onTimeout;
     }
     connect() {
         try {
@@ -46,8 +49,9 @@ export class TradeWebSocket {
         setTimeout(() => {
             this.sendMessage({
                 type: MessageType.BACKLOG,
-                data: { amount: this.maxTrades },
+                data: { amount: this.maxBacklogTrades },
             });
+            void this.maxBacklogRsi;
             this.startPing();
         }, 50);
     }
@@ -65,6 +69,9 @@ export class TradeWebSocket {
                 case MessageType.BACKLOG:
                     this.handleBacklog(message);
                     break;
+                case MessageType.RSI_BACKLOG:
+                    this.handleRsiBacklog(message);
+                    break;
                 default:
                     this.onMessage(message);
                     break;
@@ -76,11 +83,18 @@ export class TradeWebSocket {
     }
     handleBacklog(message) {
         if (Array.isArray(message.data)) {
-            console.log(`Backlog of ${message.data.length} trades received.`);
             this.onBacklog(message.data);
         }
         else {
             console.warn("Received malformed backlog data:", message.data);
+        }
+    }
+    handleRsiBacklog(message) {
+        if (Array.isArray(message.data)) {
+            this.onRsiBacklog(message.data);
+        }
+        else {
+            console.warn("Received malformed RSI backlog data:", message.data);
         }
     }
     handleError(event) {
@@ -107,7 +121,7 @@ export class TradeWebSocket {
     startPing() {
         this.stopPing();
         this.pingInterval = setInterval(() => {
-            if (this.sendMessage({ type: MessageType.PING })) {
+            if (this.sendMessage({ type: MessageType.PING, now: Date.now() })) {
                 this.startPongTimeout();
             }
         }, this.pingIntervalTime);
@@ -143,7 +157,11 @@ export class TradeWebSocket {
     sendMessage(message) {
         if (this.ws?.readyState === WebSocket.OPEN) {
             try {
-                this.ws.send(this.safeJsonStringify(message));
+                const safeMessage = this.safeJsonStringify(message);
+                if (!safeMessage) {
+                    return false;
+                }
+                this.ws.send(safeMessage);
                 return true;
             }
             catch (error) {
@@ -155,12 +173,14 @@ export class TradeWebSocket {
         return false;
     }
     isValidMessage(data) {
-        if (typeof data !== "object" ||
-            data === null ||
-            typeof data.type !== "string") {
+        if (typeof data !== "object" || data === null) {
             return false;
         }
-        return Object.values(MessageType).includes(data.type);
+        const obj = data;
+        if (typeof obj["type"] !== "string") {
+            return false;
+        }
+        return Object.values(MessageType).includes(obj["type"]);
     }
     safeJsonParse(str) {
         try {
@@ -176,7 +196,7 @@ export class TradeWebSocket {
         return JSON.stringify(obj, (_key, value) => {
             if (typeof value === "object" && value !== null) {
                 if (cache.has(value)) {
-                    return;
+                    return null;
                 }
                 cache.add(value);
             }

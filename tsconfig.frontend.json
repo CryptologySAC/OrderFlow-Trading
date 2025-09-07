@@ -2,14 +2,11 @@
     "extends": "./tsconfig.json",
     "compilerOptions": {
         "outDir": "./public/scripts",
-        "rootDir": "./public/scripts",
+        "rootDir": "./frontend/src",
         "noEmit": false,
         "module": "ESNext",
-        "moduleResolution": "bundler",
-        "allowJs": true
+        "target": "ES2024"
     },
-    "include": [
-        "./public/scripts/**/*.ts"
-    ],
+    "include": ["./frontend/src/**/*.ts"],
     "exclude": []
 }

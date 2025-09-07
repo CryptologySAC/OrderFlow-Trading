@@ -1,7 +1,7 @@
 export var MessageType;
 (function (MessageType) {
     MessageType["PING"] = "ping";
-    MessageType["BACKLOG_REQUEST"] = "backlog";
+    MessageType["BACKLOG_REQUEST"] = "backlog_request";
     MessageType["PONG"] = "pong";
     MessageType["BACKLOG"] = "backlog";
     MessageType["TRADE"] = "trade";

@@ -1,12 +1,12 @@
 {
     "extends": "./tsconfig.json",
     "compilerOptions": {
-        "rootDir": "src",
+        "rootDir": "backend/src",
         "declaration": true,
         "declarationMap": true,
         "sourceMap": true,
         "noEmit": false,
         "types": ["vitest/globals"]
     },
-    "include": ["src"]
+    "include": ["backend/src"]
 }

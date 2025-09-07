@@ -1,410 +1,427 @@
-# TEST/CLAUDE.md
+# CLAUDE.md - Testing Standards & Integrity
 
-Test-specific guidance for OrderFlow Trading System with **ZERO TOLERANCE** for testing failures or compromised test integrity.
+Production trading system testing standards with **ZERO TOLERANCE** for test integrity violations.
 
-## 🚨 CRITICAL TESTING PRINCIPLES
+## 🚨 CRITICAL FOUNDATION
 
-Do not guess, NEVER guess; all test assertions are based and calculated; if you need more data to validate behavior you request it; no guessing, no estimations, no general expectations, no bullshit. Math and logic above everything in test validation.
-
-**Reference**: All project-wide standards in `/Users/marcschot/Projects/OrderFlow Trading/CLAUDE.md` apply to test code unless explicitly overridden below.
-
-## 🧪 UNIT TESTING STANDARDS (ZERO TOLERANCE)
-
-### Test Integrity Requirements (NON-NEGOTIABLE)
-
-- **Tests MUST detect errors in code** - Never adjust tests to pass buggy implementations
-- **Tests MUST validate real-world logic** - Test correct behavior, not broken code
-- **Tests MUST fail when bugs are present** - Wrong logic should fail tests
-- **NO adjusting expectations to match buggy code** - Fix code, not tests
-- **NO lowering test standards** - Tests guide proper implementation
-- **Tests MUST be deterministic** - No randomness that masks real failures
-- **ALL test scenarios MUST be realistic** - No impossible market conditions
-
-### Prohibited Test Practices (IMMEDIATE VIOLATIONS)
-
-- ❌ Adjusting expectations to match broken code
-- ❌ Adding randomness workarounds to mask detection failures
-- ❌ Lowering validation thresholds to hide logic bugs
-- ❌ Using hardcoded defaults instead of validating real calculations
-- ❌ Writing tests that validate current behavior vs correct behavior
-- ❌ Creating tests that pass regardless of implementation correctness
-- ❌ Mocking away the logic being tested
-- ❌ Writing tests that cannot detect regressions
-
-### 🎯 MAGIC NUMBERS EXCEPTION (TESTS ONLY)
-
-**SPECIAL TESTING EXCEPTION**: Unlike production code, **magic numbers ARE ALLOWED in test files**. Tests need concrete, hardcoded values for validation.
-
-```typescript
-// ✅ ALLOWED IN TESTS: Hardcoded test values
-expect(detector.calculate(trades)).toBeCloseTo(0.75); // OK in tests
-const testPrice = 89.42; // OK in tests
-const expectedThreshold = 0.003; // OK in tests
-
-// ✅ STILL REQUIRED: Use realistic market values
-const validTick = 0.01; // Realistic for $10-$100 price range
-const invalidTick = 0.0005; // Would be invalid for that range
-
-// ❌ STILL FORBIDDEN: Values that break market realism
-const impossiblePrice = -10.5; // Negative prices don't exist
-const subTickMovement = 0.0001; // Sub-tick for wrong price range
-```
-
-**Why This Exception Exists:**
-
-- **Test Clarity**: Explicit values make test expectations clear
-- **Determinism**: Hardcoded values ensure consistent test results
-- **Debugging**: Known values easier to debug when tests fail
-- **Validation**: Specific values required to verify calculations
+**Do not guess, NEVER guess; all test validations are based on mathematical logic and real market data; if you need more data to validate you ask for it; no guessing, no estimations, no general answers, no bullshit. Test integrity above everything, request clarification when you are unsure.**
 
 ## 🏛️ INSTITUTIONAL TESTING STANDARDS
 
-### Test Suite Requirements (MANDATORY)
+### 📋 TEST INTEGRITY PRINCIPLES (NON-NEGOTIABLE)
 
-- **>95% code coverage** - All critical paths must be tested
-- **100% test pass rate** - ZERO failing tests permitted
-- **Sub-100ms execution time** per test - Maintain fast feedback loops
-- **Deterministic results** - Tests must pass consistently
-- **Comprehensive edge cases** - Test boundary conditions thoroughly
+#### Core Testing Requirements
 
-### Mock Architecture (CRITICAL)
+- **MANDATORY: >95% coverage requirement** - All tests MUST pass, coverage MUST be >95%
+- **Tests MUST detect signal generation errors** - Never adjust tests to pass buggy detector logic
+- **Tests MUST validate real market scenarios** - Test with realistic market data patterns
+- **Tests MUST fail when detector logic is wrong** - Bad signal logic should fail tests
+- **NO adjusting expectations to match buggy code** - Fix detector, not tests
+- **NO lowering signal quality standards** - Tests guide proper detector implementation
 
-- **MANDATORY: ALL tests MUST use proper mocks from `__mocks__/`**
-- **NEVER create inline mocks - always use `__mocks__/` structure**
-- **Mock files MUST mirror exact directory structure of `src/`**
-- **All mocks MUST use `vi.fn()` for proper vitest integration**
-- **Mocks MUST provide realistic behavior** - No fake responses that hide bugs
+#### Test Quality Standards
 
-#### Correct Mock Structure
+- **ALL async operations MUST have proper await patterns**
+- **ALL mock dependencies MUST use `__mocks__/` directory**
+- **ALL test data MUST be realistic market data**
+- **ALL edge cases MUST be tested**
+- **ALL error conditions MUST be validated**
 
-```typescript
-// ✅ CORRECT: Use structured mocks
-import { mockLogger } from "../__mocks__/infrastructure/logger.js";
-import { mockStorage } from "../__mocks__/storage/storage.js";
-
-// ❌ WRONG: Inline mocks
-const mockLogger = vi.fn();
-```
-
-### TypeScript Standards (ZERO TOLERANCE)
-
-- **ZERO `any` types** - Use precise typing or interfaces
-- **NEVER `unknown`** without type guards and validation
-- **ALL test functions must have explicit return types**
-- **ALL test parameters must have explicit types**
-- **Strict null checking enabled**
-- **No implicit returns**
-- **KEEP TEST CODE SIMPLE** - Avoid complex casting, prefer interface compatibility
-
-### Error Handling in Tests (MANDATORY)
-
-- **ALL async test operations MUST have proper error handling**
-- **ALL database test operations MUST handle connection failures**
-- **ALL mock failures MUST be tested explicitly**
-- **NO silent test failures** - All errors must be visible and logged
-
-## 🔢 FINANCIAL MATH TESTING (MISSION CRITICAL)
-
-### FinancialMath Test Requirements
-
-- **ALL financial calculations in tests MUST use `src/utils/financialMath.ts`**
-- **Test data MUST use realistic financial precision**
-- **Price movements MUST respect tick size rules**
-- **NO floating-point arithmetic in test calculations**
-
-```typescript
-// ✅ REQUIRED: Use FinancialMath in tests
-const expectedMidPrice = FinancialMath.calculateMidPrice(89.42, 89.44, 2);
-const expectedSpread = FinancialMath.calculateSpread(89.44, 89.42, 2);
-
-// ❌ PROHIBITED: Direct floating-point in tests
-const expectedMidPrice = (89.42 + 89.44) / 2; // Can cause precision errors
-```
-
-### 📏 Tick Size Compliance in Tests
-
-**CRITICAL**: Test data MUST respect real market tick sizes to maintain test validity.
-
-```typescript
-// ✅ CORRECT: Tick-compliant test data
-const basePrice = 89.0; // Price ~$89 (in $10-$100 range)
-const validTick = 0.01; // Correct tick size
-const testPrices = [89.0, 89.01, 89.02]; // Valid price sequence
-
-// ❌ PROHIBITED: Invalid tick movements in tests
-const invalidPrices = [89.0, 89.0005, 89.001]; // Sub-tick movements
-```
-
-## 🧵 WORKER THREAD TESTING (CRITICAL)
-
-### Worker Thread Mock Requirements
-
-- **ALL worker thread functionality MUST use proxy mocks**
-- **NO direct infrastructure mocks in worker tests**
-- **Interface compliance MUST be validated in tests**
-- **Message passing patterns MUST be tested**
-
-```typescript
-// ✅ CORRECT: Test worker thread isolation
-const mockLogger: ILogger = new MockWorkerProxyLogger();
-const mockMetrics: IWorkerMetricsCollector = new MockWorkerMetricsProxy();
-
-// ❌ WRONG: Direct infrastructure mocks
-const mockLogger = vi.mocked(Logger);
-```
-
-### Worker Thread Test Patterns
-
-- **Test proxy class behavior** - Ensure messages pass correctly
-- **Validate interface contracts** - Confirm proper TypeScript interfaces
-- **Test error handling** - Verify proper error propagation
-- **Test correlation IDs** - Ensure request tracing works
-
-## 🎯 DETECTOR TESTING STANDARDS
-
-### Pattern Detection Test Requirements
-
-- **Test with realistic market data** - Use actual price/volume ranges
-- **Validate signal accuracy** - Test true/false positive rates
-- **Test edge cases** - Boundary conditions and limit cases
-- **Performance testing** - Ensure sub-millisecond latency maintained
-
-### Signal Validation Testing
-
-- **Test signal correlation** - Multiple detectors working together
-- **Test signal timing** - Proper timestamp precision
-- **Test signal deduplication** - No duplicate signals generated
-- **Test signal priority** - Correct signal ordering
-
-### Zone-Based Detector Testing
-
-- **Test zone formation** - Proper zone candidate handling
-- **Test zone evolution** - Dynamic zone boundary updates
-- **Test memory management** - No memory leaks in zone state
-- **Test concurrent access** - Thread-safe zone operations
-
-## 🌐 WEBSOCKET TESTING GUIDELINES
-
-### WebSocket Message Testing
-
-- **Test Buffer-to-string conversion** - Proper message parsing
-- **Test message validation** - Zod schema compliance
-- **Test rate limiting** - Per-client limits enforced
-- **Test security patterns** - Reject malformed messages
-
-```typescript
-// ✅ CORRECT: Test Buffer message handling
-const testMessage = Buffer.from(JSON.stringify({ type: "test" }), "utf8");
-await websocketHandler.handleMessage(mockWs, testMessage);
-```
-
-## 🏦 INSTITUTIONAL COMPLIANCE TESTING
-
-### Data Integrity Testing
-
-- **Test trade data immutability** - No modifications after processing
-- **Test timestamp precision** - Microsecond-level accuracy
-- **Test order book consistency** - Atomic state updates
-- **Test ACID compliance** - Database transaction integrity
-
-### Performance Testing Standards
-
-- **Sub-millisecond latency** - Trade processing speed requirements
-- **Memory stability** - No memory leaks under load
-- **CPU optimization** - Efficient real-time processing
-- **Concurrent connections** - 1000+ WebSocket clients supported
-
-### Security Testing Requirements
-
-- **Input validation testing** - All inputs properly sanitized
-- **Rate limiting testing** - External endpoint protection
-- **Authentication testing** - Proper access controls
-- **Correlation ID testing** - Request tracing functionality
-
-## 📊 TEST DATA STANDARDS
-
-### Realistic Test Data Requirements
-
-- **Use actual cryptocurrency price ranges** - BTC ~$30K-$70K, ETH ~$1K-$5K
-- **Respect market hours** - Consider 24/7 crypto trading
-- **Use realistic volumes** - Match typical exchange volumes
-- **Follow market microstructure** - Bid/ask spreads, order sizes
-
-### Test Data Generation Patterns
-
-```typescript
-// ✅ CORRECT: Realistic test trade data
-const createTestTrade = (price: number, quantity: number): TradeEvent => ({
-    id: generateTradeId(),
-    symbol: "BTCUSDT",
-    price: FinancialMath.roundToTick(price, 0.01),
-    quantity: FinancialMath.roundToTick(quantity, 0.001),
-    timestamp: Date.now(),
-    isBuyerMaker: Math.random() > 0.5,
-});
-```
-
-## 🚫 TESTING PROHIBITIONS (ZERO TOLERANCE)
+### 🚫 ABSOLUTE PROHIBITIONS (ZERO TOLERANCE)
 
 **NEVER in test code:**
 
-- Modify production configuration files during tests
-- Use real API keys or external services
-- Create tests that depend on external network access
-- Write tests that modify global state without cleanup
-- Create flaky tests that pass/fail randomly
-- Test implementation details instead of behavior
-- Write tests that cannot detect regressions
-- Use production database connections
-- Create tests with hardcoded sleeps or timeouts
-- Write tests that validate wrong behavior as correct
+- **Adjust test expectations to match buggy implementation** - Fix the code, not the tests
+- **Use inline mocks** - ALL mocks MUST be in `__mocks__/` directory
+- **Skip edge case testing** - ALL edge cases must be covered
+- **Lower coverage requirements** - Maintain >95% coverage at all times
+- **Use hardcoded test data** - Use realistic market data patterns
+- **Skip error condition testing** - ALL error paths must be tested
 
-## 🎯 TEST DEVELOPMENT WORKFLOW
+### 🧪 TESTING FRAMEWORK REQUIREMENTS
 
-### Before Writing Tests
-
-1. **Understand the behavior** - Know what correct behavior looks like
-2. **Identify edge cases** - Boundary conditions and error states
-3. **Plan test scenarios** - Happy path, error path, boundary conditions
-4. **Design test data** - Realistic, comprehensive test datasets
-5. **Consider performance** - Fast execution, minimal resource usage
-
-### During Test Development
-
-1. **Write failing tests first** - Red-Green-Refactor cycle
-2. **Test behavior, not implementation** - Focus on what, not how
-3. **Use descriptive test names** - Clear expectation statements
-4. **Keep tests isolated** - No dependencies between tests
-5. **Validate thoroughly** - Comprehensive assertions
-
-### After Writing Tests
-
-1. **Run full test suite** - Ensure no regressions introduced
-2. **Check coverage** - Maintain >95% coverage requirement
-3. **Performance validation** - Tests execute under time limits
-4. **Documentation** - Comment complex test scenarios
-5. **Review test quality** - Can tests detect future bugs?
-
-## 🔧 TEST DEBUGGING GUIDELINES
-
-### Common Test Failure Patterns
-
-1. **Flaky tests** - Usually timing or state issues
-2. **Mock misconfigurations** - Incorrect mock return values
-3. **Async/await issues** - Improper async test handling
-4. **State pollution** - Tests affecting each other
-5. **Precision errors** - Floating-point calculation issues
-
-### Debugging Techniques
+#### Vitest Configuration Standards
 
 ```typescript
-// ✅ CORRECT: Add debugging information
-test("should calculate absorption correctly", () => {
-    const trades = createTestTrades();
-    const result = detector.calculate(trades);
+// ✅ REQUIRED: vitest.config.ts structure
+import { defineConfig } from "vitest/config";
 
-    // Add debugging context
-    console.log("Test trades:", trades.length);
-    console.log("Calculated result:", result);
-    console.log("Expected result:", expectedResult);
-
-    expect(result).toBeCloseTo(expectedResult, 6);
+export default defineConfig({
+    test: {
+        environment: "node",
+        setupFiles: ["./test/vitest.setup.ts"],
+        coverage: {
+            reporter: ["text", "lcov", "html"],
+            exclude: [
+                "node_modules/",
+                "dist/",
+                "test/",
+                "**/*.d.ts",
+                "**/*.config.ts",
+            ],
+            thresholds: {
+                global: {
+                    branches: 95,
+                    functions: 95,
+                    lines: 95,
+                    statements: 95,
+                },
+            },
+        },
+        testTimeout: 10000,
+        // MANDATORY: Fail on first test failure in CI
+        bail: process.env.CI === "true" ? 1 : 0,
+    },
 });
 ```
 
-## 🚨 TEST EMERGENCY PROTOCOLS
+#### Test Setup Standards
 
-### When Tests Fail in Production
+```typescript
+// ✅ REQUIRED: test/vitest.setup.ts
+import { beforeAll, afterAll } from "vitest";
 
-1. **STOP all deployments** - No code changes until tests pass
-2. **Identify root cause** - Bug in code or test?
-3. **Fix the actual issue** - Never adjust tests to pass broken code
-4. **Validate fix** - Ensure proper behavior restored
-5. **Post-incident review** - Prevent similar failures
+// Global test setup
+beforeAll(() => {
+    // Mock all external dependencies
+    mockAllDependencies();
 
-### Test Suite Recovery
+    // Set up test environment
+    process.env.NODE_ENV = "test";
+    process.env.TZ = "UTC";
+});
 
-1. **Run tests in isolation** - Identify specific failures
-2. **Check mock integrity** - Verify mock behavior matches real systems
-3. **Validate test data** - Ensure realistic test scenarios
-4. **Review recent changes** - Identify potential causes
-5. **Full system validation** - Integration testing after fixes
+// Clean up after all tests
+afterAll(() => {
+    // Clean up test data
+    cleanupTestData();
 
-## 📈 PERFORMANCE TESTING STANDARDS
-
-### Critical Path Testing
-
-- **Trade processing latency** - Sub-millisecond requirements
-- **Signal generation speed** - Real-time processing validation
-- **Memory usage patterns** - No memory leaks or excessive allocation
-- **Database query performance** - Optimized query execution
-- **WebSocket throughput** - High-frequency message handling
-
-### Load Testing Requirements
-
-- **Concurrent user simulation** - 1000+ WebSocket connections
-- **High-frequency data** - Realistic market data volumes
-- **Stress testing** - System behavior under extreme load
-- **Recovery testing** - Graceful degradation and recovery
-
-## 🎯 CLAUDE CODE TEST OPERATIONAL GUIDELINES
-
-### When Asked to Write Tests
-
-1. **ASSESS REQUIREMENTS**: "Testing [X] behavior with [Y] test scenarios"
-2. **VALIDATE TEST APPROACH**: "Tests will verify correct behavior by [method]"
-3. **CHECK MOCK USAGE**: "Using structured mocks from **mocks**/ directory"
-4. **CONFIRM COVERAGE**: "Tests cover [scenarios] with >95% coverage"
-5. **VERIFY REALISM**: "Test data uses realistic market conditions"
-
-### Test Quality Checklist
-
-- [ ] Tests detect bugs in implementation
-- [ ] Test data is realistic and market-compliant
-- [ ] Mocks are properly structured in **mocks**/
-- [ ] All async operations properly handled
-- [ ] Performance requirements met (<100ms per test)
-- [ ] No flaky or non-deterministic behavior
-- [ ] Comprehensive edge case coverage
-- [ ] Clear, descriptive test names and assertions
-
-### When Tests Fail
-
-```
-🧪 TEST FAILURE DETECTED 🧪
-
-Failed test: [test name]
-Failure type: [assertion failure/timeout/error]
-Expected: [expected value]
-Actual: [actual value]
-
-Analysis required:
-1. Is the test expectation correct?
-2. Is the implementation buggy?
-3. Are mocks configured properly?
-4. Is test data realistic?
-
-Action: Fix the underlying issue, not the test.
+    // Reset all mocks
+    resetAllMocks();
+});
 ```
 
-## 📋 TEST MAINTENANCE STANDARDS
+### 🎯 DETECTOR TESTING PATTERNS
 
-### Regular Test Maintenance
+#### Signal Quality Testing
 
-- **Weekly test suite health check** - All tests passing, good performance
-- **Monthly mock validation** - Ensure mocks match real system behavior
-- **Quarterly test data refresh** - Update with current market conditions
-- **Annual test architecture review** - Optimize test patterns and coverage
+```typescript
+describe("AbsorptionDetector", () => {
+    // ✅ REQUIRED: Test null returns for insufficient data
+    it("should return null for insufficient trade data", () => {
+        const insufficientTrades = generateTrades(2); // Less than minimum
+        const result = detector.detect(insufficientTrades);
+        expect(result).toBeNull();
+    });
 
-### Test Documentation Requirements
+    // ✅ REQUIRED: Test realistic market scenarios
+    it("should generate valid signals for strong absorption patterns", () => {
+        const strongPattern = generateStrongAbsorptionPattern();
+        const result = detector.detect(strongPattern);
 
-- **Document complex test scenarios** - Why specific test cases exist
-- **Maintain test data documentation** - What test data represents
-- **Document mock behavior** - How mocks simulate real systems
-- **Keep test instructions current** - Setup and execution procedures
+        expect(result).not.toBeNull();
+        expect(result!.confidence).toBeGreaterThan(0.7);
+        expect(result!.price).toBeCloseTo(expectedPrice, 2);
+    });
+
+    // ✅ REQUIRED: Test edge cases
+    it("should handle extreme market conditions", () => {
+        const extremeVolatility = generateExtremeVolatilityTrades();
+        const result = detector.detect(extremeVolatility);
+
+        // Should not crash, should return valid result or null
+        expect(() => detector.detect(extremeVolatility)).not.toThrow();
+    });
+});
+```
+
+#### FinancialMath Usage Testing
+
+```typescript
+describe("FinancialMath Integration", () => {
+    // ✅ REQUIRED: Verify FinancialMath usage
+    it("should use FinancialMath for all price calculations", () => {
+        const spy = jest.spyOn(FinancialMath, "calculateMidPrice");
+
+        detector.detect(testTrades);
+
+        expect(spy).toHaveBeenCalledWith(
+            expect.any(Number),
+            expect.any(Number),
+            expect.any(Number)
+        );
+    });
+
+    // ✅ REQUIRED: Test tick size compliance
+    it("should respect tick size constraints", () => {
+        const result = detector.detect(tickSizeTestTrades);
+
+        if (result !== null) {
+            const tickSize = 0.01; // For $10-$100 range
+            const tickCompliant = result.price % tickSize === 0;
+            expect(tickCompliant).toBe(true);
+        }
+    });
+});
+```
+
+### 🧪 MOCKING STANDARDS
+
+#### Mock Directory Structure
+
+```
+__mocks__/
+├── binance.ts          # Binance API mocks
+├── websocket.ts        # WebSocket connection mocks
+├── database.ts         # Database operation mocks
+├── logger.ts          # Logging system mocks
+├── config.ts          # Configuration mocks
+└── marketData.ts      # Market data generation mocks
+```
+
+#### Mock Implementation Standards
+
+```typescript
+// ✅ REQUIRED: __mocks__/binance.ts
+export const mockBinanceClient = {
+    trades: jest.fn(),
+    depth: jest.fn(),
+    // All methods return realistic data
+};
+
+export const mockWebSocket = {
+    on: jest.fn(),
+    send: jest.fn(),
+    close: jest.fn(),
+    // Proper event emission simulation
+};
+
+// ✅ REQUIRED: Mock data generators
+export const generateRealisticTrades = (
+    count: number
+): EnrichedTradeEvent[] => {
+    return Array.from({ length: count }, (_, i) => ({
+        id: `trade_${i}`,
+        symbol: "LTCUSDT",
+        price: 65.0 + (Math.random() - 0.5) * 2, // Realistic price range
+        quantity: 1 + Math.random() * 10, // Realistic volume
+        timestamp: Date.now() + i * 1000,
+        buyerIsMaker: Math.random() > 0.5,
+        // All required fields with realistic values
+    }));
+};
+```
+
+### 📊 PERFORMANCE TESTING
+
+#### Latency Testing Standards
+
+```typescript
+describe("Performance Requirements", () => {
+    // ✅ REQUIRED: Sub-millisecond latency testing
+    it("should process trades under 1ms", () => {
+        const trades = generateTrades(100);
+
+        const start = performance.now();
+        for (const trade of trades) {
+            detector.detect(trade);
+        }
+        const end = performance.now();
+
+        const avgLatency = (end - start) / trades.length;
+        expect(avgLatency).toBeLessThan(1); // Sub-millisecond requirement
+    });
+
+    // ✅ REQUIRED: Memory leak testing
+    it("should not have memory leaks under load", () => {
+        const initialMemory = process.memoryUsage().heapUsed;
+        const trades = generateTrades(1000);
+
+        for (const trade of trades) {
+            detector.detect(trade);
+        }
+
+        const finalMemory = process.memoryUsage().heapUsed;
+        const memoryIncrease = finalMemory - initialMemory;
+
+        // Allow reasonable memory increase, but detect leaks
+        expect(memoryIncrease).toBeLessThan(10 * 1024 * 1024); // 10MB limit
+    });
+});
+```
+
+### 🎯 INTEGRATION TESTING
+
+#### End-to-End Testing Standards
+
+```typescript
+describe("Signal Processing Pipeline", () => {
+    // ✅ REQUIRED: Full pipeline testing
+    it("should process trades through complete signal pipeline", async () => {
+        const trades = generateRealisticTradeSequence();
+
+        // Process through preprocessor
+        const enrichedTrades = await preprocessor.process(trades);
+
+        // Process through detectors
+        const signals = await Promise.all(
+            enrichedTrades.map((trade) =>
+                Promise.all(detectors.map((detector) => detector.detect(trade)))
+            )
+        );
+
+        // Process through signal manager
+        const processedSignals = await signalManager.process(signals.flat());
+
+        // Validate signal quality
+        expect(processedSignals.length).toBeGreaterThan(0);
+        processedSignals.forEach((signal) => {
+            expect(signal.confidence).toBeGreaterThan(0.5);
+        });
+    });
+
+    // ✅ REQUIRED: Error handling testing
+    it("should handle detector failures gracefully", async () => {
+        // Simulate detector failure
+        jest.spyOn(absorptionDetector, "detect").mockRejectedValue(
+            new Error("Test error")
+        );
+
+        const result = await signalCoordinator.processTrade(testTrade);
+
+        // Should not crash the system
+        expect(result).toBeDefined();
+        // Should log the error
+        expect(logger.error).toHaveBeenCalled();
+    });
+});
+```
+
+### 📈 COVERAGE REQUIREMENTS
+
+#### Coverage Standards
+
+```typescript
+// ✅ REQUIRED: Coverage configuration
+{
+    coverage: {
+        reporter: ['text', 'lcov', 'html'],
+        exclude: [
+            'node_modules/',
+            'dist/',
+            'test/',
+            '**/*.d.ts',
+            '**/*.config.ts',
+            // Exclude generated files
+            'src/generated/',
+            // Exclude simple getters/setters
+            '**/types/',
+        ],
+        thresholds: {
+            global: {
+                branches: 95,
+                functions: 95,
+                lines: 95,
+                statements: 95
+            },
+            // Specific thresholds for critical files
+            'src/indicators/*.ts': {
+                branches: 98,
+                functions: 98,
+                lines: 98,
+                statements: 98
+            }
+        }
+    }
+}
+```
+
+#### Coverage Analysis
+
+```typescript
+describe("Coverage Validation", () => {
+    // ✅ REQUIRED: Test all code paths
+    it("should test all detector states", () => {
+        // Test initialization
+        const detector = new AbsorptionDetector(config);
+
+        // Test with various data conditions
+        const emptyData = detector.detect([]);
+        expect(emptyData).toBeNull();
+
+        const minimalData = detector.detect(generateTrades(3));
+        // Test minimal data handling
+
+        const fullData = detector.detect(generateTrades(100));
+        // Test full processing pipeline
+    });
+
+    // ✅ REQUIRED: Test error conditions
+    it("should handle all error scenarios", () => {
+        // Test invalid configuration
+        expect(() => new AbsorptionDetector(invalidConfig)).toThrow();
+
+        // Test network failures
+        mockNetworkFailure();
+        const result = detector.detect(testTrades);
+        expect(result).toBeNull();
+
+        // Test data corruption
+        const corruptedData = corruptTradeData(testTrades);
+        expect(() => detector.detect(corruptedData)).not.toThrow();
+    });
+});
+```
+
+### 🚨 TEST INTEGRITY VIOLATIONS
+
+```
+🧪 TEST INTEGRITY VIOLATION DETECTED 🧪
+Violation type: [specific violation]
+File: [test_filename]
+Test: [test_name]
+This violates institutional testing standards.
+Required corrections: [specific fixes needed]
+This change is PROHIBITED - fix the implementation, not the tests.
+```
+
+#### Common Violations
+
+- **Adjusting test expectations** to match buggy detector logic
+- **Using inline mocks** instead of `__mocks__/` directory
+- **Skipping edge case testing** for complex algorithms
+- **Lowering coverage requirements** for critical trading logic
+- **Using unrealistic test data** that doesn't reflect market conditions
+
+### 📋 TESTING CHECKLIST
+
+#### Pre-commit Test Validation
+
+- [ ] **ALL tests pass** with zero failures
+- [ ] **Coverage >95%** for all metrics (branches, functions, lines, statements)
+- [ ] **NO test integrity violations** - tests validate correct behavior
+- [ ] **ALL edge cases tested** for critical trading logic
+- [ ] **FinancialMath usage verified** in all detector tests
+- [ ] **Tick size compliance tested** for all price calculations
+- [ ] **Error handling validated** for all failure scenarios
+- [ ] **Performance requirements met** for latency and memory usage
+
+#### Test Quality Metrics
+
+- [ ] **Realistic test data** - uses actual market data patterns
+- [ ] **Comprehensive mocking** - all external dependencies mocked
+- [ ] **Proper async handling** - all async operations properly tested
+- [ ] **Memory leak detection** - tests run without memory growth
+- [ ] **Cross-platform compatibility** - tests work in all environments
 
 ---
 
-**REMEMBER**: Tests are the first line of defense against bugs in production trading systems. Never compromise test integrity for convenience. Always fix the code, never the tests (unless the test itself is wrong).
+## 📚 SPECIALIZED GUIDANCE
 
-For all other institutional standards, architecture patterns, and development guidelines, refer to the main `/Users/marcschot/Projects/OrderFlow Trading/CLAUDE.md` file.
+**For specialized testing standards, see:**
+
+- **General Development**: `src/CLAUDE.md` - Development patterns and coding standards
+- **Detector Development**: `src/indicators/CLAUDE.md` - Pattern detection testing
+- **Project Overview**: `/CLAUDE.md` - Complete system architecture
+
+**Built for institutional trading with zero tolerance for test integrity violations.**

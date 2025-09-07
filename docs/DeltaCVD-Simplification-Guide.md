@@ -188,8 +188,8 @@ node run_hierarchical_backtest.js --detector deltaCVDDetector --verbose
 
 ### File Changes
 
-- **`src/indicators/deltaCVDConfirmation.ts`**: Enhanced CVD calculation logic
-- **`src/backtesting/configMatrix.ts`**: A/B test configuration framework
+- **`backend/src/indicators/deltaCVDConfirmation.ts`**: Enhanced CVD calculation logic
+- **`backend/src/backtesting/configMatrix.ts`**: A/B test configuration framework
 
 ### Key Methods Modified
 

@@ -51,8 +51,8 @@ yarn test:deltacvd-ab --data ./historical_data.json --output ./results
 ### Programmatic Usage
 
 ```typescript
-import { DeltaCVDABTestFramework } from "./src/backtesting/deltaCVDABTestFramework";
-import { DeltaCVDABMonitor } from "./src/analysis/deltaCVDABMonitor";
+import { DeltaCVDABTestFramework } from "./backend/src/backtesting/deltaCVDABTestFramework";
+import { DeltaCVDABMonitor } from "./backend/src/analysis/deltaCVDABMonitor";
 
 // Initialize framework
 const framework = new DeltaCVDABTestFramework(logger, metricsCollector);
@@ -70,11 +70,11 @@ console.log(`Speed Improvement: ${comparison.processingSpeedGain}%`);
 ### Real-time Integration
 
 ```typescript
-import { DeltaCVDWithABTesting } from "./src/indicators/deltaCVDWithABTesting";
+import { DeltaCVDWithABTesting } from "./backend/src/indicators/deltaCVDWithABTesting";
 import {
     DeltaCVDABMonitor,
     AllocationStrategy,
-} from "./src/analysis/deltaCVDABMonitor";
+} from "./backend/src/analysis/deltaCVDABMonitor";
 
 // Create A/B monitor
 const abMonitor = new DeltaCVDABMonitor(logger, metricsCollector);

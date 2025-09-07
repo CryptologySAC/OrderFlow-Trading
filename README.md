@@ -27,8 +27,34 @@
 ### Prerequisites
 
 - Node.js >= 23.x
-- Yarn package manager
+- Yarn package manager (v4.9.2+)
 - SQLite database
+- TypeScript 5.9.2+
+- Modern web browser (for dashboard)
+
+### Project Structure
+
+```
+├── backend/                 # Main application code
+│   ├── src/                # TypeScript source files
+│   │   ├── core/          # Configuration and error handling
+│   │   ├── infrastructure/# Logging, database, circuit breakers
+│   │   ├── indicators/    # Pattern detection algorithms
+│   │   ├── market/        # Order book and preprocessing
+│   │   ├── multithreading/# Worker thread management
+│   │   ├── services/      # Signal coordination and alerts
+│   │   ├── storage/       # Data persistence layer
+│   │   ├── trading/       # Signal processing and trading logic
+│   │   ├── utils/         # Financial math utilities
+│   │   └── websocket/     # WebSocket connection management
+│   └── test/              # Test files and mocks
+├── frontend/               # Dashboard web application
+├── public/                 # Static web assets
+├── docs/                   # Documentation
+├── analysis/               # Analysis and backtesting scripts
+├── scripts/                # Build and utility scripts
+└── config.json            # Main configuration file
+```
 
 ### Installation & Setup
 
@@ -42,21 +68,40 @@ yarn build
 # Run in development mode
 yarn start:dev
 
+# Run in production mode
+yarn start
+
 # Run tests
 yarn test
 
-# Run with coverage
+# Run tests with coverage
 yarn test:coverage
+
+# Run linting and type checking
+yarn check
 ```
+
+### Key Dependencies
+
+- **@binance/spot**: Official Binance API client
+- **ws**: WebSocket library for real-time data
+- **better-sqlite3**: High-performance SQLite database
+- **zod**: Runtime type validation
+- **pino**: High-performance logging
+- **vitest**: Fast unit testing framework
+- **chart.js**: Real-time charting for dashboard
 
 ### Development Commands
 
 ```bash
-yarn check          # Validate lint, build, and test
+yarn check          # Validate lint, typecheck, build, and test
 yarn lint           # Run ESLint with auto-fix
+yarn lint:frontend  # Run ESLint for frontend code
 yarn format         # Format code with Prettier
+yarn typecheck      # Run TypeScript type checking
 yarn build:watch    # Build with watch mode
-yarn backtest       # Run backtesting framework
+yarn clean          # Clean build artifacts
+yarn check:deps     # Validate dependency integrity
 ```
 
 ## 🏗️ Architecture Overview
@@ -228,8 +273,8 @@ They will auto-run `lint`, `test`, and `prettier` before commit/push.
 
 ### Configuration Changes
 
-- **Update TypeScript interfaces** in `src/types/configTypes.ts`
-- **Validate new options** in `src/core/config.ts`
+- **Update TypeScript interfaces** in `backend/src/types/configTypes.ts`
+- **Validate new options** in `backend/src/core/config.ts`
 - **Document parameter ranges** and effects
 - **Test backward compatibility**
 
@@ -237,10 +282,10 @@ They will auto-run `lint`, `test`, and `prettier` before commit/push.
 
 ### Production-Critical Files (NO MODIFICATIONS WITHOUT APPROVAL)
 
-- `src/trading/dataStreamManager.ts` - Market data connectivity
-- `src/market/orderFlowPreprocessor.ts` - Core trade processing
-- `src/indicators/*/` - All pattern detection algorithms
-- `src/services/signalCoordinator.ts` - Signal processing pipeline
+- `backend/src/trading/dataStreamManager.ts` - Market data connectivity
+- `backend/src/market/orderFlowPreprocessor.ts` - Core trade processing
+- `backend/src/indicators/*/` - All pattern detection algorithms
+- `backend/src/services/signalCoordinator.ts` - Signal processing pipeline
 - `.env` - **CRITICAL: Contains production API keys**
 
 ### Prohibited Practices
