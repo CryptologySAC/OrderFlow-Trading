@@ -26,7 +26,7 @@ The Signal Validation Logging System is a comprehensive performance tracking and
 
 ### Core Components
 
-1. **SignalValidationLogger** (`src/utils/signalValidationLogger.ts`)
+1. **SignalValidationLogger** (`backend/src/utils/signalValidationLogger.ts`)
     - Central logging coordinator for all signal validation activities
     - CSV file output for analysis and ML training
     - Time-based validation tracking (5min, 15min, 1hr windows)
@@ -347,7 +347,7 @@ ls -la logs/signal_validation/
 grep "SignalValidationLogger.*initialized" logs/app.log
 
 # Verify detector is calling logging methods
-grep "logSignalRejection\|logSignal" src/indicators/*Enhanced.ts
+grep "logSignalRejection\|logSignal" backend/src/indicators/*Enhanced.ts
 ```
 
 **Resolution**:

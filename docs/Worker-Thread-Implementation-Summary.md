@@ -9,7 +9,7 @@ This document summarizes the complete worker thread isolation implementation com
 ### Phase 1: Critical Fixes & Type Safety
 
 - **Fixed all worker thread isolation violations** across 4 worker threads
-- **Created shared proxy system** in `src/multithreading/shared/` directory
+- **Created shared proxy system** in `backend/src/multithreading/shared/` directory
 - **Implemented interface contracts** (`IWorkerMetricsCollector`, `IWorkerCircuitBreaker`)
 - **Resolved all TypeScript compilation errors** and ESLint violations
 - **Added BigInt support** to circuit breaker implementation
@@ -40,7 +40,7 @@ This document summarizes the complete worker thread isolation implementation com
 ### File Structure
 
 ```
-src/multithreading/
+backend/src/multithreading/
 ├── shared/                           # NEW: Shared proxy implementations
 │   ├── workerInterfaces.ts          # Interface contracts
 │   ├── workerMetricsProxy.ts        # Metrics with batching

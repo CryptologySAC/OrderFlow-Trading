@@ -12,32 +12,32 @@ Production trading system guidance for Claude Code with **ZERO TOLERANCE** for t
 
 **For specialized guidance, see:**
 
-- **General Development Standards**: `src/CLAUDE.md` - Development patterns, coding standards, and architectural principles
-- **Testing Standards**: `test/CLAUDE.md` - Test integrity, mock requirements, and validation standards
-- **Detector Development Standards**: `src/indicators/CLAUDE.md` - Pattern detection, signal processing, and optimization
+- **General Development Standards**: `backend/src/CLAUDE.md` - Development patterns, coding standards, and architectural principles
+- **Testing Standards**: `backend/test/CLAUDE.md` - Test integrity, mock requirements, and validation standards
+- **Detector Development Standards**: `backend/src/indicators/CLAUDE.md` - Pattern detection, signal processing, and optimization
 
 ### 🚨 CRITICAL PROTECTION PROTOCOLS
 
 **🔒 PRODUCTION-CRITICAL FILES (NO MODIFICATIONS WITHOUT APPROVAL):**
 
-- `src/trading/dataStreamManager.ts` - Market data connectivity
-- `src/market/orderFlowPreprocessor.ts` - Core trade processing
-- `src/indicators/*/` - Pattern detection algorithms
-- `src/services/signalCoordinator.ts` - Signal processing pipeline
-- `src/trading/signalManager.ts` - Trading signal validation
-- `src/multithreading/threadManager.ts` - Worker orchestration
-- `src/multithreading/workers/*` - All worker implementations
-- `src/multithreading/workerLogger.ts` - Worker logging
+- `backend/src/trading/dataStreamManager.ts` - Market data connectivity
+- `backend/src/market/orderFlowPreprocessor.ts` - Core trade processing
+- `backend/src/indicators/*/` - All pattern detection algorithms
+- `backend/src/services/signalCoordinator.ts` - Signal processing pipeline
+- `backend/src/trading/signalManager.ts` - Trading signal validation
+- `backend/src/multithreading/threadManager.ts` - Worker orchestration
+- `backend/src/multithreading/workers/*` - All worker implementations
+- `backend/src/multithreading/workerLogger.ts` - Worker logging
 - `/public/scripts/dashboard.js` - Production WebSocket URLs
 - `config.json` - Production configuration
 - `.env` - **CRITICAL: Production API keys - NEVER MODIFY**
 
 **⚠️ BUSINESS-CRITICAL FILES (REQUIRES VALIDATION):**
 
-- `src/infrastructure/db.ts` - Database operations
-- `src/infrastructure/migrate.ts` - Data migrations
-- `src/websocket/websocketManager.ts` - Client connections
-- `src/core/config.ts` - Configuration management
+- `backend/src/infrastructure/db.ts` - Database operations
+- `backend/src/infrastructure/migrate.ts` - Data migrations
+- `backend/src/websocket/websocketManager.ts` - Client connections
+- `backend/src/core/config.ts` - Configuration management
 
 **✅ DEVELOPMENT-SAFE FILES:**
 
@@ -98,16 +98,16 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 
 ### 📁 KEY DIRECTORIES
 
-- `src/core/` - Configuration and error handling
-- `src/infrastructure/` - Logging, metrics, circuit breakers, database
-- `src/market/` - Order book state and data preprocessing
-- `src/indicators/` - Pattern detection algorithms (see `src/indicators/CLAUDE.md`)
-- `src/services/` - Signal coordination, anomaly detection, alerts
-- `src/trading/` - Signal processing and trading logic
-- `src/storage/` - Data persistence layer
-- `src/websocket/` - WebSocket connection management
-- `src/multithreading/` - Worker thread management
-- `test/` - Test files and mocks (see `test/CLAUDE.md`)
+- `backend/src/core/` - Configuration and error handling
+- `backend/src/infrastructure/` - Logging, metrics, circuit breakers, database
+- `backend/src/market/` - Order book state and data preprocessing
+- `backend/src/indicators/` - Pattern detection algorithms (see `backend/src/indicators/CLAUDE.md`)
+- `backend/src/services/` - Signal coordination, anomaly detection, alerts
+- `backend/src/trading/` - Signal processing and trading logic
+- `backend/src/storage/` - Data persistence layer
+- `backend/src/websocket/` - WebSocket connection management
+- `backend/src/multithreading/` - Worker thread management
+- `backend/test/` - Test files and mocks (see `backend/test/CLAUDE.md`)
 
 ### 🎯 PATTERN DETECTION SYSTEM
 
@@ -141,23 +141,23 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 
 - Main config in `config.json` with symbol-specific settings
 - Environment variables override config values
-- Use `src/core/config.ts` for configuration management
-- **ALL detector configurations** documented in `src/indicators/CLAUDE.md`
+- Use `backend/src/core/config.ts` for configuration management
+- **ALL detector configurations** documented in `backend/src/indicators/CLAUDE.md`
 
 ### 🧪 TESTING FRAMEWORK
 
 **For complete testing standards, see `test/CLAUDE.md`**
 
-- Uses Vitest with setup file at `test/vitest.setup.ts`
+- Uses Vitest with setup file at `backend/test/vitest.setup.ts`
 - Extensive mocking in `__mocks__/` directory
 - **MANDATORY: >95% coverage, 100% test pass rate**
 - **Test integrity over convenience** - Fix code, never lower test standards
 
 ### 💾 DATABASE & INFRASTRUCTURE
 
-- SQLite database with migrations in `src/infrastructure/migrate.ts`
-- Database abstraction in `src/infrastructure/db.ts`
-- Custom error types in `src/core/errors.ts`
+- SQLite database with migrations in `backend/src/infrastructure/migrate.ts`
+- Database abstraction in `backend/src/infrastructure/db.ts`
+- Custom error types in `backend/src/core/errors.ts`
 - Circuit breaker pattern for external API calls
 - Correlation IDs for request tracing
 
@@ -175,7 +175,7 @@ Binance WebSocket → OrderFlowPreprocessor → Pattern Detectors → SignalCoor
 
 ### 🔢 REQUIRED STANDARDS
 
-- **FinancialMath**: Use `src/utils/financialMath.ts` for ALL calculations
+- **FinancialMath**: Use `backend/src/utils/financialMath.ts` for ALL calculations
 - **Tick Size Compliance**: Respect minimum tick sizes for price movements
 - **Data Integrity**: Trade data immutable, microsecond timestamps
 - **Performance**: Sub-millisecond latency, stable memory usage
@@ -309,6 +309,6 @@ Request explicit approval to modify this protected file.
 
 **SPECIALIZED GUIDANCE:**
 
-- **General Development**: `src/CLAUDE.md`
-- **Testing Standards**: `test/CLAUDE.md`
-- **Detector Development**: `src/indicators/CLAUDE.md`
+- **General Development**: `backend/src/CLAUDE.md`
+- **Testing Standards**: `backend/test/CLAUDE.md`
+- **Detector Development**: `backend/src/indicators/CLAUDE.md`

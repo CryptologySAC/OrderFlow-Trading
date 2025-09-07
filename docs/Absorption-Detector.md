@@ -83,7 +83,7 @@ Where:
 - Mathematical model-based approach
 - Configurable sensitivity thresholds
 
-## 🚀 Current Implementation (2024)
+## 🚀 Current Implementation
 
 ### **Constructor Pattern:**
 
@@ -104,26 +104,50 @@ const detector = new AbsorptionDetector(
 
 ```typescript
 const absorptionConfig = {
-    // Core price efficiency parameters
-    minAggVolume: 400,
-    windowMs: 60000,
-    zoneTicks: 3,
-    absorptionThreshold: 0.6,
-    priceEfficiencyThreshold: 0.85, // Key threshold for efficiency analysis
+    // Core absorption parameters (from config.json)
+    enabled: true,
+    abTestingEnabled: true,
+    minAggVolume: 174,
+    passiveAbsorptionThreshold: 0.85,
+    passiveAbsorptionThresholdElite: 0.98,
+    priceEfficiencyThreshold: 0.002,
+    maxPriceImpactRatio: 0.00007,
+    minPassiveMultiplier: 15,
+    balanceThreshold: 0.1,
+    priceStabilityTicks: 5,
+    maxVolumeMultiplierRatio: 2.5,
+    rollingWindowSize: 750,
 
-    // Volume surge integration (Phase 2)
-    volumeSurgeMultiplier: 4.0, // 4x volume surge threshold
-    imbalanceThreshold: 0.35, // 35% order flow imbalance
-    institutionalThreshold: 17.8, // 17.8 LTC institutional trades
-    burstDetectionMs: 1000, // 1-second burst detection
-    sustainedVolumeMs: 30000, // 30-second sustained analysis
-    medianTradeSize: 0.6, // Baseline trade size
+    // Timing and cooldown parameters
+    timeWindowIndex: 1,
+    eventCooldownMs: 5000,
+    expectedMovementScalingFactor: 10,
+    maxZoneCountForScoring: 5,
+    maxZonesPerSide: 5,
+    zoneHistoryWindowMs: 60000,
 
-    // Enhanced features
-    minPassiveMultiplier: 1.2,
-    maxAbsorptionRatio: 0.4,
-    icebergDetectionSensitivity: 1.0,
-    icebergConfidenceMultiplier: 1.0,
+    // Zone-specific parameters
+    absorptionZoneThreshold: 1.5,
+    minPassiveVolumeForZone: 50,
+    minAbsorptionEvents: 2,
+    absorptionDirectionThreshold: 0.6,
+    minPassiveVolumeForDirection: 10,
+    useZoneSpecificPassiveVolume: true,
+
+    // Performance optimization
+    performanceOptimization: {
+        maxEventsPerZone: 25,
+        eventRetentionMs: 60000,
+        memoryMonitoringThreshold: 0.1,
+        prioritizationWeights: {
+            recency: 0.4,
+            confidence: 0.4,
+            significance: 0.2,
+        },
+        optimizationEnabled: true,
+        memoryCheckIntervalMs: 30000,
+        maxMemoryReductionPercent: 95,
+    },
 };
 ```
 

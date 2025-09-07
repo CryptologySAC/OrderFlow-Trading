@@ -37,14 +37,14 @@ The OrderFlow Trading System employs a production-grade storage architecture des
 
 ### Core Storage Files
 
-| File                                          | Status                  | Purpose                                           |
-| --------------------------------------------- | ----------------------- | ------------------------------------------------- |
-| `src/multithreading/storage.ts`               | ✅ **PRODUCTION READY** | Main storage class with institutional-grade fixes |
-| `src/storage/pipelineStorage.ts`              | ✅ **PRODUCTION READY** | Signal processing storage with memory limits      |
-| `src/multithreading/workers/storageWorker.ts` | ✅ **PRODUCTION READY** | Worker thread with enhanced type safety           |
-| `src/storage/storageResourceManager.ts`       | ✅ **PRODUCTION READY** | Centralized resource cleanup manager              |
-| `src/storage/storageHealthMonitor.ts`         | ✅ **PRODUCTION READY** | Health monitoring with circuit breaker            |
-| `src/storage/typeGuards.ts`                   | ✅ **PRODUCTION READY** | Runtime type validation utilities                 |
+| File                                                  | Status                  | Purpose                                           |
+| ----------------------------------------------------- | ----------------------- | ------------------------------------------------- |
+| `backend/src/multithreading/storage.ts`               | ✅ **PRODUCTION READY** | Main storage class with institutional-grade fixes |
+| `backend/src/storage/pipelineStorage.ts`              | ✅ **PRODUCTION READY** | Signal processing storage with memory limits      |
+| `backend/src/multithreading/workers/storageWorker.ts` | ✅ **PRODUCTION READY** | Worker thread with enhanced type safety           |
+| `backend/src/storage/storageResourceManager.ts`       | ✅ **PRODUCTION READY** | Centralized resource cleanup manager              |
+| `backend/src/storage/storageHealthMonitor.ts`         | ✅ **PRODUCTION READY** | Health monitoring with circuit breaker            |
+| `backend/src/storage/typeGuards.ts`                   | ✅ **PRODUCTION READY** | Runtime type validation utilities                 |
 
 ### Database Schema
 

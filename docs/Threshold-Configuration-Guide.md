@@ -30,7 +30,7 @@ This guide documents the comprehensive threshold configuration system implemente
 
 ### AbsorptionDetector
 
-**File**: `src/indicators/absorptionDetector.ts`
+**File**: `backend/src/indicators/absorptionDetector.ts`
 
 **Critical Fix**:
 
@@ -75,7 +75,7 @@ export interface AbsorptionSettings extends BaseDetectorSettings {
 
 ### ExhaustionDetector
 
-**File**: `src/indicators/exhaustionDetector.ts`
+**File**: `backend/src/indicators/exhaustionDetector.ts`
 
 **Changes**: Made scoring thresholds configurable
 
@@ -116,7 +116,7 @@ export interface ExhaustionSettings extends BaseDetectorSettings {
 
 ### DeltaCVDConfirmation
 
-**File**: `src/indicators/deltaCVDConfirmation.ts`
+**File**: `backend/src/indicators/deltaCVDConfirmation.ts`
 
 **Changes**: Made correlation and depth imbalance thresholds configurable
 
@@ -154,7 +154,7 @@ export interface DeltaCVDConfirmationSettings extends BaseDetectorSettings {
 
 ### AccumulationZoneDetector
 
-**File**: `src/types/zoneTypes.ts`
+**File**: `backend/src/types/zoneTypes.ts`
 
 **Changes**: Made zone formation thresholds configurable
 
@@ -223,7 +223,7 @@ config.json → Settings Interface → Constructor → Runtime Usage
 
 ### ConfigMatrix Updates
 
-**File**: `src/backtesting/configMatrix.ts`
+**File**: `backend/src/backtesting/configMatrix.ts`
 
 **Additions**:
 

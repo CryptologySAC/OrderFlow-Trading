@@ -6,14 +6,14 @@
 
 ## 🏗️ Component Status
 
-| Component            | File                                          | Status              | Last Updated |
-| -------------------- | --------------------------------------------- | ------------------- | ------------ |
-| **Main Storage**     | `src/multithreading/storage.ts`               | ✅ PRODUCTION READY | 2024         |
-| **Pipeline Storage** | `src/storage/pipelineStorage.ts`              | ✅ PRODUCTION READY | 2024         |
-| **Storage Worker**   | `src/multithreading/workers/storageWorker.ts` | ✅ PRODUCTION READY | 2024         |
-| **Resource Manager** | `src/storage/storageResourceManager.ts`       | ✅ PRODUCTION READY | 2024         |
-| **Health Monitor**   | `src/storage/storageHealthMonitor.ts`         | ✅ PRODUCTION READY | 2024         |
-| **Type Guards**      | `src/storage/typeGuards.ts`                   | ✅ PRODUCTION READY | 2024         |
+| Component            | File                                                  | Status              | Last Updated |
+| -------------------- | ----------------------------------------------------- | ------------------- | ------------ |
+| **Main Storage**     | `backend/src/multithreading/storage.ts`               | ✅ PRODUCTION READY | 2024         |
+| **Pipeline Storage** | `backend/src/storage/pipelineStorage.ts`              | ✅ PRODUCTION READY | 2024         |
+| **Storage Worker**   | `backend/src/multithreading/workers/storageWorker.ts` | ✅ PRODUCTION READY | 2024         |
+| **Resource Manager** | `backend/src/storage/storageResourceManager.ts`       | ✅ PRODUCTION READY | 2024         |
+| **Health Monitor**   | `backend/src/storage/storageHealthMonitor.ts`         | ✅ PRODUCTION READY | 2024         |
+| **Type Guards**      | `backend/src/storage/typeGuards.ts`                   | ✅ PRODUCTION READY | 2024         |
 
 ## 🔧 Critical Fixes Applied
 
