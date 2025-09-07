@@ -1,1 +1,0 @@
-configId,detectorType,totalSignals,truePositives,falsePositives,missedMovements,precision,recall,f1Score,accuracy,directionAccuracy,avgSignalToMovementDelay,avgSignalConfidence,signalFrequency
