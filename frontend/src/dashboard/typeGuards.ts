@@ -316,12 +316,11 @@ export function transformSignalData(wsData: SignalMessage["data"]): SignalData {
     return {
         id: wsData["id"],
         type: wsData["type"],
-        side: wsData["aggressor"],
         price: wsData["price"],
-        time: wsData["timestamp"],
-        confidence: wsData["strength"] / 100, // Convert 0-100 to 0-1
+        time: wsData["time"],
+        confidence: wsData["confidence"]?? 0 / 100, // Convert 0-100 to 0-1
         signalData: {
-            confidence: wsData["strength"] / 100,
+            confidence: wsData["confidence"]?? 0 / 100,
             meta: {
                 detector: wsData["detector"],
             },

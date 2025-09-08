@@ -7,21 +7,24 @@ import {
     rsiCanvas,
     rangeSelector,
     signalFilters,
-    //signalsList,
+    signalsList,
     activeRange,
     //dedupTolerance,
     PADDING_FACTOR,
     NINETHY_MINUTES,
 } from "./state.js";
 import {
+    AnnotationOptions,
+} from "chartjs-plugin-annotation";
+import {
     cleanupOldSupportResistanceLevels,
     cleanupOldZones,
 
     //checkSupportResistanceBreaches,
-    //buildSignalLabel,
-    //handleSupportResistanceLevel,
-    //handleZoneUpdate,
-    //handleZoneSignal,
+    buildSignalLabel,
+    handleSupportResistanceLevel,
+    handleZoneUpdate,
+    handleZoneSignal,
 } from "./charts.js";
 import { TradeChart } from "./tradeChart.js";
 import { OrderBookChart } from "./orderBookChart.js";
@@ -48,15 +51,15 @@ import type {
     RsiMessage,
     SignalMessage,
     AnomalyMessage,
-    //SupportResistanceLevelMessage,
-    //ZoneUpdateMessage,
-    //ZoneSignalMessage,
+    SupportResistanceLevelMessage,
+    ZoneUpdateMessage,
+    ZoneSignalMessage,
 } from "../types.js";
 import { MessageType } from "../types.js";
 import type {
     Signal,
     SupportResistanceLevel,
-    //ZoneData,
+    ZoneData,
 } from "../frontend-types.js";
 import type { Anomaly } from "../frontend-types.js";
 
@@ -322,7 +325,7 @@ function handleMessage(message: WebSocketMessage): void {
             htmlActions.addAnomaly(anomaly);
             break;
 
-        /*
+        
         case "signal":
             const signal: Signal = (message as SignalMessage).data as Signal;
             if (isValidSignalData(signal)) {
@@ -333,12 +336,13 @@ function handleMessage(message: WebSocketMessage): void {
                     signalsList.length = 50;
                 }
                 renderSignalsList();
-                if (tradesChart) {
-                    const chartInstance = tradesChart as ChartInstance;
+                
+                if (tradeChart.tradeChart) {
+                    const chartInstance = tradeChart.tradeChart;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
                     const annotation = (plugins as any).annotation;
-                    const annotations = (annotation as any).annotations;
+                    const annotations = annotation.annotations as Record<string, AnnotationOptions<"label">>;
                     if (annotations) {
                         annotations[id] = {
                             type: "label",
@@ -357,25 +361,25 @@ function handleMessage(message: WebSocketMessage): void {
                                 x: "center",
                                 y: "center",
                             },
-                        } as ChartAnnotation;
-                        (tradesChart as ChartInstance).update("none");
+                        } as AnnotationOptions<"label">;
+                        tradeChart.tradeChart.update("default");
                     }
                 }
                 console.log("Signal label added:", label);
             }
             break;
 
-        /*
+        
 
         case "supportResistanceLevel":
-            const level = message.data as SupportResistanceLevel;
+            const level = (message as SupportResistanceLevelMessage).data as SupportResistanceLevel;
             if (isValidSupportResistanceData(level)) {
                 handleSupportResistanceLevel({ data: level });
             }
             break;
 
         case "zoneUpdate":
-            const zoneUpdate = message.data as ZoneUpdateEvent;
+            const zoneUpdate = (message as ZoneUpdateMessage).data as ZoneUpdateEvent;
             if (isValidZoneUpdateData(zoneUpdate)) {
                 // Transform ZoneVisualizationData to ZoneData
                 const zoneData: ZoneData = {
@@ -401,7 +405,7 @@ function handleMessage(message: WebSocketMessage): void {
             break;
 
         case "zoneSignal":
-            const zoneSignal = message.data as ZoneSignalEvent;
+            const zoneSignal = (message as ZoneSignalMessage).data as ZoneSignalEvent;
             if (isValidZoneSignalData(zoneSignal)) {
                 // Transform ZoneVisualizationData to ZoneData
                 const zoneData: ZoneData = {
@@ -428,12 +432,7 @@ function handleMessage(message: WebSocketMessage): void {
                 });
             }
             break;
-*/
-        case "stats":
-            break;
-
         default:
-            //console.warn("Unknown message type:", message.type);
             break;
     }
 }

@@ -47,7 +47,7 @@ const POINT_RADIUS_TINY = 5;
 const POINT_RADIUS_MINIMAL = 2;
 
 export class TradeChart {
-    private readonly tradeChart: Chart<"scatter">;
+    public readonly tradeChart: Chart<"scatter">;
     private lastTradeUpdate = Date.now();
     private lastTradeLongUpdate = Date.now();
     private _activeRange: number = NINETHY_MINUTES;

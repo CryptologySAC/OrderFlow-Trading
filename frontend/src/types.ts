@@ -1,3 +1,6 @@
+import { Signal, SupportResistanceLevel } from "./frontend-types.js";
+import { ZoneUpdateEvent, ZoneSignalEvent } from "./dashboard/types.js";
+
 export enum MessageType {
     // Client to Server
     PING = "ping",
@@ -39,15 +42,7 @@ export interface TradeMessage extends BaseMessage {
 // Signal message
 export interface SignalMessage extends BaseMessage {
     type: MessageType.SIGNAL;
-    data: {
-        id: string;
-        type: string;
-        strength: number;
-        price: number;
-        timestamp: number;
-        aggressor: "buy" | "sell";
-        detector: string;
-    };
+    data: Signal;
 }
 
 // Stats update message
@@ -162,19 +157,19 @@ export interface RuntimeConfigMessage extends BaseMessage {
 // Support resistance level message
 export interface SupportResistanceLevelMessage extends BaseMessage {
     type: MessageType.SUPPORTRESISTANCELEVEL;
-    data: Record<string, unknown>;
+    data: SupportResistanceLevel;
 }
 
 // Zone update message
 export interface ZoneUpdateMessage extends BaseMessage {
     type: MessageType.ZONEUPDATE;
-    data: Record<string, unknown>;
+    data: ZoneUpdateEvent;
 }
 
 // Zone signal message
 export interface ZoneSignalMessage extends BaseMessage {
     type: MessageType.ZONESIGNAL;
-    data: Record<string, unknown>;
+    data: ZoneSignalEvent;
 }
 
 // --- Client-side Messages ---

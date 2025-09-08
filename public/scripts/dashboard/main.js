@@ -1,6 +1,6 @@
 import * as Config from "../config.js";
-import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, signalFilters, activeRange, PADDING_FACTOR, NINETHY_MINUTES, } from "./state.js";
-import { cleanupOldSupportResistanceLevels, cleanupOldZones, } from "./charts.js";
+import { tradesCanvas, orderBookCanvas, rsiCanvas, rangeSelector, signalFilters, signalsList, activeRange, PADDING_FACTOR, NINETHY_MINUTES, } from "./state.js";
+import { cleanupOldSupportResistanceLevels, cleanupOldZones, buildSignalLabel, handleSupportResistanceLevel, handleZoneUpdate, handleZoneSignal, } from "./charts.js";
 import { TradeChart } from "./tradeChart.js";
 import { OrderBookChart } from "./orderBookChart.js";
 import { RsiChart } from "./rsiChart.js";
@@ -188,7 +188,103 @@ function handleMessage(message) {
             const anomaly = message.data;
             htmlActions.addAnomaly(anomaly);
             break;
-        case "stats":
+        case "signal":
+            const signal = message.data;
+            if (isValidSignalData(signal)) {
+                const label = buildSignalLabel(signal);
+                const id = signal.id;
+                signalsList.unshift(signal);
+                if (signalsList.length > 50) {
+                    signalsList.length = 50;
+                }
+                renderSignalsList();
+                if (tradeChart.tradeChart) {
+                    const chartInstance = tradeChart.tradeChart;
+                    const chartOptions = chartInstance.options;
+                    const plugins = chartOptions.plugins;
+                    const annotation = plugins.annotation;
+                    const annotations = annotation.annotations;
+                    if (annotations) {
+                        annotations[id] = {
+                            type: "label",
+                            xValue: signal.time,
+                            yValue: signal.price,
+                            content: label,
+                            backgroundColor: "rgba(90, 50, 255, 0.5)",
+                            color: "white",
+                            font: {
+                                size: 12,
+                                family: "monospace",
+                            },
+                            borderRadius: 4,
+                            padding: 8,
+                            position: {
+                                x: "center",
+                                y: "center",
+                            },
+                        };
+                        tradeChart.tradeChart.update("default");
+                    }
+                }
+                console.log("Signal label added:", label);
+            }
+            break;
+        case "supportResistanceLevel":
+            const level = message.data;
+            if (isValidSupportResistanceData(level)) {
+                handleSupportResistanceLevel({ data: level });
+            }
+            break;
+        case "zoneUpdate":
+            const zoneUpdate = message.data;
+            if (isValidZoneUpdateData(zoneUpdate)) {
+                const zoneData = {
+                    id: zoneUpdate.zone.id,
+                    type: zoneUpdate.zone.type,
+                    priceRange: {
+                        min: zoneUpdate.zone.priceRange.min,
+                        max: zoneUpdate.zone.priceRange.max,
+                        center: zoneUpdate.zone.priceRange.center,
+                    },
+                    volume: zoneUpdate.zone.volume,
+                    timestamp: zoneUpdate.zone.lastUpdate,
+                    strength: zoneUpdate.zone.strength,
+                    startTime: zoneUpdate.zone.startTime,
+                    confidence: zoneUpdate.zone.confidence,
+                };
+                handleZoneUpdate({
+                    updateType: zoneUpdate.updateType,
+                    zone: zoneData,
+                    significance: zoneUpdate.significance,
+                });
+            }
+            break;
+        case "zoneSignal":
+            const zoneSignal = message.data;
+            if (isValidZoneSignalData(zoneSignal)) {
+                const zoneData = {
+                    id: zoneSignal.zone.id,
+                    type: zoneSignal.zone.type,
+                    priceRange: {
+                        min: zoneSignal.zone.priceRange.min,
+                        max: zoneSignal.zone.priceRange.max,
+                        center: zoneSignal.zone.priceRange.center,
+                    },
+                    volume: zoneSignal.zone.volume,
+                    timestamp: zoneSignal.zone.lastUpdate,
+                    strength: zoneSignal.zone.strength,
+                    startTime: zoneSignal.zone.startTime,
+                    confidence: zoneSignal.zone.confidence,
+                };
+                handleZoneSignal({
+                    signalType: zoneSignal.signalType,
+                    zone: zoneData,
+                    actionType: zoneSignal.actionType,
+                    confidence: zoneSignal.confidence,
+                    urgency: "medium",
+                    expectedDirection: zoneSignal.expectedDirection,
+                });
+            }
             break;
         default:
             break;
