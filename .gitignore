@@ -27,3 +27,4 @@ analysis/reports/*
 .cursor/
 .husky/
 .vscode/
+rust/target/*

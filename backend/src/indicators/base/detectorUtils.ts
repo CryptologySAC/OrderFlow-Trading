@@ -2,7 +2,7 @@
 import { SpotWebsocketStreams } from "@binance/spot";
 import type { AggressiveTrade } from "../../types/marketEvents.js";
 import { randomUUID } from "crypto";
-import { FinancialMath } from "../../utils/financialMath.js";
+import { FinancialMath } from "../../utils/financialMathRustDropIn.js";
 
 /**
  * @deprecated This class is being migrated to use FinancialMath for all calculations.

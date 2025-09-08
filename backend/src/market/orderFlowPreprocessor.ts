@@ -18,7 +18,7 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import { randomUUID } from "crypto";
 import { IndividualTradesManager } from "../data/individualTradesManager.js";
 import { MicrostructureAnalyzer } from "../data/microstructureAnalyzer.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 import { AdaptiveZoneCalculator } from "../utils/adaptiveZoneCalculator.js";
 import type { StandardZoneConfig } from "../types/zoneTypes.js";
 import { CircularBuffer } from "../utils/circularBuffer.js";

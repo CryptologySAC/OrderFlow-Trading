@@ -12,7 +12,7 @@
 // 3. Absorption Quality: Ratio of passive to aggressive volume
 //
 
-import { FinancialMath } from "../../utils/financialMath.js";
+import { FinancialMath } from "../../utils/financialMathRustDropIn.js";
 import type { ZoneSnapshot } from "../../types/marketEvents.js";
 
 /**

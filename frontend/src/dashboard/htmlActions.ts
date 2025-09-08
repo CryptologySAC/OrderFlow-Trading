@@ -501,7 +501,7 @@ export class HTMLActions {
             case "flow_imbalance":
                 return "⇄";
             case "api_connectivity":
-                return "⚠︎"
+                return "⚠︎";
             default:
                 console.log(`ANOMALY TYPE: ${type}`);
                 return "•";

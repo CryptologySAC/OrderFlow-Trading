@@ -19,7 +19,7 @@
 //
 
 import { Detector } from "./base/detectorEnrichedTrade.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 import { TimeAwareCache } from "../utils/timeAwareCache.js";
 import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
@@ -991,7 +991,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
                     buyVolume,
                     sellVolume
                 );
-                const volumeRatio = FinancialMath.divideQuantities(
+                const volumeRatio = FinancialMath.safeDivide(
                     Math.abs(cvdDelta),
                     aggressiveVolume
                 );
@@ -1068,16 +1068,13 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             };
         }
 
-        const averageDivergence = FinancialMath.divideQuantities(
+        const averageDivergence = FinancialMath.safeDivide(
             totalDivergenceScore,
             affectedZones
         );
 
         // Apply financial precision to prevent floating point errors
-        const preciseAverageDivergence = FinancialMath.normalizeQuantity(
-            averageDivergence,
-            2
-        );
+        const preciseAverageDivergence = averageDivergence; // FinancialMath handles precision internally
         const hasDivergence = preciseAverageDivergence >= minStrength;
 
         this.logger.debug(
@@ -1128,10 +1125,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             return null;
         }
 
-        const buyRatio = FinancialMath.divideQuantities(
-            totalBuyVolume,
-            totalVolume
-        );
+        const buyRatio = FinancialMath.safeDivide(totalBuyVolume, totalVolume);
 
         // Simple CVD-based signal direction: more buying = buy signal, more selling = sell signal
         if (buyRatio > 0.6) return "buy";
@@ -1330,7 +1324,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         const totalVolume = totalAggressive + totalPassive;
         const institutionalVolumeRatio =
             totalVolume > 0
-                ? FinancialMath.divideQuantities(totalPassive, totalVolume)
+                ? FinancialMath.safeDivide(totalPassive, totalVolume)
                 : 0;
 
         // Calculate CVD-specific price efficiency using volume delta
@@ -1376,7 +1370,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
             );
 
             // Weight CVD delta by zone volume
-            const volumeWeightedCVD = FinancialMath.multiplyQuantities(
+            const volumeWeightedCVD = FinancialMath.safeMultiply(
                 Math.abs(cvdDelta),
                 zone.aggressiveVolume
             );
@@ -1397,10 +1391,7 @@ export class DeltaCVDDetectorEnhanced extends Detector {
         if (totalVolume === 0) return null;
 
         // Calculate CVD efficiency as ratio of imbalance to total volume
-        return FinancialMath.divideQuantities(
-            totalVolumeWeightedCVD,
-            totalVolume
-        );
+        return FinancialMath.safeDivide(totalVolumeWeightedCVD, totalVolume);
     }
 
     /**

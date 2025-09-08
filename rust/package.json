@@ -1,0 +1,16 @@
+{
+    "name": "financial-math-bindings",
+    "version": "0.1.0",
+    "description": "Node.js bindings for high-performance financial math library using Neon",
+    "main": "index.js",
+    "scripts": {
+        "build": "neon build --release",
+        "build:debug": "neon build"
+    },
+    "engines": {
+        "node": ">= 16"
+    },
+    "dependencies": {
+        "neon-cli": "^0.10.1"
+    }
+}
