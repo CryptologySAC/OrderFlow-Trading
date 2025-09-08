@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { RollingWindow } from "../../utils/rollingWindow.js";
-import { FinancialMath } from "../../utils/financialMath.js";
+import { FinancialMath } from "../../utils/financialMathRustDropIn.js";
 import type { ILogger } from "../../infrastructure/loggerInterface.js";
 import type { EnrichedTradeEvent } from "../../types/marketEvents.js";
 import { TraditionalIndicatorsSchema } from "../../core/config.js";

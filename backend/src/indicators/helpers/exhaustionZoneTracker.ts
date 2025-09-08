@@ -19,7 +19,7 @@
 // - Maintains original unlimited history behavior for full detection accuracy
 //
 
-import { FinancialMath } from "../../utils/financialMath.js";
+import { FinancialMath } from "../../utils/financialMathRustDropIn.js";
 import { Config } from "../../core/config.js";
 import type { ZoneSnapshot } from "../../types/marketEvents.js";
 

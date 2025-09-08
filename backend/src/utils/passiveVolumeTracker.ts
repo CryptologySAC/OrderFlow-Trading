@@ -1,6 +1,6 @@
 import { TimeAwareCache } from "./timeAwareCache.js";
 import { DepthLevel } from "./interfaces.js";
-import { FinancialMath } from "./financialMath.js";
+import { FinancialMath } from "./financialMathRustDropIn.js";
 
 /**
  * Tracks passive orderbook volume over time for refill logic.

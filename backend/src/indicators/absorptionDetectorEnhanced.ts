@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { Detector } from "./base/detectorEnrichedTrade.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";

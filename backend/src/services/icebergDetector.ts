@@ -13,7 +13,7 @@
 
 import { randomUUID } from "crypto";
 import { Detector } from "../indicators/base/detectorEnrichedTrade.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 import { Config } from "../core/config.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterface.js";

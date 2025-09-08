@@ -19,7 +19,7 @@
 
 import * as fs from "fs/promises";
 import * as path from "path";
-import { FinancialMath } from "./financialMath.js";
+import { FinancialMath } from "./financialMathRustDropIn.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type {
     SignalCandidate,

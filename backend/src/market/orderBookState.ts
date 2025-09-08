@@ -5,7 +5,7 @@ import type { IMetricsCollector } from "../infrastructure/metricsCollectorInterf
 import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { ThreadManager } from "../multithreading/threadManager.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 
 type SnapShot = Map<number, PassiveLevel>;
 

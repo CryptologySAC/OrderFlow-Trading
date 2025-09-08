@@ -6,7 +6,7 @@
 // - Maintains backward compatibility with wasSpoofed() boolean method
 import { EventEmitter } from "events";
 import { TimeAwareCache } from "../utils/timeAwareCache.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { AnomalyDetector } from "./anomalyDetector.js";
 

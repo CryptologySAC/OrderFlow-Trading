@@ -24,7 +24,7 @@ import type {
 } from "../analysis/signalTracker.js";
 import type { MarketContextCollector } from "../analysis/marketContextCollector.js";
 import { Config } from "../core/config.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 
 export interface SignalManagerConfig {
     confidenceThreshold: number;

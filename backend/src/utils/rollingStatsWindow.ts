@@ -1,4 +1,4 @@
-import { FinancialMath } from "./financialMath.js";
+import { FinancialMath } from "./financialMathRustDropIn.js";
 
 export class RollingStatsWindow {
     private readonly entries: { value: number; time: number }[] = [];

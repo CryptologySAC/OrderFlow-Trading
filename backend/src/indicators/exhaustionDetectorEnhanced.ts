@@ -1,6 +1,6 @@
 // src/indicators/exhaustionDetectorEnhanced.ts
 import { Detector } from "./base/detectorEnrichedTrade.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 import { Config } from "../core/config.js";
 import { SignalValidationLogger } from "../utils/signalValidationLogger.js";
 import {

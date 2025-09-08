@@ -6,7 +6,7 @@ import type { PassiveLevel, OrderBookHealth } from "../types/marketEvents.js";
 import type { ILogger } from "../infrastructure/loggerInterface.js";
 import type { ThreadManager } from "../multithreading/threadManager.js";
 import { RedBlackTree } from "./helpers/redBlackTree.js";
-import { FinancialMath } from "../utils/financialMath.js";
+import { FinancialMath } from "../utils/financialMathRustDropIn.js";
 import {
     type IOrderBookState,
     type OrderBookStateOptions,

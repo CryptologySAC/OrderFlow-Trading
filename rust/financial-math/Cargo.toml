@@ -1,0 +1,21 @@
+[package]
+name = "financial-math"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance financial mathematics using u128 fixed-point arithmetic"
+license = "MIT"
+authors = ["Cryptology"]
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[features]
+default = []
+serde = ["dep:serde"]
+checked = []  # Enable overflow checking
+unchecked = []  # Maximum performance, no bounds checking
