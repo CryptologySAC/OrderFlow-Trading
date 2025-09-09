@@ -13,8 +13,8 @@
  *   npx tsx analysis/analyze_success_with_price_reconstruction.ts 2025-08-12   # Specific date
  */
 import * as fs from "fs/promises";
-import { getAnalysisDate } from "../utils/getAnalysisDate";
-import { FinancialMath } from "../src/utils/financialMath";
+import { getAnalysisDate } from "../../utils/getAnalysisDate";
+import { FinancialMath } from "../backend/src/utils/financialMath";
 import {
     BaseSignal,
     SignalCluster,

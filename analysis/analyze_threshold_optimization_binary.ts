@@ -24,7 +24,7 @@ import {
     convertToLimaTime,
     PHASE_DETECTION_CONFIG,
 } from "./shared/phaseDetection.js";
-import { getDB } from "../src/infrastructure/db.js";
+import { getDB } from "../backend/src/infrastructure/db.js";
 
 import {
     CorrectPhase,

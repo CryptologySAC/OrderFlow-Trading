@@ -137,7 +137,7 @@ export interface Signal {
     type: string;
     side: "buy" | "sell";
     price: number;
-    time: number; 
+    time: number;
     confidence?: number;
     detector?: string;
     zone?: ZoneData;

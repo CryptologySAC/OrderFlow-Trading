@@ -318,9 +318,9 @@ export function transformSignalData(wsData: SignalMessage["data"]): SignalData {
         type: wsData["type"],
         price: wsData["price"],
         time: wsData["time"],
-        confidence: wsData["confidence"]?? 0 / 100, // Convert 0-100 to 0-1
+        confidence: wsData["confidence"] ?? 0 / 100, // Convert 0-100 to 0-1
         signalData: {
-            confidence: wsData["confidence"]?? 0 / 100,
+            confidence: wsData["confidence"] ?? 0 / 100,
             meta: {
                 detector: wsData["detector"],
             },

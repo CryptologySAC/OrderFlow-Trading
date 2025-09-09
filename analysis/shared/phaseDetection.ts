@@ -3,7 +3,7 @@
  * Ensures both tools use exactly the same phase detection algorithms
  */
 
-import { FinancialMath } from "../../src/utils/financialMath.js";
+import { FinancialMath } from "../../backend/src/utils/financialMath.js";
 
 // Configuration constants
 export const PHASE_DETECTION_CONFIG = {

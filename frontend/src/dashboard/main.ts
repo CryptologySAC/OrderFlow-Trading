@@ -13,9 +13,7 @@ import {
     PADDING_FACTOR,
     NINETHY_MINUTES,
 } from "./state.js";
-import {
-    AnnotationOptions,
-} from "chartjs-plugin-annotation";
+import { AnnotationOptions } from "chartjs-plugin-annotation";
 import {
     cleanupOldSupportResistanceLevels,
     cleanupOldZones,
@@ -325,7 +323,6 @@ function handleMessage(message: WebSocketMessage): void {
             htmlActions.addAnomaly(anomaly);
             break;
 
-        
         case "signal":
             const signal: Signal = (message as SignalMessage).data as Signal;
             if (isValidSignalData(signal)) {
@@ -336,13 +333,16 @@ function handleMessage(message: WebSocketMessage): void {
                     signalsList.length = 50;
                 }
                 renderSignalsList();
-                
+
                 if (tradeChart.tradeChart) {
                     const chartInstance = tradeChart.tradeChart;
                     const chartOptions = chartInstance.options;
                     const plugins = chartOptions.plugins;
                     const annotation = (plugins as any).annotation;
-                    const annotations = annotation.annotations as Record<string, AnnotationOptions<"label">>;
+                    const annotations = annotation.annotations as Record<
+                        string,
+                        AnnotationOptions<"label">
+                    >;
                     if (annotations) {
                         annotations[id] = {
                             type: "label",
@@ -369,17 +369,17 @@ function handleMessage(message: WebSocketMessage): void {
             }
             break;
 
-        
-
         case "supportResistanceLevel":
-            const level = (message as SupportResistanceLevelMessage).data as SupportResistanceLevel;
+            const level = (message as SupportResistanceLevelMessage)
+                .data as SupportResistanceLevel;
             if (isValidSupportResistanceData(level)) {
                 handleSupportResistanceLevel({ data: level });
             }
             break;
 
         case "zoneUpdate":
-            const zoneUpdate = (message as ZoneUpdateMessage).data as ZoneUpdateEvent;
+            const zoneUpdate = (message as ZoneUpdateMessage)
+                .data as ZoneUpdateEvent;
             if (isValidZoneUpdateData(zoneUpdate)) {
                 // Transform ZoneVisualizationData to ZoneData
                 const zoneData: ZoneData = {
@@ -405,7 +405,8 @@ function handleMessage(message: WebSocketMessage): void {
             break;
 
         case "zoneSignal":
-            const zoneSignal = (message as ZoneSignalMessage).data as ZoneSignalEvent;
+            const zoneSignal = (message as ZoneSignalMessage)
+                .data as ZoneSignalEvent;
             if (isValidZoneSignalData(zoneSignal)) {
                 // Transform ZoneVisualizationData to ZoneData
                 const zoneData: ZoneData = {
