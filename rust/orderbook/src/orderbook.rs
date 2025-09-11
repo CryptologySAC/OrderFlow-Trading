@@ -1,15 +1,13 @@
-use rust_decimal::Decimal;
-use rust_decimal::prelude::*;
 use std::collections::BTreeMap;
 use chrono::{DateTime, Utc, Duration};
 use crate::types::*;
 use crate::financial_math::*;
 
-/// High-performance order book implementation using BTreeMap
-/// Provides O(log n) operations for all price level operations
+/// High-performance order book implementation using BTreeMap with u128 keys
+/// Provides O(log n) operations for all price level operations with maximum performance
 pub struct OrderBook {
-    /// BTreeMap for O(log n) price level operations
-    levels: BTreeMap<Decimal, PassiveLevel>,
+    /// BTreeMap with u128 keys for high-precision price storage (8 decimal places)
+    levels: BTreeMap<u128, PassiveLevel>,
     config: OrderBookConfig,
     last_update: DateTime<Utc>,
     error_count: usize,
@@ -22,7 +20,7 @@ impl OrderBook {
     pub fn new(price_precision: u32, tick_size: f64) -> Self {
         let config = OrderBookConfig {
             price_precision,
-            tick_size: Decimal::try_from(tick_size).unwrap_or(Decimal::new(1, 8)),
+            tick_size,
             ..Default::default()
         };
 
@@ -34,6 +32,16 @@ impl OrderBook {
             circuit_open: false,
             circuit_open_until: None,
         }
+    }
+
+    /// Convert f64 price to u128 with high precision (multiply by 1e8 for 8 decimal places)
+    fn price_to_u128(price: f64) -> u128 {
+        (price * 100_000_000.0) as u128
+    }
+
+    /// Convert u128 price back to f64
+    fn u128_to_price(value: u128) -> f64 {
+        value as f64 / 100_000_000.0
     }
 
     /// Update order book with depth changes - O(log n) per update
@@ -54,22 +62,22 @@ impl OrderBook {
 
         // Process bids - O(k log n) where k is number of updates
         for (price_str, qty_str) in &update.bids {
-            let price = Decimal::from_str_exact(price_str)
+            let price: f64 = price_str.parse()
                 .map_err(|_| format!("Invalid price: {}", price_str))?;
-            let qty = Decimal::from_str_exact(qty_str)
+            let qty: f64 = qty_str.parse()
                 .map_err(|_| format!("Invalid quantity: {}", qty_str))?;
 
-            self.update_level(price, qty, Decimal::ZERO, now)?;
+            self.update_level(price, qty, 0.0, now)?;
         }
 
         // Process asks - O(k log n) where k is number of updates
         for (price_str, qty_str) in &update.asks {
-            let price = Decimal::from_str_exact(price_str)
+            let price: f64 = price_str.parse()
                 .map_err(|_| format!("Invalid price: {}", price_str))?;
-            let qty = Decimal::from_str_exact(qty_str)
+            let qty: f64 = qty_str.parse()
                 .map_err(|_| format!("Invalid quantity: {}", qty_str))?;
 
-            self.update_level(price, Decimal::ZERO, qty, now)?;
+            self.update_level(price, 0.0, qty, now)?;
         }
 
         self.last_update = now;
@@ -77,19 +85,20 @@ impl OrderBook {
     }
 
     /// Update a single price level - O(log n)
-    fn update_level(&mut self, price: Decimal, bid_qty: Decimal, ask_qty: Decimal, timestamp: DateTime<Utc>) -> Result<(), String> {
-        // Normalize price to tick size
+    fn update_level(&mut self, price: f64, bid_qty: f64, ask_qty: f64, timestamp: DateTime<Utc>) -> Result<(), String> {
+        // Normalize price to tick size and convert to u128
         let normalized_price = self.normalize_price(price);
+        let price_key = Self::price_to_u128(normalized_price);
 
-        if bid_qty.is_zero() && ask_qty.is_zero() {
+        if bid_qty == 0.0 && ask_qty == 0.0 {
             // Remove level if both sides are zero
-            self.levels.remove(&normalized_price);
+            self.levels.remove(&price_key);
         } else {
             // Update or insert level
-            let level = self.levels.entry(normalized_price).or_insert_with(|| PassiveLevel {
+            let level = self.levels.entry(price_key).or_insert_with(|| PassiveLevel {
                 price: normalized_price,
-                bid: Decimal::ZERO,
-                ask: Decimal::ZERO,
+                bid: 0.0,
+                ask: 0.0,
                 timestamp,
                 consumed_ask: None,
                 consumed_bid: None,
@@ -103,10 +112,10 @@ impl OrderBook {
             level.timestamp = timestamp;
 
             // Track changes for debugging
-            if !bid_qty.is_zero() {
+            if bid_qty != 0.0 {
                 level.added_bid = Some(bid_qty);
             }
-            if !ask_qty.is_zero() {
+            if ask_qty != 0.0 {
                 level.added_ask = Some(ask_qty);
             }
         }
@@ -116,9 +125,9 @@ impl OrderBook {
 
     /// Get level at specific price - O(log n)
     pub fn get_level(&self, price: f64) -> Option<&PassiveLevel> {
-        let price_decimal = Decimal::from_f64_retain(price)?;
-        let normalized_price = self.normalize_price(price_decimal);
-        self.levels.get(&normalized_price)
+        let normalized_price = self.normalize_price(price);
+        let price_key = Self::price_to_u128(normalized_price);
+        self.levels.get(&price_key)
     }
 
     /// Get best bid price - O(1) amortized with cached value
@@ -126,8 +135,8 @@ impl OrderBook {
         // BTreeMap is ordered, so we can get the last (highest) key
         self.levels.iter()
             .rev()
-            .find(|(_, level)| !level.bid.is_zero())
-            .map(|(price, _)| price.to_f64().unwrap_or(0.0))
+            .find(|(_, level)| level.bid != 0.0)
+            .map(|(price, _)| Self::u128_to_price(*price))
             .unwrap_or(0.0)
     }
 
@@ -135,51 +144,51 @@ impl OrderBook {
     pub fn get_best_ask(&self) -> f64 {
         // BTreeMap is ordered, so we can get the first (lowest) key
         self.levels.iter()
-            .find(|(_, level)| !level.ask.is_zero())
-            .map(|(price, _)| price.to_f64().unwrap_or(f64::INFINITY))
+            .find(|(_, level)| level.ask != 0.0)
+            .map(|(price, _)| Self::u128_to_price(*price))
             .unwrap_or(f64::INFINITY)
     }
 
     /// Calculate spread with high precision
     pub fn get_spread(&self) -> f64 {
-        let best_bid = Decimal::from_f64_retain(self.get_best_bid()).unwrap_or(Decimal::ZERO);
-        let best_ask = Decimal::from_f64_retain(self.get_best_ask()).unwrap_or(Decimal::ZERO);
+        let best_bid = self.get_best_bid();
+        let best_ask = self.get_best_ask();
 
-        if best_bid.is_zero() || best_ask.is_zero() {
+        if best_bid == 0.0 || best_ask == f64::INFINITY {
             0.0
         } else {
-            calculate_spread(best_ask, best_bid, self.config.price_precision).to_f64().unwrap_or(0.0)
+            calculate_spread(best_ask, best_bid, self.config.price_precision)
         }
     }
 
     /// Calculate mid price with high precision
     pub fn get_mid_price(&self) -> f64 {
-        let best_bid = Decimal::from_f64_retain(self.get_best_bid()).unwrap_or(Decimal::ZERO);
-        let best_ask = Decimal::from_f64_retain(self.get_best_ask()).unwrap_or(Decimal::ZERO);
+        let best_bid = self.get_best_bid();
+        let best_ask = self.get_best_ask();
 
-        if best_bid.is_zero() || best_ask.is_zero() {
+        if best_bid == 0.0 || best_ask == f64::INFINITY {
             0.0
         } else {
-            calculate_mid_price(best_bid, best_ask, self.config.price_precision).to_f64().unwrap_or(0.0)
+            calculate_mid_price(best_bid, best_ask, self.config.price_precision)
         }
     }
 
     /// Sum band calculation - O(log n) with BTreeMap range operations
     pub fn sum_band(&self, center: f64, band_ticks: u32, tick_size: f64) -> BandSum {
-        let center_decimal = Decimal::from_f64_retain(center).unwrap_or(Decimal::ZERO);
-        let tick_size_decimal = Decimal::from_f64_retain(tick_size).unwrap_or(Decimal::new(1, 8));
-
         // Calculate band boundaries
-        let band_size = tick_size_decimal * Decimal::from(band_ticks);
-        let min_price = center_decimal - band_size;
-        let max_price = center_decimal + band_size;
+        let band_size = tick_size * band_ticks as f64;
+        let min_price = center - band_size;
+        let max_price = center + band_size;
 
-        let mut sum_bid = Decimal::ZERO;
-        let mut sum_ask = Decimal::ZERO;
+        let min_key = Self::price_to_u128(min_price);
+        let max_key = Self::price_to_u128(max_price);
+
+        let mut sum_bid = 0.0;
+        let mut sum_ask = 0.0;
         let mut levels = 0;
 
         // Use BTreeMap range query - O(log n + k) where k is levels in range
-        for (_, level) in self.levels.range(min_price..=max_price) {
+        for (_, level) in self.levels.range(min_key..=max_key) {
             sum_bid += level.bid;
             sum_ask += level.ask;
             levels += 1;
@@ -196,24 +205,24 @@ impl OrderBook {
     pub fn get_depth_metrics(&self) -> DepthMetrics {
         let mut bid_levels = 0;
         let mut ask_levels = 0;
-        let mut total_bid_volume = Decimal::ZERO;
-        let mut total_ask_volume = Decimal::ZERO;
+        let mut total_bid_volume = 0.0;
+        let mut total_ask_volume = 0.0;
 
         // Single pass through all levels
         for level in self.levels.values() {
-            if !level.bid.is_zero() {
+            if level.bid != 0.0 {
                 bid_levels += 1;
                 total_bid_volume += level.bid;
             }
-            if !level.ask.is_zero() {
+            if level.ask != 0.0 {
                 ask_levels += 1;
                 total_ask_volume += level.ask;
             }
         }
 
         let total_volume = total_bid_volume + total_ask_volume;
-        let imbalance = if total_volume.is_zero() {
-            Decimal::ZERO
+        let imbalance = if total_volume == 0.0 {
+            0.0
         } else {
             (total_bid_volume - total_ask_volume) / total_volume
         };
@@ -239,7 +248,7 @@ impl OrderBook {
     }
 
     /// Normalize price to tick size
-    fn normalize_price(&self, price: Decimal) -> Decimal {
+    fn normalize_price(&self, price: f64) -> f64 {
         normalize_price_to_tick(price, self.config.tick_size)
     }
 
@@ -274,8 +283,8 @@ impl OrderBook {
             circuit_breaker_open: self.circuit_open,
             error_rate: self.error_count,
             book_size: self.levels.len(),
-            spread: Decimal::from_f64_retain(self.get_spread()).unwrap_or(Decimal::ZERO),
-            mid_price: Decimal::from_f64_retain(self.get_mid_price()).unwrap_or(Decimal::ZERO),
+            spread: self.get_spread(),
+            mid_price: self.get_mid_price(),
             details: HealthDetails {
                 bid_levels: metrics.bid_levels,
                 ask_levels: metrics.ask_levels,

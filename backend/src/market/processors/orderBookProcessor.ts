@@ -176,7 +176,8 @@ export class OrderBookProcessor implements IOrderBookProcessor {
             this.lastProcessedTime = Date.now();
             this.processedCount++;
             // Reset if approaching safe limits for serialization
-            if (this.processedCount > 9007199254740991n) {
+            const MAX_SAFE_INTEGER_BIGINT = 9007199254740991n;
+            if (this.processedCount > MAX_SAFE_INTEGER_BIGINT) {
                 this.processedCount = 0n;
             }
 
@@ -267,7 +268,9 @@ export class OrderBookProcessor implements IOrderBookProcessor {
         });
 
         // Periodic cleanup of old depletion data
-        if (this.processedCount % 1000n === 0n) {
+        const CLEANUP_INTERVAL = 1000n;
+        const ZERO_BIGINT = 0n;
+        if (this.processedCount % CLEANUP_INTERVAL === ZERO_BIGINT) {
             // Every 1000 updates
             this.cleanupDepletionData();
         }
@@ -441,7 +444,8 @@ export class OrderBookProcessor implements IOrderBookProcessor {
     ): void {
         this.errorCount++;
         // Reset if approaching safe limits for serialization
-        if (this.errorCount > 9007199254740991n) {
+        const MAX_SAFE_INTEGER_BIGINT = 9007199254740991n;
+        if (this.errorCount > MAX_SAFE_INTEGER_BIGINT) {
             this.errorCount = 0n;
         }
         this.lastError = error.message;
@@ -504,9 +508,12 @@ export class OrderBookProcessor implements IOrderBookProcessor {
                 ? times.reduce((a, b) => a + b, 0) / times.length
                 : 0;
 
+        const P99_PERCENTILE = 0.99;
         const p99Time =
             times.length > 0
-                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]!
+                ? times.sort((a, b) => a - b)[
+                      Math.floor(times.length * P99_PERCENTILE)
+                  ]!
                 : 0;
 
         return {

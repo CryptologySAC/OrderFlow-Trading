@@ -7,8 +7,8 @@ if (!fs.existsSync(nativeDir)) {
     fs.mkdirSync(nativeDir, { recursive: true });
 }
 
-// Copy the built library
-const targetDir = path.join(__dirname, "..", "target", "release");
+// Copy the built library (workspace build puts it in parent target directory)
+const targetDir = path.join(__dirname, "..", "..", "target", "release");
 const libName =
     process.platform === "win32"
         ? "orderbook.dll"

@@ -1,10 +1,24 @@
 // Drop-in replacement for redBlackTreeRust.ts using native Rust red-black tree
 // This maintains the exact same API while providing massive performance improvements
-
+import addon from "/Users/marcschot/Projects/OrderFlow Trading/rust/btreemap/native";
 import type { PassiveLevel } from "../../types/marketEvents.js";
 
-// Import the consolidated Rust BTreeMap native addon
-const addon = require("../../../rust/btreemap/native");
+// Type definitions for the Rust BTreeMap native addon
+interface RustPassiveLevel {
+    price: number;
+    bid: number;
+    ask: number;
+    timestamp: number;
+    consumed_ask?: number;
+    consumed_bid?: number;
+    added_ask?: number;
+    added_bid?: number;
+}
+
+interface RustRBNode {
+    price: number;
+    level: RustPassiveLevel;
+}
 
 // Re-export the PassiveLevel type for compatibility
 export type { PassiveLevel };
@@ -29,7 +43,9 @@ class RedBlackTreeImpl {
 
     constructor() {
         // Create unique ID for this tree instance
-        this.treeId = `tree_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const RANDOM_SUFFIX_LENGTH = 9;
+        const BASE36_RADIX = 36;
+        this.treeId = `tree_${Date.now()}_${Math.random().toString(BASE36_RADIX).substring(2, RANDOM_SUFFIX_LENGTH)}`;
         addon.createTree(this.treeId);
     }
 
@@ -70,16 +86,25 @@ class RedBlackTreeImpl {
     public search(price: number): RBNode | undefined {
         const result = addon.search(this.treeId, price);
         if (result) {
-            return new RBNode(result.price, {
+            const level = {
                 price: result.level.price,
                 bid: result.level.bid,
                 ask: result.level.ask,
                 timestamp: result.level.timestamp,
-                consumedAsk: result.level.consumed_ask ?? undefined,
-                consumedBid: result.level.consumed_bid ?? undefined,
-                addedAsk: result.level.added_ask ?? undefined,
-                addedBid: result.level.added_bid ?? undefined,
-            });
+                ...(result.level.consumed_ask
+                    ? { consumedAsk: result.level.consumed_ask }
+                    : {}),
+                ...(result.level.consumed_bid
+                    ? { consumedBid: result.level.consumed_bid }
+                    : {}),
+                ...(result.level.added_ask
+                    ? { addedAsk: result.level.added_ask }
+                    : {}),
+                ...(result.level.added_bid
+                    ? { addedBid: result.level.added_bid }
+                    : {}),
+            } as PassiveLevel;
+            return new RBNode(result.price, level);
         }
         return undefined;
     }
@@ -95,11 +120,15 @@ class RedBlackTreeImpl {
                 bid: result.bid,
                 ask: result.ask,
                 timestamp: result.timestamp,
-                consumedAsk: result.consumed_ask ?? undefined,
-                consumedBid: result.consumed_bid ?? undefined,
-                addedAsk: result.added_ask ?? undefined,
-                addedBid: result.added_bid ?? undefined,
-            };
+                ...(result.consumed_ask
+                    ? { consumedAsk: result.consumed_ask }
+                    : {}),
+                ...(result.consumed_bid
+                    ? { consumedBid: result.consumed_bid }
+                    : {}),
+                ...(result.added_ask ? { addedAsk: result.added_ask } : {}),
+                ...(result.added_bid ? { addedBid: result.added_bid } : {}),
+            } as PassiveLevel;
         }
         return undefined;
     }
@@ -138,17 +167,25 @@ class RedBlackTreeImpl {
     public getAllNodes(): RBNode[] {
         const nodes = addon.getAllNodes(this.treeId);
         return nodes.map(
-            (node: any) =>
+            (node: RustRBNode) =>
                 new RBNode(node.price, {
                     price: node.level.price,
                     bid: node.level.bid,
                     ask: node.level.ask,
                     timestamp: node.level.timestamp,
-                    consumedAsk: node.level.consumed_ask ?? undefined,
-                    consumedBid: node.level.consumed_bid ?? undefined,
-                    addedAsk: node.level.added_ask ?? undefined,
-                    addedBid: node.level.added_bid ?? undefined,
-                })
+                    ...(node.level.consumed_ask
+                        ? { consumedAsk: node.level.consumed_ask }
+                        : {}),
+                    ...(node.level.consumed_bid
+                        ? { consumedBid: node.level.consumed_bid }
+                        : {}),
+                    ...(node.level.added_ask
+                        ? { addedAsk: node.level.added_ask }
+                        : {}),
+                    ...(node.level.added_bid
+                        ? { addedBid: node.level.added_bid }
+                        : {}),
+                } as PassiveLevel)
         );
     }
 

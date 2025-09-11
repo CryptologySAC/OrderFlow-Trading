@@ -3,7 +3,6 @@ use crate::orderbook::OrderBook;
 use crate::types::*;
 use std::sync::Mutex;
 use std::collections::HashMap;
-use rust_decimal::prelude::*;
 use lazy_static::lazy_static;
 
 // Thread-safe storage for order books
@@ -53,10 +52,10 @@ pub fn get_level(mut cx: FunctionContext) -> JsResult<JsValue> {
         if let Some(level) = order_book.get_level(price) {
             let js_object = JsObject::new(&mut cx);
 
-            // Convert Decimal to f64 for JavaScript
-            let price_val = cx.number(level.price.to_f64().unwrap_or(0.0));
-            let bid_val = cx.number(level.bid.to_f64().unwrap_or(0.0));
-            let ask_val = cx.number(level.ask.to_f64().unwrap_or(0.0));
+            // Values are already f64
+            let price_val = cx.number(level.price);
+            let bid_val = cx.number(level.bid);
+            let ask_val = cx.number(level.ask);
             let timestamp_val = cx.string(&level.timestamp.to_rfc3339());
 
             js_object.set(&mut cx, "price", price_val)?;
@@ -133,8 +132,8 @@ pub fn sum_band(mut cx: FunctionContext) -> JsResult<JsValue> {
         let result = order_book.sum_band(center, band_ticks, tick_size);
 
         let js_object = JsObject::new(&mut cx);
-        let bid_val = cx.number(result.bid.to_f64().unwrap_or(0.0));
-        let ask_val = cx.number(result.ask.to_f64().unwrap_or(0.0));
+        let bid_val = cx.number(result.bid);
+        let ask_val = cx.number(result.ask);
         let levels_val = cx.number(result.levels as f64);
 
         js_object.set(&mut cx, "bid", bid_val)?;
@@ -163,9 +162,9 @@ pub fn get_depth_metrics(mut cx: FunctionContext) -> JsResult<JsValue> {
         js_object.set(&mut cx, "totalLevels", total_levels_val)?;
         js_object.set(&mut cx, "bidLevels", bid_levels_val)?;
         js_object.set(&mut cx, "askLevels", ask_levels_val)?;
-        let total_bid_volume_val = cx.number(metrics.total_bid_volume.to_f64().unwrap_or(0.0));
-        let total_ask_volume_val = cx.number(metrics.total_ask_volume.to_f64().unwrap_or(0.0));
-        let imbalance_val = cx.number(metrics.imbalance.to_f64().unwrap_or(0.0));
+        let total_bid_volume_val = cx.number(metrics.total_bid_volume);
+        let total_ask_volume_val = cx.number(metrics.total_ask_volume);
+        let imbalance_val = cx.number(metrics.imbalance);
 
         js_object.set(&mut cx, "totalBidVolume", total_bid_volume_val)?;
         js_object.set(&mut cx, "totalAskVolume", total_ask_volume_val)?;
@@ -217,8 +216,8 @@ pub fn get_health(mut cx: FunctionContext) -> JsResult<JsValue> {
         let circuit_breaker_open_val = cx.boolean(health.circuit_breaker_open);
         let error_rate_val = cx.number(health.error_rate as f64);
         let book_size_val = cx.number(health.book_size as f64);
-        let spread_val = cx.number(health.spread.to_f64().unwrap_or(0.0));
-        let mid_price_val = cx.number(health.mid_price.to_f64().unwrap_or(0.0));
+        let spread_val = cx.number(health.spread);
+        let mid_price_val = cx.number(health.mid_price);
 
         js_object.set(&mut cx, "status", status_val)?;
         js_object.set(&mut cx, "initialized", initialized_val)?;
@@ -233,8 +232,8 @@ pub fn get_health(mut cx: FunctionContext) -> JsResult<JsValue> {
         let details = JsObject::new(&mut cx);
         let bid_levels_val = cx.number(health.details.bid_levels as f64);
         let ask_levels_val = cx.number(health.details.ask_levels as f64);
-        let total_bid_volume_val = cx.number(health.details.total_bid_volume.to_f64().unwrap_or(0.0));
-        let total_ask_volume_val = cx.number(health.details.total_ask_volume.to_f64().unwrap_or(0.0));
+        let total_bid_volume_val = cx.number(health.details.total_bid_volume);
+        let total_ask_volume_val = cx.number(health.details.total_ask_volume);
         let stale_levels_val = cx.number(health.details.stale_levels as f64);
         let memory_usage_mb_val = cx.number(health.details.memory_usage_mb);
 
