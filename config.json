@@ -250,7 +250,7 @@
                 "exhaustionThreshold": 0.45,
                 "passiveRatioBalanceThreshold": 0.967,
                 "timeWindowIndex": 0,
-                "eventCooldownMs": 5000,
+                "eventCooldownMs": 1000,
                 "maxZonesPerSide": 15,
                 "zoneDepletionThreshold": 0.1,
                 "gapDetectionTicks": 10,

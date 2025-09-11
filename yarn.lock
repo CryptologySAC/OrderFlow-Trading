@@ -1912,10 +1912,38 @@ __metadata:
   languageName: node
   linkType: hard
 
+"domnode-dom@npm:~0.0.X":
+  version: 0.0.4
+  resolution: "domnode-dom@npm:0.0.4"
+  dependencies:
+    domnode: "npm:~0.0.3"
+  checksum: 10c0/8d16deedbfb7f8887a53e08675fa2b7bb43f6809440b07e8837e217d91223b03928fc9c70bf689d5cbd643b328fefa0eb0671e131974dfb08f601dfef9f2a8b3
+  languageName: node
+  linkType: hard
+
+"domnode@npm:~0.0.3":
+  version: 0.0.3
+  resolution: "domnode@npm:0.0.3"
+  dependencies:
+    mustache: "npm:0.4.0"
+  checksum: 10c0/3c9430543ea05b433cceae71f78c1c3456d00bb49c32e772f5d8516de5081e0073b2004df50c19a13232018a6a74cc74af2a30b5d82a1316dc47f1898146c506
+  languageName: node
+  linkType: hard
+
 "dotenv@npm:^17.2.1":
   version: 17.2.1
   resolution: "dotenv@npm:17.2.1"
   checksum: 10c0/918dd2f9d8b8f86b0afabad9534793d51de3718c437f9e7b6525628cf68c1d4ae768cc37a5afff38c066f58a8ecf549f4ac6cd5617485bd328e826112cc2650a
+  languageName: node
+  linkType: hard
+
+"drag-stream@npm:0.0.3":
+  version: 0.0.3
+  resolution: "drag-stream@npm:0.0.3"
+  dependencies:
+    domnode-dom: "npm:~0.0.X"
+    through: "npm:~2.2.1"
+  checksum: 10c0/86787be227670a8223718ca15fbaa09abed32f789d5de85bd0a93dde824c13c20c4c5f4ec5cbda021b488a465f0123c1c18340ef860fe28ab929c30344bb062e
   languageName: node
   linkType: hard
 
@@ -2666,6 +2694,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"fullscreen@npm:0.0.1":
+  version: 0.0.1
+  resolution: "fullscreen@npm:0.0.1"
+  checksum: 10c0/1bba10cee30055062c71fef2693724da01da3d8e2550ed1d65e457ecf5078e49e9c31e758ecd8a948023f34a9eb8f2b4794b39c70dd68b31186bc5204a9ee754
+  languageName: node
+  linkType: hard
+
 "function-bind@npm:^1.1.2":
   version: 1.1.2
   resolution: "function-bind@npm:1.1.2"
@@ -2937,6 +2972,17 @@ __metadata:
   version: 1.3.8
   resolution: "ini@npm:1.3.8"
   checksum: 10c0/ec93838d2328b619532e4f1ff05df7909760b6f66d9c9e2ded11e5c1897d6f2f9980c54dd638f88654b00919ce31e827040631eab0a3969e4d1abefa0719516a
+  languageName: node
+  linkType: hard
+
+"interact@npm:^0.0.3":
+  version: 0.0.3
+  resolution: "interact@npm:0.0.3"
+  dependencies:
+    drag-stream: "npm:0.0.3"
+    fullscreen: "npm:0.0.1"
+    pointer-lock: "npm:0.0.3"
+  checksum: 10c0/5a0cd5375f3832f3d1fb4331abf1a58f24a7708f786a388cc41684da320aae7adaf3720f8b9394c1c55a8e47d95350cab06356433ef567f21cff5713f33b2e5b
   languageName: node
   linkType: hard
 
@@ -3669,6 +3715,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"mustache@npm:0.4.0":
+  version: 0.4.0
+  resolution: "mustache@npm:0.4.0"
+  checksum: 10c0/112cee344af9f7ae2c36b384efa727ff73d211d4f6620074cdafa5e390d2ad06762b3304a8474cca214ff53dce331148c3c292e55e947204d1ed0404e5ab6e59
+  languageName: node
+  linkType: hard
+
 "nano-spawn@npm:^1.0.2":
   version: 1.0.2
   resolution: "nano-spawn@npm:1.0.2"
@@ -3869,6 +3922,7 @@ __metadata:
     express: "npm:^5.1.0"
     fastpriorityqueue: "npm:^0.7.5"
     husky: "npm:^9.1.7"
+    interact: "npm:^0.0.3"
     interactjs: "npm:^1.10.27"
     jsdoc: "npm:^4.0.4"
     lightweight-charts: "npm:^5.0.8"
@@ -4070,6 +4124,13 @@ __metadata:
   bin:
     pino: bin.js
   checksum: 10c0/c7f8a83a9a9d728b4eff6d0f4b9367f031c91bcaa5806fbf0eedcc8e77faba593d59baf11a8fba0dd1c778bb17ca7ed01418ac1df4ec129faeedd4f3ecaff66f
+  languageName: node
+  linkType: hard
+
+"pointer-lock@npm:0.0.3":
+  version: 0.0.3
+  resolution: "pointer-lock@npm:0.0.3"
+  checksum: 10c0/288611a4ecc965f93db0ee598be39c1cb1bfa983aee25e0d1d09d8b64fea48f0e7eb74045cb27ac836e923050ec2ba9a12b88f49fbea2b40f72752a2870e9819
   languageName: node
   linkType: hard
 
@@ -4898,6 +4959,13 @@ __metadata:
   dependencies:
     real-require: "npm:^0.2.0"
   checksum: 10c0/c36118379940b77a6ef3e6f4d5dd31e97b8210c3f7b9a54eb8fe6358ab173f6d0acfaf69b9c3db024b948c0c5fd2a7df93e2e49151af02076b35ada3205ec9a6
+  languageName: node
+  linkType: hard
+
+"through@npm:~2.2.1":
+  version: 2.2.7
+  resolution: "through@npm:2.2.7"
+  checksum: 10c0/26e66b7b88f7fc38d7d25170093227d83047d2de54774e2496b69c260c0fdc34e2efd70eb7eb6814a203795cc78d4c18ed49d876b9b1a7d4c681f717d73f3a37
   languageName: node
   linkType: hard
 

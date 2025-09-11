@@ -1,5 +1,5 @@
 [workspace]
-members = ["financial-math", "bindings", "btreemap", "orderbook"]
+members = ["financial-math", "bindings", "btreemap"]
 resolver = "2"
 
 [workspace.dependencies]
