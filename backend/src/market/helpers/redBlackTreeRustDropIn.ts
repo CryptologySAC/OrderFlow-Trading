@@ -121,18 +121,6 @@ class RedBlackTreeImpl {
     }
 
     /**
-     * Get both best bid and ask atomically
-     */
-    public getBestBidAsk(): { bid: number; ask: number } {
-        const bid = addon.getBestBid(this.treeId);
-        const ask = addon.getBestAsk(this.treeId);
-        return {
-            bid,
-            ask: ask === Infinity ? 0 : ask,
-        };
-    }
-
-    /**
      * Get all nodes for iteration
      */
     public getAllNodes(): RBNode[] {

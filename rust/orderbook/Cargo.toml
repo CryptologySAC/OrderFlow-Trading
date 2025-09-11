@@ -1,17 +1,19 @@
 [package]
-name = "btreemap"
+name = "orderbook"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "btreemap"
+name = "orderbook"
 crate-type = ["cdylib"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-ordered-float = "4.0"
+rust_decimal = { version = "1.35", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1.0"
+anyhow = "1.0"
 lazy_static = "1.4"
 
 [dependencies.neon]
