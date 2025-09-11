@@ -13,7 +13,17 @@ import type {
 
 // Synchronous ES module import - professional standard like README
 // If addon is not available, this will throw at import time (correct behavior)
-import addon from "../../../rust/orderbook/native";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
+
+// Use absolute path to ensure correct resolution regardless of working directory
+const addonPath = join(__dirname, "../../../rust/orderbook/native/index.node");
+const addon = require(addonPath);
 
 type SnapShot = Map<number, PassiveLevel>;
 

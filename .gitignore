@@ -28,3 +28,4 @@ analysis/reports/
 .husky/
 .vscode/
 rust/target/
+rust/financial-math/native/index.node
