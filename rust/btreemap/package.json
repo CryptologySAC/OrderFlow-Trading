@@ -2,18 +2,11 @@
     "name": "btreemap",
     "version": "0.1.0",
     "description": "High-performance BTreeMap implementation for order book management",
-    "type": "module",
     "main": "native/index.node",
-    "exports": {
-        ".": {
-            "import": "./native/index.node",
-            "require": "./native/index.node"
-        }
-    },
     "scripts": {
-        "build": "cd ../btreemap-bindings && neon build --release && cp native/index.node ../btreemap/native/",
-        "build:debug": "cd ../btreemap-bindings && neon build && cp native/index.node ../btreemap/native/",
-        "test": "cd ../btreemap-core && cargo test"
+        "build": "neon build --release",
+        "build:debug": "neon build",
+        "test": "cargo test"
     },
     "keywords": [
         "btreemap",

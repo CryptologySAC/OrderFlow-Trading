@@ -11,20 +11,8 @@ import type {
     OrderBookStateOptions,
 } from "./orderBookState.js";
 
-// Import the Rust orderbook native addon with proper ES module typing
-import type { NativeAddon } from "../../../rust/orderbook/native.d.ts";
-
-// Import the native addon with proper typing
-let addon: NativeAddon;
-try {
-    const addonModule = await import("../../../rust/orderbook/native");
-    addon = addonModule.default;
-} catch (error) {
-    console.error("Failed to load Rust orderbook addon", {
-        error: error instanceof Error ? error.message : String(error),
-    });
-    throw new Error("Rust orderbook bindings are required but not available");
-}
+// Import the Rust orderbook native addon
+import addon from "/Users/marcschot/Projects/OrderFlow Trading/rust/orderbook/native";
 
 type SnapShot = Map<number, PassiveLevel>;
 

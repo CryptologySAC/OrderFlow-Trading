@@ -1,20 +1,14 @@
 {
     "name": "orderbook-native",
     "version": "0.1.0",
-    "description": "High-performance order book implementation",
-    "type": "module",
+    "description": "High-performance Rust order book implementation",
     "main": "native/index.node",
-    "exports": {
-        ".": {
-            "import": "./native/index.node",
-            "require": "./native/index.node"
-        }
-    },
     "scripts": {
-        "build": "cd ../orderbook-bindings && neon build --release && cp native/index.node ../orderbook/native/",
-        "build-debug": "cd ../orderbook-bindings && neon build && cp native/index.node ../orderbook/native/",
-        "test": "cd ../orderbook-core && cargo test",
-        "clean": "cd ../orderbook-bindings && cargo clean && rm -rf ../orderbook/native/"
+        "build": "cargo build --release && npm run copy-native",
+        "build-debug": "cargo build && npm run copy-native",
+        "copy-native": "node scripts/copy-native.js",
+        "test": "cargo test",
+        "clean": "cargo clean && rm -rf native/"
     },
     "keywords": [
         "orderbook",
@@ -27,5 +21,4 @@
     "engines": {
         "node": ">=16.0.0"
     }
-}
 }
