@@ -230,13 +230,15 @@ function handleMessage(message) {
             }
             break;
         case "supportResistanceLevel":
-            const level = message.data;
+            const level = message
+                .data;
             if (isValidSupportResistanceData(level)) {
                 handleSupportResistanceLevel({ data: level });
             }
             break;
         case "zoneUpdate":
-            const zoneUpdate = message.data;
+            const zoneUpdate = message
+                .data;
             if (isValidZoneUpdateData(zoneUpdate)) {
                 const zoneData = {
                     id: zoneUpdate.zone.id,
@@ -260,7 +262,8 @@ function handleMessage(message) {
             }
             break;
         case "zoneSignal":
-            const zoneSignal = message.data;
+            const zoneSignal = message
+                .data;
             if (isValidZoneSignalData(zoneSignal)) {
                 const zoneData = {
                     id: zoneSignal.zone.id,

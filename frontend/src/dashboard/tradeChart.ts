@@ -163,7 +163,7 @@ export class TradeChart {
         });
 
         try {
-            let lastPriceLine = {
+            const lastPriceLine = {
                 type: "line",
                 yMin: 0,
                 yMax: 0,
@@ -214,10 +214,42 @@ export class TradeChart {
                 },
             };
 
+            const upperTakeProfitLine = {
+                type: "line",
+                yMin: 0,
+                yMax: 0,
+                borderColor: "white",
+                borderWidth: 1,
+                borderCapStyle: "butt",
+                borderJoinStyle: "miter",
+                drawTime: "afterDatasetsDraw",
+            };
+
+            const lowerTakeProfitLine = {
+                type: "line",
+                yMin: 0,
+                yMax: 0,
+                borderColor: "white",
+                borderWidth: 1,
+                borderCapStyle: "butt",
+                borderJoinStyle: "miter",
+                drawTime: "afterDatasetsDraw",
+            };
+
             (
                 this.tradeChart.options.plugins!.annotation!
                     .annotations as Record<string, AnnotationOptions<"line">>
             )["lastPriceLine"] = lastPriceLine as AnnotationOptions<"line">;
+            (
+                this.tradeChart.options.plugins!.annotation!
+                    .annotations as Record<string, AnnotationOptions<"line">>
+            )["upperTakeProfitLine"] =
+                upperTakeProfitLine as AnnotationOptions<"line">;
+            (
+                this.tradeChart.options.plugins!.annotation!
+                    .annotations as Record<string, AnnotationOptions<"line">>
+            )["lowerTakeProfitLine"] =
+                lowerTakeProfitLine as AnnotationOptions<"line">;
         } catch (error) {
             console.error("Error loading annotations: ", error);
         }
@@ -501,6 +533,24 @@ export class TradeChart {
             if (line) {
                 line.yMin = price;
                 line.yMax = price;
+            }
+
+            const upperTP = price * 1.007;
+            const upperLine = annotations[
+                "upperTakeProfitLine"
+            ] as AnnotationOptions<"line">;
+            if (upperLine) {
+                upperLine.yMin = upperTP;
+                upperLine.yMax = upperTP;
+            }
+
+            const lowerTP = price * 0.993;
+            const lowerLine = annotations[
+                "lowerTakeProfitLine"
+            ] as AnnotationOptions<"line">;
+            if (lowerLine) {
+                lowerLine.yMin = lowerTP;
+                lowerLine.yMax = lowerTP;
             }
         }
     }

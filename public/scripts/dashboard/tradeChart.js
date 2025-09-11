@@ -122,7 +122,7 @@ export class TradeChart {
             },
         });
         try {
-            let lastPriceLine = {
+            const lastPriceLine = {
                 type: "line",
                 yMin: 0,
                 yMax: 0,
@@ -162,8 +162,34 @@ export class TradeChart {
                     padding: 6,
                 },
             };
+            const upperTakeProfitLine = {
+                type: "line",
+                yMin: 0,
+                yMax: 0,
+                borderColor: "white",
+                borderWidth: 1,
+                borderCapStyle: "butt",
+                borderJoinStyle: "miter",
+                drawTime: "afterDatasetsDraw",
+            };
+            const lowerTakeProfitLine = {
+                type: "line",
+                yMin: 0,
+                yMax: 0,
+                borderColor: "white",
+                borderWidth: 1,
+                borderCapStyle: "butt",
+                borderJoinStyle: "miter",
+                drawTime: "afterDatasetsDraw",
+            };
             this.tradeChart.options.plugins.annotation
                 .annotations["lastPriceLine"] = lastPriceLine;
+            this.tradeChart.options.plugins.annotation
+                .annotations["upperTakeProfitLine"] =
+                upperTakeProfitLine;
+            this.tradeChart.options.plugins.annotation
+                .annotations["lowerTakeProfitLine"] =
+                lowerTakeProfitLine;
         }
         catch (error) {
             console.error("Error loading annotations: ", error);
@@ -377,6 +403,18 @@ export class TradeChart {
             if (line) {
                 line.yMin = price;
                 line.yMax = price;
+            }
+            const upperTP = price * 1.007;
+            const upperLine = annotations["upperTakeProfitLine"];
+            if (upperLine) {
+                upperLine.yMin = upperTP;
+                upperLine.yMax = upperTP;
+            }
+            const lowerTP = price * 0.993;
+            const lowerLine = annotations["lowerTakeProfitLine"];
+            if (lowerLine) {
+                lowerLine.yMin = lowerTP;
+                lowerLine.yMax = lowerTP;
             }
         }
     }

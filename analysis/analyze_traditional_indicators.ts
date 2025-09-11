@@ -15,7 +15,7 @@ import {
     CorrectPhase,
     PricePoint,
 } from "./shared/correctPhaseDetection.js";
-import { getDB } from "../src/infrastructure/db.js";
+import { getDB } from "../backend/src/infrastructure/db.js";
 
 // Traditional indicator data from signal logs
 interface TraditionalIndicatorData {

@@ -1,10 +1,5 @@
 // Chart.js v4 Type Augmentation
-import type {
-    Chart as ChartJS,
-    ChartOptions as ChartJSOptions,
-    ScaleOptionsByType,
-    CartesianScaleTypeRegistry,
-} from "chart.js";
+import type { Chart as ChartJS } from "chart.js";
 
 // Extend Chart.js types for our use case
 export type ChartInstance = ChartJS;
@@ -42,15 +37,6 @@ export interface ChartScale {
     };
 }
 
-export interface ChartOptions extends ChartJSOptions {
-    scales?: {
-        [key: string]: ScaleOptionsByType<keyof CartesianScaleTypeRegistry>;
-    };
-    plugins?: {
-        annotation?: any; // Use any for Chart.js plugin compatibility
-    } & ChartJSOptions["plugins"];
-}
-
 export interface ChartDataset {
     data: ChartDataPoint[] | (number | null)[];
     label?: string;
@@ -64,14 +50,6 @@ export interface ChartDataset {
     fill?: boolean;
     barPercentage?: number;
     categoryPercentage?: number;
-}
-
-export interface ChartConfiguration {
-    type: string;
-    data: {
-        datasets: ChartDataset[];
-    };
-    options: ChartOptions;
 }
 
 // =============================================================================

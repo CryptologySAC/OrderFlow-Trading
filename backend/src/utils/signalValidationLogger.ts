@@ -1330,6 +1330,202 @@ export class SignalValidationLogger {
     }
 
     /**
+     * Check if exactly 1 threshold failed in the thresholdChecks
+     * Returns true only if exactly 1 threshold failed, false otherwise
+     */
+    private hasExactlyOneFailedThreshold(
+        thresholdChecks:
+            | AbsorptionThresholdChecks
+            | ExhaustionThresholdChecks
+            | DeltaCVDThresholdChecks
+    ): boolean {
+        let failedCount = 0;
+
+        // Helper function to check if a threshold passes
+        const checkThreshold = (
+            threshold: number,
+            calculated: number,
+            op: string
+        ): boolean => {
+            if (op === "NONE") return true; // Skip NONE operators
+
+            switch (op) {
+                case "EQL":
+                    return calculated >= threshold;
+                case "EQS":
+                    return calculated <= threshold;
+                case "EQ":
+                    return calculated === threshold;
+                default:
+                    return true; // Unknown operator, assume pass
+            }
+        };
+
+        // Helper to check a threshold and update failed count
+        const checkAndCount = (
+            threshold: number,
+            calculated: number,
+            op: string
+        ): boolean => {
+            if (!checkThreshold(threshold, calculated, op)) {
+                failedCount++;
+                // Early exit if we already have more than 1 failure
+                if (failedCount > 1) return false;
+            }
+            return true;
+        };
+
+        if ("minAggVolume" in thresholdChecks) {
+            // Absorption detector thresholds
+            const checks = thresholdChecks as AbsorptionThresholdChecks;
+            if (
+                !checkAndCount(
+                    checks.minAggVolume.threshold,
+                    checks.minAggVolume.calculated,
+                    checks.minAggVolume.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.passiveAbsorptionThreshold.threshold,
+                    checks.passiveAbsorptionThreshold.calculated,
+                    checks.passiveAbsorptionThreshold.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.priceEfficiencyThreshold.threshold,
+                    checks.priceEfficiencyThreshold.calculated,
+                    checks.priceEfficiencyThreshold.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.maxPriceImpactRatio.threshold,
+                    checks.maxPriceImpactRatio.calculated,
+                    checks.maxPriceImpactRatio.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.minPassiveMultiplier.threshold,
+                    checks.minPassiveMultiplier.calculated,
+                    checks.minPassiveMultiplier.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.maxVolumeMultiplierRatio.threshold,
+                    checks.maxVolumeMultiplierRatio.calculated,
+                    checks.maxVolumeMultiplierRatio.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.balanceThreshold.threshold,
+                    checks.balanceThreshold.calculated,
+                    checks.balanceThreshold.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.priceStabilityTicks.threshold,
+                    checks.priceStabilityTicks.calculated,
+                    checks.priceStabilityTicks.op
+                )
+            )
+                return false;
+        } else if ("exhaustionThreshold" in thresholdChecks) {
+            // Exhaustion detector thresholds
+            const checks = thresholdChecks as ExhaustionThresholdChecks;
+            if (
+                !checkAndCount(
+                    checks.exhaustionThreshold.threshold,
+                    checks.exhaustionThreshold.calculated,
+                    checks.exhaustionThreshold.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.passiveRatioBalanceThreshold.threshold,
+                    checks.passiveRatioBalanceThreshold.calculated,
+                    checks.passiveRatioBalanceThreshold.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.minPeakVolumeCheck.threshold,
+                    checks.minPeakVolumeCheck.calculated,
+                    checks.minPeakVolumeCheck.op
+                )
+            )
+                return false;
+        } else if ("minTradesPerSec" in thresholdChecks) {
+            // DeltaCVD detector thresholds
+            const checks = thresholdChecks as DeltaCVDThresholdChecks;
+            if (
+                !checkAndCount(
+                    checks.minTradesPerSec.threshold,
+                    checks.minTradesPerSec.calculated,
+                    checks.minTradesPerSec.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.minVolPerSec.threshold,
+                    checks.minVolPerSec.calculated,
+                    checks.minVolPerSec.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.signalThreshold.threshold,
+                    checks.signalThreshold.calculated,
+                    checks.signalThreshold.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.cvdImbalanceThreshold.threshold,
+                    checks.cvdImbalanceThreshold.calculated,
+                    checks.cvdImbalanceThreshold.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.institutionalThreshold.threshold,
+                    checks.institutionalThreshold.calculated,
+                    checks.institutionalThreshold.op
+                )
+            )
+                return false;
+            if (
+                !checkAndCount(
+                    checks.volumeEfficiencyThreshold.threshold,
+                    checks.volumeEfficiencyThreshold.calculated,
+                    checks.volumeEfficiencyThreshold.op
+                )
+            )
+                return false;
+        }
+
+        return failedCount === 1;
+    }
+
+    /**
      * Validate rejection to see if it was a missed opportunity
      */
     private validateRejection(
@@ -1387,17 +1583,25 @@ export class SignalValidationLogger {
                     record.tpSlStatus = "NEITHER";
                 }
 
+                // Check if exactly 1 threshold failed
+                const hasExactlyOneFailure = this.hasExactlyOneFailedThreshold(
+                    record.thresholdChecks
+                );
+
                 // CRITICAL: Write to rejected_missed file if this would have been successful
-                // Only for absorption and exhaustion, and only if not rejected for minAggVolume
+                // Only for absorption and exhaustion, only if not rejected for minAggVolume,
+                // AND only if exactly 1 threshold failed
                 if (
                     record.tpSlStatus === "TP" &&
                     (record.detectorType === "absorption" ||
                         record.detectorType === "exhaustion") &&
-                    record.rejectionReason !== "Insufficient aggregate volume"
+                    record.rejectionReason !==
+                        "Insufficient aggregate volume" &&
+                    hasExactlyOneFailure
                 ) {
                     this.writeRejectedMissedRecord(record);
                     this.logger.info(
-                        "Rejected signal would have been successful - logged to rejected_missed",
+                        "Rejected signal would have been successful - logged to rejected_missed (failed 1 threshold)",
                         {
                             rejectionId,
                             detectorType: record.detectorType,

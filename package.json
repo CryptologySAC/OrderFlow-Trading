@@ -36,8 +36,8 @@
         "check:deps": "yarn install --check-cache",
         "typecheck": "tsc --noEmit",
         "build:watch": "tsc -p tsconfig.build.json --watch",
-        "analyze:signals": "npx tsx analysis/analyze_success_with_price_reconstruction.ts",
         "analyze:thresholds": "npx tsx analysis/analyze_threshold_optimization_binary.ts",
+        "analyze:boundaries": "npx tsx analysis/analyze_threshold_boundaries.ts",
         "analyze:traditional": "npx  --node-options='--max-old-space-size=16384' tsx analysis/analyze_traditional_indicators.ts",
         "check": "yarn lint && yarn typecheck && yarn build && yarn test",
         "check:ci": "yarn lint && yarn typecheck && yarn build --if-present && yarn test:coverage"

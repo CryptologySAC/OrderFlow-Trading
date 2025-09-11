@@ -234,10 +234,21 @@
                 "enableMetrics": true,
                 "logLevel": "info"
             },
+            "deltaCVD": {
+                "signalThreshold": 0.86,
+                "eventCooldownMs": 5000,
+                "cvdImbalanceThreshold": 1.0,
+                "timeWindowIndex": 0,
+                "institutionalThreshold": 500.0,
+                "volumeEfficiencyThreshold": 0.1,
+                "zoneSearchDistance": 5,
+                "tradeRateWindowSize": 10,
+                "volumeRateWindowSize": 10
+            },
             "exhaustion": {
-                "passiveRatioBalanceThreshold": 0.99,
-                "exhaustionThreshold": 0.01,
-                "minPeakVolume": 10,
+                "minPeakVolume": 400,
+                "exhaustionThreshold": 0.45,
+                "passiveRatioBalanceThreshold": 0.967,
                 "timeWindowIndex": 0,
                 "eventCooldownMs": 1000,
                 "maxZonesPerSide": 15,
@@ -257,12 +268,12 @@
             "absorption": {
                 "enabled": true,
                 "abTestingEnabled": false,
-                "minAggVolume": 50,
-                "passiveAbsorptionThreshold": 0.6,
-                "passiveAbsorptionThresholdElite": 0.98,
-                "priceEfficiencyThreshold": 0.01,
+                "minAggVolume": 550,
+                "priceEfficiencyThreshold": 0.0006,
+                "minPassiveMultiplier": 0.95,
+                "passiveAbsorptionThreshold": 0.9855,
+                "passiveAbsorptionThresholdElite": 0.995,                
                 "maxPriceImpactRatio": 0.1,
-                "minPassiveMultiplier": 0.5,
                 "balanceThreshold": 0.2,
                 "priceStabilityTicks": 5,
                 "maxVolumeMultiplierRatio": 50.0,
@@ -352,17 +363,6 @@
                 "whaleCooldownMs": 300000,
                 "marketHealthWindowMs": 600000
             },
-            "deltaCVD": {
-                "signalThreshold": 0.01,
-                "eventCooldownMs": 5000,
-                "cvdImbalanceThreshold": 0.5,
-                "timeWindowIndex": 0,
-                "institutionalThreshold": 5.0,
-                "volumeEfficiencyThreshold": 0.1,
-                "zoneSearchDistance": 50,
-                "tradeRateWindowSize": 10,
-                "volumeRateWindowSize": 10
-            },
             "accumulation": {
                 "timeWindowIndex": 1,
                 "eventCooldownMs": 30000,
@@ -403,6 +403,7 @@
                 "defaultBaselineVolatility": 0.04,
                 "enhancementMode": "production"
             },
+            
             "simpleIceberg": {
                 "timeWindowIndex": 1,
                 "enhancementMode": "production",
