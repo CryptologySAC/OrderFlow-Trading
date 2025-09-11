@@ -1,10 +1,21 @@
 // Drop-in replacement for redBlackTreeRust.ts using native Rust red-black tree
 // This maintains the exact same API while providing massive performance improvements
 import type { PassiveLevel } from "../../types/marketEvents.js";
+import type { BTreeMapAddon } from "../../../../rust/btreemap/native.d.ts";
 
-// Synchronous ES module import - professional standard like README
-// If addon is not available, this will throw at import time (correct behavior)
-import addon from "../../../../rust/btreemap";
+// Import the consolidated Rust BTreeMap native addon with proper ES module typing
+let addon: BTreeMapAddon | null = null;
+try {
+    // Use proper ES module import with relative path to the native addon
+    const addonModule = await import("../../../../rust/btreemap/native");
+    addon = addonModule.default;
+} catch (error) {
+    console.warn(
+        "Rust BTreeMap bindings not available, falling back to JavaScript implementation",
+        { error: error instanceof Error ? error.message : String(error) }
+    );
+    addon = null;
+}
 
 // Type definitions for the Rust BTreeMap native addon
 interface RustPassiveLevel {
