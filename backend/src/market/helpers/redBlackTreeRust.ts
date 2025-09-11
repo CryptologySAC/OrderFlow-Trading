@@ -8,21 +8,6 @@ import addon from "../../../../rust/btreemap";
 
 // Type definitions for the Rust BTreeMap native addon - using proper types from declaration file
 
-// Interface for raw node data returned from Rust addon
-interface RawNodeData {
-    price: number;
-    level: {
-        price: number;
-        bid: number;
-        ask: number;
-        timestamp: number;
-        consumed_ask?: number;
-        consumed_bid?: number;
-        added_ask?: number;
-        added_bid?: number;
-    };
-}
-
 // Re-export the PassiveLevel type for compatibility
 export type { PassiveLevel };
 
@@ -197,9 +182,9 @@ class RedBlackTreeImpl {
         if (addon === null) {
             throw new Error("Rust BTreeMap bindings not available");
         }
-        const nodes = addon.getAllNodes(this.treeId) as RawNodeData[];
+        const nodes = addon.getAllNodes(this.treeId);
         return nodes.map(
-            (node: RawNodeData) =>
+            (node: any) =>
                 new RBNode(node.price, {
                     price: node.level.price,
                     bid: node.level.bid,
@@ -217,7 +202,7 @@ class RedBlackTreeImpl {
                     ...(node.level.added_bid
                         ? { addedBid: node.level.added_bid }
                         : {}),
-                })
+                } as PassiveLevel)
         );
     }
 
