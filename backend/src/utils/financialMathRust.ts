@@ -45,16 +45,25 @@ interface FinancialMathBindings {
 }
 
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 
-const financialMathAddon: FinancialMathBindings =
-    require("../../rust/financial-math/native/index.node") as FinancialMathBindings;
+// Use absolute path to ensure correct resolution regardless of working directory
+const financialMathPath = join(
+    __dirname,
+    "../../rust/financial-math/native/index.node"
+);
+const financialMathAddon = require(financialMathPath);
 
 // Note: This will be built and installed via npm scripts
 let nativeBindings: FinancialMathBindings | null = null;
 
 try {
-    nativeBindings = financialMathAddon as FinancialMathBindings;
+    nativeBindings = financialMathAddon;
 } catch (_error) {
     void _error;
     console.warn(

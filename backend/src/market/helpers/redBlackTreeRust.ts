@@ -4,7 +4,7 @@ import type { PassiveLevel } from "../../types/marketEvents.js";
 
 // Synchronous ES module import - professional standard like README
 // If addon is not available, this will throw at import time (correct behavior)
-import addon from "../../../rust/btreemap";
+import addon from "../../../../rust/btreemap";
 
 // Type definitions for the Rust BTreeMap native addon - using proper types from declaration file
 
