@@ -442,7 +442,6 @@ name = "orderbook-bindings"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "lazy_static",
  "neon",
  "orderbook-core",
  "serde_json",
