@@ -14,7 +14,7 @@ export class HTMLActions {
     private activeRange = NINETHY_MINUTES;
     public anomalyFilters: Set<string> = new Set(["critical", "high"]);
     private readonly anomalyList: Anomaly[] = [];
-    // @ts-ignore might need this later
+    // @ts-ignore
     private readonly anomalySeverityOrder: string[] = [
         "critical",
         "high",
