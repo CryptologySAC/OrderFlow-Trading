@@ -1,0 +1,11 @@
+[package]
+name = "orderbook-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core order book implementation for high-performance trading"
+license = "MIT"
+authors = ["OrderFlow Trading"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }

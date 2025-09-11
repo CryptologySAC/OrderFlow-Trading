@@ -1,24 +1,24 @@
 // Drop-in replacement for redBlackTreeRust.ts using native Rust red-black tree
 // This maintains the exact same API while providing massive performance improvements
-import addon from "/Users/marcschot/Projects/OrderFlow Trading/rust/btreemap/native";
 import type { PassiveLevel } from "../../types/marketEvents.js";
 
-// Type definitions for the Rust BTreeMap native addon
-interface RustPassiveLevel {
-    price: number;
-    bid: number;
-    ask: number;
-    timestamp: number;
-    consumed_ask?: number;
-    consumed_bid?: number;
-    added_ask?: number;
-    added_bid?: number;
+// Import the Rust BTreeMap native addon with proper ES module typing
+import type { BTreeMapAddon } from "../../../../rust/btreemap/native.d.ts";
+
+// Import the native addon with proper typing
+let addon: BTreeMapAddon | null = null;
+try {
+    const addonModule = await import("../../../../rust/btreemap/native");
+    addon = addonModule.default;
+} catch (error) {
+    console.warn(
+        "Rust BTreeMap bindings not available, falling back to JavaScript implementation",
+        { error: error instanceof Error ? error.message : String(error) }
+    );
+    addon = null;
 }
 
-interface RustRBNode {
-    price: number;
-    level: RustPassiveLevel;
-}
+// Type definitions for the Rust BTreeMap native addon - using proper types from declaration file
 
 // Re-export the PassiveLevel type for compatibility
 export type { PassiveLevel };
@@ -46,13 +46,18 @@ class RedBlackTreeImpl {
         const RANDOM_SUFFIX_LENGTH = 9;
         const BASE36_RADIX = 36;
         this.treeId = `tree_${Date.now()}_${Math.random().toString(BASE36_RADIX).substring(2, RANDOM_SUFFIX_LENGTH)}`;
-        addon.createTree(this.treeId);
+        if (addon !== null) {
+            addon.createTree(this.treeId);
+        }
     }
 
     /**
      * Insert a price level with bid/ask separation enforcement
      */
     public insert(price: number, level: PassiveLevel): void {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         const levelJson = JSON.stringify({
             price: level.price,
             bid: level.bid,
@@ -70,6 +75,9 @@ class RedBlackTreeImpl {
      * Set bid/ask with automatic separation enforcement
      */
     public set(price: number, side: "bid" | "ask", quantity: number): void {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         addon.set(this.treeId, price, side, quantity);
     }
 
@@ -77,6 +85,9 @@ class RedBlackTreeImpl {
      * Delete a price level
      */
     public delete(price: number): void {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         addon.delete(this.treeId, price);
     }
 
@@ -84,6 +95,9 @@ class RedBlackTreeImpl {
      * Find a price level
      */
     public search(price: number): RBNode | undefined {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         const result = addon.search(this.treeId, price);
         if (result) {
             const level = {
@@ -113,6 +127,9 @@ class RedBlackTreeImpl {
      * Get price level
      */
     public get(price: number): PassiveLevel | undefined {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         const result = addon.get(this.treeId, price);
         if (result) {
             return {
@@ -137,6 +154,9 @@ class RedBlackTreeImpl {
      * Get best bid (highest price with bid > 0) - O(log n) with Rust BTreeMap
      */
     public getBestBid(): number {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         return addon.getBestBid(this.treeId);
     }
 
@@ -144,6 +164,9 @@ class RedBlackTreeImpl {
      * Get best ask (lowest price with ask > 0) - O(log n) with Rust BTreeMap
      */
     public getBestAsk(): number {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         const askPrice = addon.getBestAsk(this.treeId);
         // Return 0 when no asks available (matching original behavior)
         return askPrice === Infinity ? 0 : askPrice;
@@ -153,6 +176,9 @@ class RedBlackTreeImpl {
      * Get both best bid and ask atomically
      */
     public getBestBidAsk(): { bid: number; ask: number } {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         const bid = addon.getBestBid(this.treeId);
         const ask = addon.getBestAsk(this.treeId);
         return {
@@ -165,9 +191,12 @@ class RedBlackTreeImpl {
      * Get all nodes for iteration
      */
     public getAllNodes(): RBNode[] {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         const nodes = addon.getAllNodes(this.treeId);
         return nodes.map(
-            (node: RustRBNode) =>
+            (node: any) =>
                 new RBNode(node.price, {
                     price: node.level.price,
                     bid: node.level.bid,
@@ -193,6 +222,9 @@ class RedBlackTreeImpl {
      * Get tree size
      */
     public size(): number {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         return addon.size(this.treeId);
     }
 
@@ -200,6 +232,9 @@ class RedBlackTreeImpl {
      * Clear tree
      */
     public clear(): void {
+        if (addon === null) {
+            throw new Error("Rust BTreeMap bindings not available");
+        }
         addon.clear(this.treeId);
     }
 }
