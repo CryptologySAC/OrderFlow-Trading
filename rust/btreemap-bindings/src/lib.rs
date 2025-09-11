@@ -4,7 +4,7 @@
 //! library functionality to Node.js applications.
 
 use neon::prelude::*;
-use btreemap_core::{OrderBookBTreeMap, PassiveLevel, RBNode};
+use btreemap_core::{OrderBookBTreeMap, PassiveLevel};
 use std::sync::Mutex;
 use lazy_static::lazy_static;
 

@@ -4,7 +4,7 @@
 //! library functionality to Node.js applications.
 
 use neon::prelude::*;
-use orderbook_core::{OrderBook, DepthUpdate, PassiveLevel, BandSum, DepthMetrics, OrderBookHealth};
+use orderbook_core::{OrderBook, DepthUpdate};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use lazy_static::lazy_static;
