@@ -33,7 +33,7 @@ import type {
     OrderBookSnapshot,
 } from "./types/marketEvents.js";
 import { OrderflowPreprocessor } from "./market/orderFlowPreprocessor.js";
-import { RedBlackTreeOrderBook } from "./market/redBlackTreeOrderBook.js";
+import { RedBlackTreeOrderBook } from "./market/redBlackTreeOrderBookRust.js";
 import type { IOrderBookState } from "./market/orderBookState.js";
 import { SignalManager } from "./trading/signalManager.js";
 import { SignalCoordinator } from "./services/signalCoordinator.js";
