@@ -14,16 +14,83 @@ import type {
 // Synchronous ES module import - professional standard like README
 // If addon is not available, this will throw at import time (correct behavior)
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 
+interface Level {
+    price: number;
+    bid: number;
+    ask: number;
+    timestamp: string;
+    consumedAsk?: number;
+    consumedBid?: number;
+    addedAsk?: number;
+    addedBid?: number;
+}
+
+interface Band {
+    bid: number;
+    ask: number;
+    levels: number;
+}
+
+interface DepthMetrics {
+    totalLevels: number;
+    bidLevels: number;
+    askLevels: number;
+    totalBidVolume: number;
+    totalAskVolume: number;
+    imbalance: number;
+}
+
+interface HealthDetails {
+    bidLevels: number;
+    askLevels: number;
+    totalBidVolume: number;
+    totalAskVolume: number;
+    staleLevels: number;
+    memoryUsageMB: number;
+}
+
+interface Health {
+    status: "healthy" | "degraded" | "unhealthy";
+    initialized: boolean;
+    lastUpdateMs: number;
+    circuitBreakerOpen: boolean;
+    errorRate: number;
+    bookSize: number;
+    spread: number;
+    midPrice: number;
+    details: HealthDetails;
+}
+
+interface RustOrderBookAddon {
+    createOrderBook(
+        symbol: string,
+        pricePrecision: number,
+        tickSize: number
+    ): string;
+    updateDepth(rustOrderBookId: string, updatesJson: string): void;
+    size(rustOrderBookId: string): number;
+    getLevel(rustOrderBookId: string, price: number): Level | undefined;
+    getBestBid(rustOrderBookId: string): number;
+    getBestAsk(rustOrderBookId: string): number;
+    getSpread(rustOrderBookId: string): number;
+    getMidPrice(rustOrderBookId: string): number;
+    sumBand(
+        rustOrderBookId: string,
+        center: number,
+        bandTicks: number,
+        tickSize: number
+    ): Band;
+    getDepthMetrics(rustOrderBookId: string): DepthMetrics;
+    getHealth(rustOrderBookId: string): Health;
+    clear(rustOrderBookId: string): void;
+}
+
 // Use absolute path to ensure correct resolution regardless of working directory
-const addonPath = join(__dirname, "../../../rust/orderbook/native/index.node");
-const addon = require(addonPath);
+const addon =
+    require("../../rust/orderbook/native/index.node") as RustOrderBookAddon;
 
 type SnapShot = Map<number, PassiveLevel>;
 

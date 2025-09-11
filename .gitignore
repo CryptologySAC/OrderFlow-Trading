@@ -27,5 +27,5 @@ analysis/reports/
 .cursor/
 .husky/
 .vscode/
-rust/target/
-rust/financial-math/native/index.node
+backend/rust/target/
+backend/rust/financial-math/native/index.node

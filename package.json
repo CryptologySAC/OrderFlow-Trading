@@ -7,18 +7,18 @@
     "description": "Cryptology OrderFlow Trading",
     "private": true,
     "files": [
-        "dist",
+        "backend/dist",
         "bin"
     ],
-    "main": "dist/app",
-    "types": "dist/app",
+    "main": "backend/dist/app",
+    "types": "backend/dist/app",
     "bin": {
         "streamer": "bin/app"
     },
     "scripts": {
         "start": "bin/app",
         "start:dev": "NODE_ENV=development bin/app",
-        "clean": "rm -r dist",
+        "clean": "rm -r backend/dist",
         "format": "yarn lint",
         "lint": "yarn prettier && eslint \"backend/src/**/*.{ts,tsx}\" ",
         "lint:fix": "eslint \"backend/src/**/*.{ts,tsx}\" --fix",
@@ -28,8 +28,8 @@
         "update": "npx npm-check-updates -u",
         "build": "yarn build:rust && yarn format && tsc -p tsconfig.build.json",
         "build:frontend": "tsc -p tsconfig.frontend.json",
-        "build:rust": "cd rust && cargo build --release && cp target/release/libfinancial_math_bindings.dylib target/release/index.node",
-        "build:rust:debug": "cd rust && cargo build && cp target/release/libfinancial_math_bindings.dylib target/release/index.node",
+        "build:rust": "cd backend/rust && cargo build --release && cp target/release/libfinancial_math_bindings.dylib target/release/index.node",
+        "build:rust:debug": "cd backend/rust && cargo build && cp target/release/libfinancial_math_bindings.dylib target/release/index.node",
         "test": "vitest --run",
         "test:coverage": "vitest run --coverage",
         "test:rust": "cd rust && cargo test",

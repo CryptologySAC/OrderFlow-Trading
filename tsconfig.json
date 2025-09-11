@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "outDir": "dist",
+        "outDir": "backend/dist",
         "target": "ES2024",
         "module": "ES2022",
         "moduleResolution": "node",
@@ -42,7 +42,7 @@
         "backend/src/**/*",
         "backend/test/**/*",
         "scripts/**/*",
-        "rust/**/*"
+        "backend/rust/**/*"
     ],
     "ts-node": {
         "esm": true
