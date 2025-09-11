@@ -2,21 +2,9 @@
 // This maintains the exact same API while providing massive performance improvements
 import type { PassiveLevel } from "../../types/marketEvents.js";
 
-// Import the Rust BTreeMap native addon with proper ES module typing
-import type { BTreeMapAddon } from "../../../../rust/btreemap/native.d.ts";
-
-// Import the native addon with proper typing
-let addon: BTreeMapAddon | null = null;
-try {
-    const addonModule = await import("../../../../rust/btreemap/native");
-    addon = addonModule.default;
-} catch (error) {
-    console.warn(
-        "Rust BTreeMap bindings not available, falling back to JavaScript implementation",
-        { error: error instanceof Error ? error.message : String(error) }
-    );
-    addon = null;
-}
+// Synchronous ES module import - professional standard like README
+// If addon is not available, this will throw at import time (correct behavior)
+import addon from "../../../../rust/btreemap";
 
 // Type definitions for the Rust BTreeMap native addon - using proper types from declaration file
 
