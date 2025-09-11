@@ -38,12 +38,7 @@
         "noPropertyAccessFromIndexSignature": true,
         "exactOptionalPropertyTypes": true
     },
-    "include": [
-        "backend/src/**/*",
-        "backend/test/**/*",
-        "scripts/**/*",
-        "rust/**/*"
-    ],
+    "include": ["backend/src/**/*", "backend/test/**/*", "scripts/**/*"],
     "ts-node": {
         "esm": true
     }

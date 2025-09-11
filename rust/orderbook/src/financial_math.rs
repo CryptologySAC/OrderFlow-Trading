@@ -1,6 +1,8 @@
+use rust_decimal::Decimal;
+
 /// Normalize price to tick size with high precision
-pub fn normalize_price_to_tick(price: f64, tick_size: f64) -> f64 {
-    if tick_size == 0.0 {
+pub fn normalize_price_to_tick(price: Decimal, tick_size: Decimal) -> Decimal {
+    if tick_size.is_zero() {
         return price;
     }
 
@@ -11,24 +13,24 @@ pub fn normalize_price_to_tick(price: f64, tick_size: f64) -> f64 {
 }
 
 /// Calculate spread with high precision
-pub fn calculate_spread(ask: f64, bid: f64, _precision: u32) -> f64 {
-    if bid == 0.0 {
-        return 0.0;
+pub fn calculate_spread(ask: Decimal, bid: Decimal, _precision: u32) -> Decimal {
+    if bid.is_zero() {
+        return Decimal::ZERO;
     }
     ask - bid
 }
 
 /// Calculate mid price with high precision
-pub fn calculate_mid_price(bid: f64, ask: f64, _precision: u32) -> f64 {
-    if bid == 0.0 || ask == f64::INFINITY {
-        return 0.0;
+pub fn calculate_mid_price(bid: Decimal, ask: Decimal, _precision: u32) -> Decimal {
+    if bid.is_zero() || ask.is_zero() {
+        return Decimal::ZERO;
     }
-    (bid + ask) / 2.0
+    (bid + ask) / Decimal::TWO
 }
 
 /// Safe division with zero check
-pub fn safe_divide(numerator: f64, denominator: f64, default: f64) -> f64 {
-    if denominator == 0.0 {
+pub fn safe_divide(numerator: Decimal, denominator: Decimal, default: Decimal) -> Decimal {
+    if denominator.is_zero() {
         default
     } else {
         numerator / denominator
@@ -36,87 +38,88 @@ pub fn safe_divide(numerator: f64, denominator: f64, default: f64) -> f64 {
 }
 
 /// Safe multiplication
-pub fn safe_multiply(a: f64, b: f64) -> f64 {
+pub fn safe_multiply(a: Decimal, b: Decimal) -> Decimal {
     a * b
 }
 
 /// Safe addition
-pub fn safe_add(a: f64, b: f64) -> f64 {
+pub fn safe_add(a: Decimal, b: Decimal) -> Decimal {
     a + b
 }
 
 /// Safe subtraction
-pub fn safe_subtract(a: f64, b: f64) -> f64 {
+pub fn safe_subtract(a: Decimal, b: Decimal) -> Decimal {
     a - b
 }
 
 /// Calculate percentage difference
-pub fn calculate_percentage_change(old_value: f64, new_value: f64) -> f64 {
-    if old_value == 0.0 {
-        return 0.0;
+pub fn calculate_percentage_change(old_value: Decimal, new_value: Decimal) -> Decimal {
+    if old_value.is_zero() {
+        return Decimal::ZERO;
     }
-    ((new_value - old_value) / old_value) * 100.0
+    ((new_value - old_value) / old_value) * Decimal::ONE_HUNDRED
 }
 
 /// Round to specified decimal places
-pub fn round_to_decimals(value: f64, decimals: u32) -> f64 {
-    let multiplier = 10f64.powi(decimals as i32);
+pub fn round_to_decimals(value: Decimal, decimals: u32) -> Decimal {
+    let multiplier = Decimal::from(10i64.pow(decimals as u32));
     (value * multiplier).round() / multiplier
 }
 
 /// Convert price to integer representation for precise calculations
-pub fn price_to_int(price: f64, scale: u32) -> i64 {
-    let scaled = price * 10f64.powi(scale as i32);
-    scaled as i64
+pub fn price_to_int(price: Decimal, scale: u32) -> i64 {
+    let scaled = price * Decimal::from(10i64.pow(scale as u32));
+    scaled.mantissa() as i64
 }
 
 /// Convert integer back to price
-pub fn int_to_price(price_int: i64, scale: u32) -> f64 {
-    price_int as f64 / 10f64.powi(scale as i32)
+pub fn int_to_price(price_int: i64, scale: u32) -> Decimal {
+    Decimal::from(price_int) / Decimal::from(10i64.pow(scale as u32))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+use rust_decimal::Decimal;
 
     #[test]
     fn test_normalize_price_to_tick() {
-        let price = 500.00123;
-        let tick_size = 0.001;
+        let price = Decimal::new(50000123, 5); // 500.00123
+        let tick_size = Decimal::new(1, 3); // 0.001
         let normalized = normalize_price_to_tick(price, tick_size);
-        assert_eq!(normalized, 500.001);
+        assert_eq!(normalized, Decimal::new(500001, 3)); // 500.001
     }
 
     #[test]
     fn test_calculate_spread() {
-        let ask = 500.01;
-        let bid = 500.00;
+        let ask = Decimal::new(50001, 2); // 500.01
+        let bid = Decimal::new(50000, 2); // 500.00
         let spread = calculate_spread(ask, bid, 8);
-        assert_eq!(spread, 0.01);
+        assert_eq!(spread, Decimal::new(1, 2)); // 0.01
     }
 
     #[test]
     fn test_calculate_mid_price() {
-        let bid = 500.00;
-        let ask = 500.02;
+        let bid = Decimal::new(50000, 2); // 500.00
+        let ask = Decimal::new(50002, 2); // 500.02
         let mid = calculate_mid_price(bid, ask, 8);
-        assert_eq!(mid, 500.01);
+        assert_eq!(mid, Decimal::new(50001, 2)); // 500.01
     }
 
     #[test]
     fn test_safe_divide() {
-        let result = safe_divide(10.0, 2.0, 0.0);
-        assert_eq!(result, 5.0);
+        let result = safe_divide(Decimal::TEN, Decimal::TWO, Decimal::ZERO);
+        assert_eq!(result, Decimal::new(5, 0));
 
-        let zero_result = safe_divide(10.0, 0.0, 42.0);
-        assert_eq!(zero_result, 42.0);
+        let zero_result = safe_divide(Decimal::TEN, Decimal::ZERO, Decimal::new(42, 0));
+        assert_eq!(zero_result, Decimal::new(42, 0));
     }
 
     #[test]
     fn test_price_conversions() {
-        let price = 500.00123456;
+        let price = Decimal::new(50000123456, 8); // 500.00123456
         let price_int = price_to_int(price, 8);
         let converted_back = int_to_price(price_int, 8);
-        assert!((price - converted_back).abs() < 1e-10);
+        assert_eq!(price, converted_back);
     }
 }

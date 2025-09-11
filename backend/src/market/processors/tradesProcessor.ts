@@ -198,19 +198,14 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
             }
             throw error;
         }
-        const DEFAULT_STORAGE_MINUTES = 90;
-        this.storageTime =
-            options.storageTime ?? 1000 * 60 * DEFAULT_STORAGE_MINUTES; // 90 minutes
+        this.storageTime = options.storageTime ?? 1000 * 60 * 90; // 90 minutes
         this.maxBacklogRetries = options.maxBacklogRetries ?? 3;
 
         // Large buffer size to handle high-volume periods, cleaned by time not size
-        const DEFAULT_MAX_MEMORY_TRADES = 200000;
-        this.maxMemoryTrades =
-            options.maxMemoryTrades ?? DEFAULT_MAX_MEMORY_TRADES;
+        this.maxMemoryTrades = options.maxMemoryTrades ?? 200000;
         this.saveQueueSize = options.saveQueueSize ?? 5000;
         this.healthCheckInterval = options.healthCheckInterval ?? 30000; // 30 s
-        const BUFFER_RETENTION_MINUTES = 90;
-        this.bufferRetentionMs = BUFFER_RETENTION_MINUTES * 60 * 1000; // 90 minutes in milliseconds (aligned with storage retention)
+        this.bufferRetentionMs = 90 * 60 * 1000; // 90 minutes in milliseconds (aligned with storage retention)
         this.maxErrorWindowSize = Math.max(
             10,
             options.maxErrorWindowSize ?? 1000
@@ -948,10 +943,8 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
         const now = Date.now();
         // ✅ TIMING FIX: Use monotonic time for health checks to avoid clock change issues
         const monotonicNow = process.hrtime.bigint();
-        const NANOSECONDS_TO_MILLISECONDS = 1_000_000;
         const lastTradeAge =
-            Number(monotonicNow - this.lastTradeMonotonicTime) /
-            NANOSECONDS_TO_MILLISECONDS; // Convert to milliseconds
+            Number(monotonicNow - this.lastTradeMonotonicTime) / 1_000_000; // Convert to milliseconds
         const memoryUsage = this.recentTrades.length * 100;
         // ✅ SECURITY FIX: Calculate error rate from recent errors in 60-second window
         const cutoff = now - 60_000;
@@ -999,12 +992,9 @@ export class TradesProcessor extends EventEmitter implements ITradesProcessor {
                 ? times.reduce((a, b) => a + b, 0) / times.length
                 : 0;
 
-        const P99_PERCENTILE = 0.99;
         const p99Time =
             times.length > 0
-                ? times.sort((a, b) => a - b)[
-                      Math.floor(times.length * P99_PERCENTILE)
-                  ]!
+                ? times.sort((a, b) => a - b)[Math.floor(times.length * 0.99)]!
                 : 0;
 
         const backlogProgress = this.backlogComplete
