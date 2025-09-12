@@ -10,6 +10,8 @@ authors = ["Cryptology"]
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true, optional = true }
+num-bigint = "0.4"
+num-traits = "0.2"
 
 [dev-dependencies]
 criterion = "0.5"

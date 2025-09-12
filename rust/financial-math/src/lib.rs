@@ -29,6 +29,7 @@ pub mod division;
 pub mod validation;
 pub mod statistics;
 pub mod zones;
+pub mod big_arithmetic;
 
 pub use conversions::*;
 pub use arithmetic::*;
@@ -36,6 +37,7 @@ pub use division::*;
 pub use validation::*;
 pub use statistics::*;
 pub use zones::*;
+pub use big_arithmetic::*;
 
 /// Core error type for financial operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

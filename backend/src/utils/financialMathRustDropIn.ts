@@ -389,10 +389,98 @@ export class FinancialMathRustDropIn extends FinancialMath {
             return super.safeSubtract(a, b);
         }
         if (isNaN(a) || isNaN(b)) return 0;
-        const aStr = FinancialMathRust.priceToInt(a);
-        const bStr = FinancialMathRust.priceToInt(b);
-        const resultStr = FinancialMathRust.safeSubtract(aStr, bStr);
-        return FinancialMathRust.intToPrice(resultStr);
+
+        // Check for values that might cause u128 overflow
+        // u128 max is approximately 3.4e38, but we use a conservative limit
+        const MAX_SAFE_U128 = 1e30;
+
+        // Determine if these are likely price values (small decimals) or quantity values (large integers)
+        const isPriceLike = (val: number) =>
+            Math.abs(val) < 1e6 && val % 1 !== 0;
+        const isQuantityLike = (val: number) =>
+            Math.abs(val) >= 1e3 || val % 1 === 0;
+
+        const aIsPrice = isPriceLike(a);
+        const bIsPrice = isPriceLike(b);
+        const aIsQuantity = isQuantityLike(a);
+        const bIsQuantity = isQuantityLike(b);
+
+        // If values are too large for u128 or mixed types, use JavaScript big integer arithmetic
+        if (
+            Math.abs(a) > MAX_SAFE_U128 ||
+            Math.abs(b) > MAX_SAFE_U128 ||
+            (aIsPrice && bIsQuantity) ||
+            (aIsQuantity && bIsPrice)
+        ) {
+            // Use JavaScript BigInt for very large numbers (maintains Rust performance philosophy)
+            try {
+                const aBig = BigInt(Math.floor(a));
+                const bBig = BigInt(Math.floor(b));
+                const result = aBig - bBig;
+                return Number(result);
+            } catch (error) {
+                // If BigInt fails, fallback to JavaScript arithmetic
+                console.warn?.(
+                    "BigInt arithmetic failed, falling back to JavaScript",
+                    { error: (error as Error).message, a, b }
+                );
+                return super.safeSubtract(a, b);
+            }
+        }
+
+        try {
+            // Use appropriate scaling based on value type
+            if (aIsPrice && bIsPrice) {
+                // Both are price-like, use price scaling
+                const aStr = FinancialMathRust.priceToInt(a);
+                const bStr = FinancialMathRust.priceToInt(b);
+                const result = this.safeSubtractU128(aStr, bStr);
+                return FinancialMathRust.intToPrice(result);
+            } else if (aIsQuantity && bIsQuantity) {
+                // Both are quantity-like, use quantity scaling
+                const aStr = FinancialMathRust.quantityToInt(a);
+                const bStr = FinancialMathRust.quantityToInt(b);
+                const result = this.safeSubtractU128(aStr, bStr);
+                return FinancialMathRust.intToQuantity(result);
+            } else {
+                // Mixed types or uncertain, use BigInt
+                const aBig = BigInt(Math.floor(a));
+                const bBig = BigInt(Math.floor(b));
+                const result = aBig - bBig;
+                return Number(result);
+            }
+        } catch (error) {
+            // If Rust arithmetic fails, try BigInt, then fallback to JavaScript
+            try {
+                const aBig = BigInt(Math.floor(a));
+                const bBig = BigInt(Math.floor(b));
+                const result = aBig - bBig;
+                return Number(result);
+            } catch (bigError) {
+                console.warn?.(
+                    "All arithmetic failed, falling back to JavaScript",
+                    {
+                        error: (error as Error).message,
+                        bigError: (bigError as Error).message,
+                        a,
+                        b,
+                    }
+                );
+                return super.safeSubtract(a, b);
+            }
+        }
+    }
+
+    /**
+     * Safe subtraction using BigInt to handle negative results
+     * The Rust u128 arithmetic doesn't support negative numbers, so we use BigInt
+     */
+    private static safeSubtractU128(aStr: string, bStr: string): string {
+        // Use BigInt for all subtractions since financial calculations often result in negative numbers
+        const aBig = BigInt(aStr);
+        const bBig = BigInt(bStr);
+        const result = aBig - bBig;
+        return result.toString();
     }
 
     static override safeMultiply(a: number, b: number): number {
@@ -400,10 +488,15 @@ export class FinancialMathRustDropIn extends FinancialMath {
             return super.safeMultiply(a, b);
         }
         if (isNaN(a) || isNaN(b)) return 0;
-        const aStr = FinancialMathRust.priceToInt(a);
-        const bStr = FinancialMathRust.priceToInt(b);
-        const resultStr = FinancialMathRust.safeMultiply(aStr, bStr);
-        return FinancialMathRust.intToPrice(resultStr);
+
+        // Use generic fixed-point conversion with appropriate scale
+        // For general multiplication, use 8 decimals (same as price scale)
+        const scale = 8;
+        const aFixed = FinancialMathRust.floatToFixed(a, scale);
+        const bFixed = FinancialMathRust.floatToFixed(b, scale);
+        const resultFixed = FinancialMathRust.safeMultiply(aFixed, bFixed);
+        // When multiplying two scale-8 numbers, result has scale-16
+        return FinancialMathRust.fixedToFloat(resultFixed, scale * 2);
     }
 
     static override safeDivideEnhanced(
@@ -527,6 +620,5 @@ export class FinancialMathRustDropIn extends FinancialMath {
         return Math.abs(value);
     }
 }
-
 // Export with the original name for easy migration
 export { FinancialMathRustDropIn as FinancialMath };

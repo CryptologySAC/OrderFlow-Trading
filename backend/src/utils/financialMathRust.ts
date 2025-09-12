@@ -19,14 +19,24 @@ interface FinancialMathBindings {
     int_to_price(value: string): number;
     quantity_to_int(quantity: number): string;
     int_to_quantity(value: string): number;
+    float_to_fixed(value: number, scale: number): string;
+    fixed_to_float(value: string, scale: number): number;
 
     // Arithmetic
     safe_add(a: string, b: string): string;
     safe_subtract(a: string, b: string): string;
+    safe_subtract_with_fallback(a: string, b: string): string;
     safe_multiply(a: string, b: string): string;
     safe_divide(a: string, b: string): string;
     calculate_mid_price(bid: string, ask: string): string;
     calculate_spread(bid: string, ask: string): string;
+
+    // Big Arithmetic (for very large numbers)
+    big_safe_add(a: string, b: string): string;
+    big_safe_subtract(a: string, b: string): string;
+    big_safe_multiply(a: string, b: string): string;
+    big_safe_divide(a: string, b: string): string;
+    big_absolute_difference(a: string, b: string): string;
 
     // Statistics
     calculate_mean(values: string[]): string;
@@ -130,6 +140,16 @@ export class FinancialMathRust {
     }
 
     /**
+     * Safe subtraction with automatic big integer fallback for overflow
+     */
+    static safeSubtractWithFallback(a: string, b: string): string {
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.safe_subtract_with_fallback(a, b);
+    }
+
+    /**
      * Safe multiplication with overflow protection
      */
     static safeMultiply(a: string, b: string): string {
@@ -150,6 +170,26 @@ export class FinancialMathRust {
     }
 
     /**
+     * Convert floating-point number to fixed-point u128 string with custom scale
+     */
+    static floatToFixed(value: number, scale: number): string {
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.float_to_fixed(value, scale);
+    }
+
+    /**
+     * Convert fixed-point u128 string back to floating-point with custom scale
+     */
+    static fixedToFloat(value: string, scale: number): number {
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.fixed_to_float(value, scale);
+    }
+
+    /**
      * Calculate mid price: (bid + ask) / 2
      */
     static calculateMidPrice(bid: string, ask: string): string {
@@ -167,6 +207,56 @@ export class FinancialMathRust {
             throw new Error("Rust bindings not available");
         }
         return nativeBindings.calculate_spread(bid, ask);
+    }
+
+    /**
+     * Big integer safe addition (handles very large numbers)
+     */
+    static bigSafeAdd(a: string, b: string): string {
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.big_safe_add(a, b);
+    }
+
+    /**
+     * Big integer safe subtraction (handles very large numbers)
+     */
+    static bigSafeSubtract(a: string, b: string): string {
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.big_safe_subtract(a, b);
+    }
+
+    /**
+     * Big integer safe multiplication (handles very large numbers)
+     */
+    static bigSafeMultiply(a: string, b: string): string {
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.big_safe_multiply(a, b);
+    }
+
+    /**
+     * Big integer safe division (handles very large numbers)
+     */
+    static bigSafeDivide(a: string, b: string): string {
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.big_safe_divide(a, b);
+    }
+
+    /**
+     * Big integer absolute difference (handles very large numbers)
+     */
+    static bigAbsoluteDifference(a: string, b: string): string {
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.big_absolute_difference(a, b);
     }
 
     /**
@@ -314,7 +404,7 @@ export class FinancialMathRustCompat {
             a.toString(),
             b.toString()
         );
-        return parseInt(result);
+        return parseFloat(result);
     }
 
     /**
@@ -325,7 +415,7 @@ export class FinancialMathRustCompat {
             a.toString(),
             b.toString()
         );
-        return parseInt(result);
+        return parseFloat(result);
     }
 
     /**
@@ -333,6 +423,6 @@ export class FinancialMathRustCompat {
      */
     static safeDivide(a: number, b: number): number {
         const result = FinancialMathRust.safeDivide(a.toString(), b.toString());
-        return parseInt(result);
+        return parseFloat(result);
     }
 }

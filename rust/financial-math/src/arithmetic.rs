@@ -26,11 +26,42 @@ pub fn safe_add(a: u128, b: u128) -> FinancialResult<u128> {
 /// use financial_math::safe_subtract;
 ///
 /// let result = safe_subtract(100_000_000, 50_000_000).unwrap();
-/// assert_eq!(result, 50_000_000);
+/// assert_eq!(result, "50000000");
 /// ```
 #[inline(always)]
-pub fn safe_subtract(a: u128, b: u128) -> FinancialResult<u128> {
-    a.checked_sub(b).ok_or(FinancialError::Overflow)
+pub fn safe_subtract(a: u128, b: u128) -> FinancialResult<String> {
+    match a.checked_sub(b) {
+        Some(result) => Ok(result.to_string()),
+        None => {
+            // Fallback to big integer arithmetic for negative results
+            use crate::big_arithmetic::big_safe_subtract;
+            big_safe_subtract(&a.to_string(), &b.to_string())
+        }
+    }
+}
+
+/// Safe subtraction with automatic big integer fallback for overflow
+///
+/// # Examples
+/// ```
+/// use financial_math::{safe_subtract_with_fallback, FinancialResult};
+///
+/// let result = safe_subtract_with_fallback(100_000_000, 50_000_000);
+/// match result {
+///     Ok(value) => println!("Result: {}", value),
+///     Err(_) => println!("Overflow occurred"),
+/// }
+/// ```
+#[inline(always)]
+pub fn safe_subtract_with_fallback(a: u128, b: u128) -> FinancialResult<String> {
+    match a.checked_sub(b) {
+        Some(result) => Ok(result.to_string()),
+        None => {
+            // Fallback to big integer arithmetic
+            use crate::big_arithmetic::big_safe_subtract;
+            big_safe_subtract(&a.to_string(), &b.to_string())
+        }
+    }
 }
 
 /// Safe multiplication with overflow protection

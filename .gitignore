@@ -28,3 +28,4 @@ analysis/reports/
 .husky/
 .vscode/
 rust/target/
+rust/index.node

@@ -67,6 +67,45 @@ fn int_to_quantity(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(cx.number(result))
 }
 
+fn float_to_fixed(mut cx: FunctionContext) -> JsResult<JsString> {
+    let value = match cx.argument::<JsNumber>(0) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected number argument for value"),
+    };
+
+    let scale = match cx.argument::<JsNumber>(1) {
+        Ok(arg) => arg.value(&mut cx) as u32,
+        Err(_) => return cx.throw_error("Expected number argument for scale"),
+    };
+
+    let result = match financial_math::conversions::safe_float_to_fixed(value, scale) {
+        Ok(fixed) => fixed,
+        Err(e) => return cx.throw_error(&format!("Conversion error: {:?}", e)),
+    };
+
+    Ok(cx.string(result.to_string()))
+}
+
+fn fixed_to_float(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let value_str = match cx.argument::<JsString>(0) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for value"),
+    };
+
+    let scale = match cx.argument::<JsNumber>(1) {
+        Ok(arg) => arg.value(&mut cx) as u32,
+        Err(_) => return cx.throw_error("Expected number argument for scale"),
+    };
+
+    let value_u128: u128 = match value_str.parse() {
+        Ok(value) => value,
+        Err(_) => return cx.throw_error("Invalid u128 value"),
+    };
+
+    let result = financial_math::conversions::fixed_to_float(value_u128, financial_math::Scale::Custom(scale));
+    Ok(cx.number(result))
+}
+
 // ===== ARITHMETIC =====
 
 fn safe_add(mut cx: FunctionContext) -> JsResult<JsString> {
@@ -109,6 +148,68 @@ fn safe_subtract(mut cx: FunctionContext) -> JsResult<JsString> {
         Err(_) => return cx.throw_error("Expected string argument for b"),
     };
 
+    // Try parsing as u128 first for integer arithmetic
+    if let Ok(a_u128) = a_str.parse::<u128>() {
+        if let Ok(b_u128) = b_str.parse::<u128>() {
+            let result = match financial_math::arithmetic::safe_subtract(a_u128, b_u128) {
+                Ok(value) => value,
+                Err(_) => {
+                    // Fallback to big arithmetic for very large numbers
+                    match financial_math::big_arithmetic::big_safe_subtract(&a_str, &b_str) {
+                        Ok(value) => value,
+                        Err(e) => return cx.throw_error(&format!("Big arithmetic error: {:?}", e)),
+                    }
+                }
+            };
+            return Ok(cx.string(result));
+        }
+    }
+
+    // If not u128, try as floats with scaling for floating point arithmetic
+    if let Ok(a_f64) = a_str.parse::<f64>() {
+        if let Ok(b_f64) = b_str.parse::<f64>() {
+            // Assume price scale for floats (8 decimal places)
+            let scale = financial_math::PRICE_SCALE.value() as f64;
+            let a_scaled = (a_f64 * scale) as u128;
+            let b_scaled = (b_f64 * scale) as u128;
+
+            let result_scaled = match financial_math::arithmetic::safe_subtract(a_scaled, b_scaled) {
+                Ok(value) => {
+                    let result_int = value.parse::<u128>().unwrap_or(0);
+                    result_int as f64 / scale
+                },
+                Err(_) => {
+                    // Fallback to big arithmetic for scaled values
+                    let a_str_scaled = a_scaled.to_string();
+                    let b_str_scaled = b_scaled.to_string();
+                    match financial_math::big_arithmetic::big_safe_subtract(&a_str_scaled, &b_str_scaled) {
+                        Ok(value) => {
+                            let result_big = value.parse::<f64>().unwrap_or(0.0);
+                            result_big / scale
+                        },
+                        Err(e) => return cx.throw_error(&format!("Big arithmetic error: {:?}", e)),
+                    }
+                }
+            };
+
+            return Ok(cx.string(result_scaled.to_string()));
+        }
+    }
+
+    return cx.throw_error("Invalid arguments: must be valid u128 or f64 strings");
+}
+
+fn safe_subtract_with_fallback(mut cx: FunctionContext) -> JsResult<JsString> {
+    let a_str = match cx.argument::<JsString>(0) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for a"),
+    };
+
+    let b_str = match cx.argument::<JsString>(1) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for b"),
+    };
+
     let a_u128: u128 = match a_str.parse() {
         Ok(value) => value,
         Err(_) => return cx.throw_error("Invalid u128 value for a"),
@@ -119,12 +220,12 @@ fn safe_subtract(mut cx: FunctionContext) -> JsResult<JsString> {
         Err(_) => return cx.throw_error("Invalid u128 value for b"),
     };
 
-    let result = match financial_math::arithmetic::safe_subtract(a_u128, b_u128) {
+    let result = match financial_math::arithmetic::safe_subtract_with_fallback(a_u128, b_u128) {
         Ok(value) => value,
         Err(e) => return cx.throw_error(&format!("Arithmetic error: {:?}", e)),
     };
 
-    Ok(cx.string(result.to_string()))
+    Ok(cx.string(result))
 }
 
 fn safe_multiply(mut cx: FunctionContext) -> JsResult<JsString> {
@@ -233,6 +334,103 @@ fn calculate_spread(mut cx: FunctionContext) -> JsResult<JsString> {
 
     let result = financial_math::arithmetic::calculate_spread(bid_u128, ask_u128);
     Ok(cx.string(result.to_string()))
+}
+
+// ===== BIG ARITHMETIC =====
+
+fn big_safe_add(mut cx: FunctionContext) -> JsResult<JsString> {
+    let a_str = match cx.argument::<JsString>(0) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for a"),
+    };
+
+    let b_str = match cx.argument::<JsString>(1) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for b"),
+    };
+
+    let result = match financial_math::big_arithmetic::big_safe_add(&a_str, &b_str) {
+        Ok(value) => value,
+        Err(e) => return cx.throw_error(&format!("Big arithmetic error: {:?}", e)),
+    };
+
+    Ok(cx.string(result))
+}
+
+fn big_safe_subtract(mut cx: FunctionContext) -> JsResult<JsString> {
+    let a_str = match cx.argument::<JsString>(0) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for a"),
+    };
+
+    let b_str = match cx.argument::<JsString>(1) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for b"),
+    };
+
+    let result = match financial_math::big_arithmetic::big_safe_subtract(&a_str, &b_str) {
+        Ok(value) => value,
+        Err(e) => return cx.throw_error(&format!("Big arithmetic error: {:?}", e)),
+    };
+
+    Ok(cx.string(result))
+}
+
+fn big_safe_multiply(mut cx: FunctionContext) -> JsResult<JsString> {
+    let a_str = match cx.argument::<JsString>(0) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for a"),
+    };
+
+    let b_str = match cx.argument::<JsString>(1) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for b"),
+    };
+
+    let result = match financial_math::big_arithmetic::big_safe_multiply(&a_str, &b_str) {
+        Ok(value) => value,
+        Err(e) => return cx.throw_error(&format!("Big arithmetic error: {:?}", e)),
+    };
+
+    Ok(cx.string(result))
+}
+
+fn big_safe_divide(mut cx: FunctionContext) -> JsResult<JsString> {
+    let a_str = match cx.argument::<JsString>(0) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for a"),
+    };
+
+    let b_str = match cx.argument::<JsString>(1) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for b"),
+    };
+
+    let result = match financial_math::big_arithmetic::big_safe_divide(&a_str, &b_str) {
+        Ok(value) => value,
+        Err(e) => return cx.throw_error(&format!("Big arithmetic error: {:?}", e)),
+    };
+
+    Ok(cx.string(result))
+}
+
+fn big_absolute_difference(mut cx: FunctionContext) -> JsResult<JsString> {
+    let a_str = match cx.argument::<JsString>(0) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for a"),
+    };
+
+    let b_str = match cx.argument::<JsString>(1) {
+        Ok(arg) => arg.value(&mut cx),
+        Err(_) => return cx.throw_error("Expected string argument for b"),
+    };
+
+    let result = match financial_math::big_arithmetic::big_absolute_difference(&a_str, &b_str) {
+        Ok(value) => value,
+        Err(e) => return cx.throw_error(&format!("Big arithmetic error: {:?}", e)),
+    };
+
+    Ok(cx.string(result))
 }
 
 // ===== STATISTICS =====
@@ -652,6 +850,14 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         Ok(_) => {},
         Err(e) => return Err(e),
     }
+    match cx.export_function("float_to_fixed", float_to_fixed) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("fixed_to_float", fixed_to_float) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
     match cx.export_function("safe_add", safe_add) {
         Ok(_) => {},
         Err(e) => return Err(e),
@@ -673,6 +879,30 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         Err(e) => return Err(e),
     }
     match cx.export_function("calculate_spread", calculate_spread) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("safe_subtract_with_fallback", safe_subtract_with_fallback) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("big_safe_add", big_safe_add) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("big_safe_subtract", big_safe_subtract) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("big_safe_multiply", big_safe_multiply) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("big_safe_divide", big_safe_divide) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("big_absolute_difference", big_absolute_difference) {
         Ok(_) => {},
         Err(e) => return Err(e),
     }
