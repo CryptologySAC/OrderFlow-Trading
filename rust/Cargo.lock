@@ -39,6 +39,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 name = "btreemap"
 version = "0.1.0"
 dependencies = [
+ "neon",
  "ordered-float",
  "serde",
  "serde_json",
@@ -201,6 +202,7 @@ dependencies = [
 name = "financial-math-bindings"
 version = "0.1.0"
 dependencies = [
+ "btreemap",
  "financial-math",
  "neon",
 ]

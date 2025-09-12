@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
+use neon::prelude::*;
 
 /// PassiveLevel represents a price level in the order book
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +37,8 @@ pub struct RBNode {
 pub struct OrderBookBTreeMap {
     tree: Mutex<BTreeMap<OrderedFloat<f64>, PassiveLevel>>,
 }
+
+impl Finalize for OrderBookBTreeMap {}
 
 impl OrderBookBTreeMap {
     pub fn new() -> Self {

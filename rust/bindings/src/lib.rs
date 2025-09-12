@@ -5,6 +5,7 @@
 
 use neon::prelude::*;
 use financial_math::{PRICE_SCALE, QUANTITY_SCALE};
+use btreemap::{OrderBookBTreeMap, PassiveLevel};
 
 // ===== CONVERSIONS =====
 
@@ -448,6 +449,189 @@ fn get_quantity_scale(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(cx.number(QUANTITY_SCALE.value() as f64))
 }
 
+// ===== BTREEMAP ORDER BOOK =====
+
+fn create_order_book_btree(mut cx: FunctionContext) -> JsResult<JsBox<OrderBookBTreeMap>> {
+    let tree = OrderBookBTreeMap::new();
+    Ok(cx.boxed(tree))
+}
+
+fn btree_insert(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let tree = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let price = cx.argument::<JsNumber>(1)?.value(&mut cx);
+    let level_obj = cx.argument::<JsObject>(2)?;
+
+    let bid = level_obj.get::<JsNumber, _, _>(&mut cx, "bid")?.value(&mut cx);
+    let ask = level_obj.get::<JsNumber, _, _>(&mut cx, "ask")?.value(&mut cx);
+    let timestamp = level_obj.get::<JsNumber, _, _>(&mut cx, "timestamp")?.value(&mut cx);
+
+    let consumed_ask = level_obj.get_opt::<JsNumber, _, _>(&mut cx, "consumedAsk")?
+        .map(|v| v.value(&mut cx)).unwrap_or(0.0);
+    let consumed_bid = level_obj.get_opt::<JsNumber, _, _>(&mut cx, "consumedBid")?
+        .map(|v| v.value(&mut cx)).unwrap_or(0.0);
+    let added_ask = level_obj.get_opt::<JsNumber, _, _>(&mut cx, "addedAsk")?
+        .map(|v| v.value(&mut cx)).unwrap_or(0.0);
+    let added_bid = level_obj.get_opt::<JsNumber, _, _>(&mut cx, "addedBid")?
+        .map(|v| v.value(&mut cx)).unwrap_or(0.0);
+
+    let level = PassiveLevel {
+        price,
+        bid,
+        ask,
+        timestamp,
+        consumed_ask: Some(consumed_ask),
+        consumed_bid: Some(consumed_bid),
+        added_ask: Some(added_ask),
+        added_bid: Some(added_bid),
+    };
+
+    tree.insert(price, level);
+    Ok(cx.undefined())
+}
+
+fn btree_set(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let price = cx.argument::<JsNumber>(1)?.value(&mut cx);
+    let side = cx.argument::<JsString>(2)?.value(&mut cx);
+    let quantity = cx.argument::<JsNumber>(3)?.value(&mut cx);
+
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    tree.set(price, side.as_str(), quantity);
+    Ok(cx.undefined())
+}
+
+fn btree_delete(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let price = cx.argument::<JsNumber>(1)?.value(&mut cx);
+
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    tree.delete(price);
+    Ok(cx.undefined())
+}
+
+fn btree_search(mut cx: FunctionContext) -> JsResult<JsValue> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let price = cx.argument::<JsNumber>(1)?.value(&mut cx);
+
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    match tree.search(price) {
+        Some(node) => {
+            let obj = JsObject::new(&mut cx);
+            let price_val = cx.number(node.price);
+            obj.set(&mut cx, "price", price_val)?;
+            let level_obj = level_to_js_object(&mut cx, &node.level)?;
+            obj.set(&mut cx, "level", level_obj)?;
+            Ok(obj.as_value(&mut cx))
+        }
+        None => Ok(cx.undefined().as_value(&mut cx))
+    }
+}
+
+fn btree_get(mut cx: FunctionContext) -> JsResult<JsValue> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let price = cx.argument::<JsNumber>(1)?.value(&mut cx);
+
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    match tree.get(price) {
+        Some(level) => {
+            let obj = level_to_js_object(&mut cx, &level)?;
+            Ok(obj.as_value(&mut cx))
+        }
+        None => Ok(cx.undefined().as_value(&mut cx))
+    }
+}
+
+fn btree_get_best_bid(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    let best_bid = tree.get_best_bid();
+    Ok(cx.number(best_bid))
+}
+
+fn btree_get_best_ask(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    let best_ask = tree.get_best_ask();
+    Ok(cx.number(best_ask))
+}
+
+fn btree_get_best_bid_ask(mut cx: FunctionContext) -> JsResult<JsObject> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    let (bid, ask) = tree.get_best_bid_ask();
+
+    let obj = JsObject::new(&mut cx);
+    let bid_val = cx.number(bid);
+    obj.set(&mut cx, "bid", bid_val)?;
+    let ask_val = cx.number(ask);
+    obj.set(&mut cx, "ask", ask_val)?;
+    Ok(obj)
+}
+
+fn btree_get_all_nodes(mut cx: FunctionContext) -> JsResult<JsArray> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    let nodes = tree.get_all_nodes();
+
+    let arr = JsArray::new(&mut cx, nodes.len());
+    for (i, node) in nodes.iter().enumerate() {
+        let obj = JsObject::new(&mut cx);
+        let price_val = cx.number(node.price);
+        obj.set(&mut cx, "price", price_val)?;
+        let level_obj = level_to_js_object(&mut cx, &node.level)?;
+        obj.set(&mut cx, "level", level_obj)?;
+        arr.set(&mut cx, i as u32, obj)?;
+    }
+    Ok(arr)
+}
+
+fn btree_size(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    let size = tree.size();
+    Ok(cx.number(size as f64))
+}
+
+fn btree_clear(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let tree_box = cx.argument::<JsBox<OrderBookBTreeMap>>(0)?;
+    let tree: &OrderBookBTreeMap = &*tree_box;
+    tree.clear();
+    Ok(cx.undefined())
+}
+
+// Helper function to convert PassiveLevel to JavaScript object
+fn level_to_js_object<'a>(cx: &mut impl Context<'a>, level: &PassiveLevel) -> JsResult<'a, JsObject> {
+    let obj = JsObject::new(cx);
+
+    let price_val = cx.number(level.price);
+    obj.set(cx, "price", price_val)?;
+    let bid_val = cx.number(level.bid);
+    obj.set(cx, "bid", bid_val)?;
+    let ask_val = cx.number(level.ask);
+    obj.set(cx, "ask", ask_val)?;
+    let timestamp_val = cx.number(level.timestamp);
+    obj.set(cx, "timestamp", timestamp_val)?;
+
+    if let Some(consumed_ask) = level.consumed_ask {
+        let consumed_ask_val = cx.number(consumed_ask);
+        obj.set(cx, "consumedAsk", consumed_ask_val)?;
+    }
+    if let Some(consumed_bid) = level.consumed_bid {
+        let consumed_bid_val = cx.number(consumed_bid);
+        obj.set(cx, "consumedBid", consumed_bid_val)?;
+    }
+    if let Some(added_ask) = level.added_ask {
+        let added_ask_val = cx.number(added_ask);
+        obj.set(cx, "addedAsk", added_ask_val)?;
+    }
+    if let Some(added_bid) = level.added_bid {
+        let added_bid_val = cx.number(added_bid);
+        obj.set(cx, "addedBid", added_bid_val)?;
+    }
+
+    Ok(obj)
+}
+
 // ===== MODULE REGISTRATION =====
 
 #[neon::main]
@@ -521,6 +705,54 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         Err(e) => return Err(e),
     }
     match cx.export_function("get_quantity_scale", get_quantity_scale) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("create_order_book_btree", create_order_book_btree) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_insert", btree_insert) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_set", btree_set) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_delete", btree_delete) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_search", btree_search) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_get", btree_get) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_get_best_bid", btree_get_best_bid) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_get_best_ask", btree_get_best_ask) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_get_best_bid_ask", btree_get_best_bid_ask) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_get_all_nodes", btree_get_all_nodes) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_size", btree_size) {
+        Ok(_) => {},
+        Err(e) => return Err(e),
+    }
+    match cx.export_function("btree_clear", btree_clear) {
         Ok(_) => {},
         Err(e) => return Err(e),
     }

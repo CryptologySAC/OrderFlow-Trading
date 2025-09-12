@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 [dependencies]
 neon = { version = "1.0", default-features = false, features = ["napi-6"] }
 financial-math = { path = "../financial-math" }
+btreemap = { path = "../btreemap" }
