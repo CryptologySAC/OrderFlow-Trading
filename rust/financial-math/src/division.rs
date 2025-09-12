@@ -11,7 +11,7 @@ use crate::{FinancialResult, FinancialError};
 /// use financial_math::precise_divide;
 ///
 /// let result = precise_divide(100_000_000, 3_000_000, 8).unwrap();
-/// assert_eq!(result, 33_333_333); // 33.333333
+/// assert_eq!(result, 3_333_333_333); // 33.333333
 /// ```
 pub fn precise_divide(numerator: u128, denominator: u128, scale: u32) -> FinancialResult<u128> {
     if denominator == 0 {

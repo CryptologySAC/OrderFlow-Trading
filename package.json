@@ -26,7 +26,7 @@
         "prettier": "npx prettier --write './**/*.{ts,tsx}'",
         "updates": "npx npm-check-updates",
         "update": "npx npm-check-updates -u",
-        "build": "yarn build:rust && yarn format && tsc -p tsconfig.build.json",
+        "build": "yarn build:rust && yarn format && tsc -p tsconfig.build.json && cp -r rust/target dist/rust",
         "build:frontend": "tsc -p tsconfig.frontend.json",
         "build:rust": "cd rust && cargo build --release && cp target/release/libfinancial_math_bindings.dylib target/release/index.node",
         "build:rust:debug": "cd rust && cargo build && cp target/release/libfinancial_math_bindings.dylib target/release/index.node",

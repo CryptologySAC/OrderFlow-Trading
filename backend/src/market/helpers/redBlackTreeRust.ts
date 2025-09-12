@@ -1,7 +1,52 @@
-// Drop-in replacement for RedBlackTree using native Map
-// Provides exact same API with significant performance improvements
+// Native Rust BTreeMap implementation with FFI bindings
+// Drop-in replacement for JavaScript Red-Black Tree with native performance
 
+import { createRequire } from "module";
 import type { PassiveLevel } from "../../types/marketEvents.js";
+
+// Get the current module's directory for resolving the native binding
+
+// Import the native Rust bindings using ES6 compatible require
+const require = createRequire(import.meta.url);
+
+// Type definitions for native Rust bindings
+interface NativeBindings {
+    create_order_book_btree(): unknown;
+    btree_insert(tree: unknown, price: number, level: PassiveLevel): void;
+    btree_set(
+        tree: unknown,
+        price: number,
+        side: "bid" | "ask",
+        quantity: number
+    ): void;
+    btree_delete(tree: unknown, price: number): void;
+    btree_search(
+        tree: unknown,
+        price: number
+    ): { price: number; level: PassiveLevel } | undefined;
+    btree_get(tree: unknown, price: number): PassiveLevel | undefined;
+    btree_get_best_bid(tree: unknown): number;
+    btree_get_best_ask(tree: unknown): number;
+    btree_get_best_bid_ask(tree: unknown): { bid: number; ask: number };
+    btree_get_all_nodes(
+        tree: unknown
+    ): Array<{ price: number; level: PassiveLevel }>;
+    btree_size(tree: unknown): number;
+    btree_clear(tree: unknown): void;
+}
+
+let nativeBindings: NativeBindings | null;
+try {
+    // This path is correct: DO NOT CHANGE!
+    nativeBindings =
+        require("../../rust/target/release/index.node") as NativeBindings;
+} catch (_error) {
+    void _error;
+    console.error(
+        "Rust financial math bindings not available, falling back to JavaScript implementation"
+    );
+    nativeBindings = null;
+}
 
 // Re-export the PassiveLevel type for compatibility
 export type { PassiveLevel };
@@ -18,85 +63,59 @@ export class RBNode {
 }
 
 /**
- * High-performance Map-based OrderBook implementation
- * Drop-in replacement for JavaScript Red-Black Tree with significant performance improvement
+ * High-performance Rust BTreeMap-based OrderBook implementation
+ * Native performance with exact JavaScript API compatibility
  */
 class RedBlackTree {
-    private tree: Map<number, PassiveLevel>;
+    private nativeTree: unknown;
 
     constructor() {
-        this.tree = new Map();
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        this.nativeTree = nativeBindings.create_order_book_btree();
     }
 
     /**
      * Insert a price level with bid/ask separation enforcement
      */
     public insert(price: number, level: PassiveLevel): void {
-        // If price already exists, merge with separation enforcement
-        if (this.tree.has(price)) {
-            const existing = this.tree.get(price)!;
-            const merged = this.enforceBidAskSeparation(existing, level);
-            this.tree.set(price, merged);
-        } else {
-            this.tree.set(price, level);
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
         }
+        nativeBindings.btree_insert(this.nativeTree, price, level);
     }
 
     /**
      * Set bid/ask with automatic separation enforcement
      */
     public set(price: number, side: "bid" | "ask", quantity: number): void {
-        if (this.tree.has(price)) {
-            // Update existing level with separation enforcement
-            const existing = this.tree.get(price)!;
-            if (side === "bid") {
-                existing.bid = quantity;
-                existing.addedBid = quantity;
-                // Clear conflicting ask if setting bid > 0
-                if (quantity > 0) {
-                    existing.ask = 0;
-                    existing.addedAsk = 0;
-                }
-            } else {
-                existing.ask = quantity;
-                existing.addedAsk = quantity;
-                // Clear conflicting bid if setting ask > 0
-                if (quantity > 0) {
-                    existing.bid = 0;
-                    existing.addedBid = 0;
-                }
-            }
-            existing.timestamp = Date.now();
-        } else {
-            // Create new level
-            const level: PassiveLevel = {
-                price,
-                bid: side === "bid" ? quantity : 0,
-                ask: side === "ask" ? quantity : 0,
-                timestamp: Date.now(),
-                consumedAsk: 0,
-                consumedBid: 0,
-                addedAsk: side === "ask" ? quantity : 0,
-                addedBid: side === "bid" ? quantity : 0,
-            };
-            this.tree.set(price, level);
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
         }
+        nativeBindings.btree_set(this.nativeTree, price, side, quantity);
     }
 
     /**
      * Delete a price level
      */
     public delete(price: number): void {
-        this.tree.delete(price);
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        nativeBindings.btree_delete(this.nativeTree, price);
     }
 
     /**
      * Find a price level
      */
     public search(price: number): RBNode | undefined {
-        const level = this.tree.get(price);
-        if (level) {
-            return new RBNode(price, level);
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        const result = nativeBindings.btree_search(this.nativeTree, price);
+        if (result !== undefined) {
+            return new RBNode(result.price, result.level);
         }
         return undefined;
     }
@@ -105,117 +124,74 @@ class RedBlackTree {
      * Get price level
      */
     public get(price: number): PassiveLevel | undefined {
-        return this.tree.get(price);
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.btree_get(this.nativeTree, price);
     }
 
     /**
-     * Get best bid (highest price with bid > 0) - O(n) but optimized
+     * Get best bid (highest price with bid > 0) - O(log n)
      */
     public getBestBid(): number {
-        let bestBid = 0;
-        for (const [price, level] of this.tree) {
-            if (level.bid > 0 && price > bestBid) {
-                bestBid = price;
-            }
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
         }
-        return bestBid;
+        return nativeBindings.btree_get_best_bid(this.nativeTree);
     }
 
     /**
-     * Get best ask (lowest price with ask > 0) - O(n) but optimized
+     * Get best ask (lowest price with ask > 0) - O(log n)
      */
     public getBestAsk(): number {
-        let bestAsk = Infinity;
-        for (const [price, level] of this.tree) {
-            if (level.ask > 0 && price < bestAsk) {
-                bestAsk = price;
-            }
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
         }
-        return bestAsk === Infinity ? Infinity : bestAsk;
+        return nativeBindings.btree_get_best_ask(this.nativeTree);
     }
 
     /**
      * Atomic operation: get both best bid and ask in single tree traversal
      */
     public getBestBidAsk(): { bid: number; ask: number } {
-        let bestBid = 0;
-        let bestAsk = Infinity;
-
-        for (const [price, level] of this.tree) {
-            if (level.bid > 0 && price > bestBid) {
-                bestBid = price;
-            }
-            if (level.ask > 0 && price < bestAsk) {
-                bestAsk = price;
-            }
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
         }
-
-        return {
-            bid: bestBid,
-            ask: bestAsk === Infinity ? Infinity : bestAsk,
-        };
+        return nativeBindings.btree_get_best_bid_ask(this.nativeTree);
     }
 
     /**
      * Get all nodes for iteration
      */
     public getAllNodes(): RBNode[] {
-        const nodes: RBNode[] = [];
-        // Sort by price for consistent ordering
-        const sortedEntries = Array.from(this.tree.entries()).sort(
-            ([a], [b]) => a - b
-        );
-        for (const [price, level] of sortedEntries) {
-            nodes.push(new RBNode(price, level));
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
         }
-        return nodes;
+        const nodes = nativeBindings.btree_get_all_nodes(this.nativeTree);
+        return nodes.map(
+            (node: { price: number; level: PassiveLevel }) =>
+                new RBNode(node.price, node.level)
+        );
     }
 
     /**
      * Get tree size
      */
     public size(): number {
-        return this.tree.size;
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
+        }
+        return nativeBindings.btree_size(this.nativeTree);
     }
 
     /**
      * Clear tree
      */
     public clear(): void {
-        this.tree.clear();
-    }
-
-    /**
-     * Enforce bid/ask separation when merging levels
-     */
-    private enforceBidAskSeparation(
-        existing: PassiveLevel,
-        incoming: PassiveLevel
-    ): PassiveLevel {
-        const result = { ...existing };
-
-        // If incoming has bid data, clear any existing ask and update bid
-        if (incoming.bid > 0) {
-            result.bid = incoming.bid;
-            result.addedBid = incoming.addedBid || 0;
-            result.ask = 0;
-            result.addedAsk = 0;
+        if (!nativeBindings) {
+            throw new Error("Rust bindings not available");
         }
-
-        // If incoming has ask data, clear any existing bid and update ask
-        if (incoming.ask > 0) {
-            result.ask = incoming.ask;
-            result.addedAsk = incoming.addedAsk || 0;
-            result.bid = 0;
-            result.addedBid = 0;
-        }
-
-        // Update other fields
-        result.timestamp = incoming.timestamp;
-        result.consumedBid = incoming.consumedBid || 0;
-        result.consumedAsk = incoming.consumedAsk || 0;
-
-        return result;
+        nativeBindings.btree_clear(this.nativeTree);
     }
 }
 

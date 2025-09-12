@@ -51,8 +51,9 @@ interface FinancialMathBindings {
 // Note: This will be built and installed via npm scripts
 let nativeBindings: FinancialMathBindings | null;
 try {
+    // This path is correct: DO NOT CHANGE!
     nativeBindings =
-        require("../../../rust/target/release/index.node") as FinancialMathBindings;
+        require("../../rust/target/release/index.node") as FinancialMathBindings;
 } catch (_error) {
     void _error;
     console.warn(

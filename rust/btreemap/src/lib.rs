@@ -149,15 +149,19 @@ impl OrderBookBTreeMap {
         let mut best_bid = 0.0;
         let mut best_ask = f64::INFINITY;
 
+        // Find best bid (highest price with bid > 0)
         for (price, level) in tree.iter().rev() {
-            if level.bid > 0.0 && best_bid == 0.0 {
+            if level.bid > 0.0 {
                 best_bid = price.into_inner();
+                break; // Found the highest bid, can stop
             }
-            if level.ask > 0.0 && best_ask == f64::INFINITY {
+        }
+
+        // Find best ask (lowest price with ask > 0)
+        for (price, level) in tree.iter() {
+            if level.ask > 0.0 {
                 best_ask = price.into_inner();
-            }
-            if best_bid > 0.0 && best_ask != f64::INFINITY {
-                break;
+                break; // Found the lowest ask, can stop
             }
         }
 

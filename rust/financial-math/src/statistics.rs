@@ -98,10 +98,10 @@ pub fn calculate_percentile(values: &[u128], percentile: u32) -> FinancialResult
         return Ok(sorted_values[sorted_values.len() - 1]);
     }
 
-    // Calculate position using fixed-point arithmetic
-    let position = (percentile as u128 * (sorted_values.len() as u128 - 1) * 100) / 10000;
+    // Calculate position as floating point
+    let position = (percentile as f64 * (sorted_values.len() as f64 - 1.0)) / 100.0;
 
-    let lower_index = (position / 100) as usize;
+    let lower_index = position as usize;
     let upper_index = lower_index + 1;
 
     if upper_index >= sorted_values.len() {
@@ -112,9 +112,9 @@ pub fn calculate_percentile(values: &[u128], percentile: u32) -> FinancialResult
     let upper_value = sorted_values[upper_index];
 
     // Linear interpolation
-    let fraction = position % 100;
+    let fraction = position - (lower_index as f64);
     let diff = upper_value - lower_value;
-    let interpolated = lower_value + (diff * fraction) / 100;
+    let interpolated = lower_value + (diff as f64 * fraction) as u128;
 
     Ok(interpolated)
 }
@@ -203,7 +203,7 @@ mod tests {
     fn test_calculate_median() {
         let values = vec![90_000_000, 100_000_000, 110_000_000];
         let median = calculate_median(&values).unwrap();
-        assert_eq!(median, 90_100_000); // 90.1 (actual result)
+        assert_eq!(median, 100_000_000); // Middle value for odd count
 
         let values2 = vec![90_000_000, 100_000_000, 110_000_000, 120_000_000];
         let median2 = calculate_median(&values2).unwrap();
@@ -215,10 +215,10 @@ mod tests {
         let values = vec![90_000_000, 100_000_000, 110_000_000, 120_000_000];
 
         let p25 = calculate_percentile(&values, 25).unwrap();
-        assert_eq!(p25, 90_000_000); // 25th percentile (actual result)
+        assert_eq!(p25, 97_500_000); // 25th percentile with interpolation
 
         let p75 = calculate_percentile(&values, 75).unwrap();
-        assert_eq!(p75, 115_000_000); // 115.0 (actual result)
+        assert_eq!(p75, 112_500_000); // 75th percentile with interpolation
 
         let p100 = calculate_percentile(&values, 100).unwrap();
         assert_eq!(p100, 120_000_000); // Maximum value

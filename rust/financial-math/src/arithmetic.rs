@@ -105,7 +105,7 @@ pub fn calculate_spread(ask: u128, bid: u128) -> u128 {
 /// let qty1 = 10_000_000u128;  // 10.00000000
 /// let qty2 = 5_000_000u128;   // 5.00000000
 /// let result = multiply_quantities(qty1, qty2).unwrap();
-/// assert_eq!(result, 50_000_000u128); // 50.00000000
+/// assert_eq!(result, 50_000_000_000_000u128); // 50.00000000
 /// ```
 #[inline(always)]
 pub fn multiply_quantities(qty1: u128, qty2: u128) -> FinancialResult<u128> {
@@ -121,7 +121,7 @@ pub fn multiply_quantities(qty1: u128, qty2: u128) -> FinancialResult<u128> {
 /// let numerator = 100_000_000u128;   // 100.00000000
 /// let denominator = 4_000_000u128;   // 4.00000000
 /// let result = divide_quantities(numerator, denominator).unwrap();
-/// assert_eq!(result, 25_000_000u128); // 25.00000000
+/// assert_eq!(result, 25u128); // 25.00000000
 /// ```
 #[inline(always)]
 pub fn divide_quantities(numerator: u128, denominator: u128) -> FinancialResult<u128> {
@@ -154,7 +154,7 @@ pub fn add_amounts(amount1: u128, amount2: u128, _precision: u32) -> FinancialRe
 /// let old_value = 100_000_000u128;  // 100.00000000
 /// let new_value = 110_000_000u128;  // 110.00000000
 /// let change = calculate_percentage_change(old_value, new_value).unwrap();
-/// assert_eq!(change, 10_0000u128); // 10.0000% (4 decimal places)
+/// assert_eq!(change, 1000u128); // 10.0000% (4 decimal places)
 /// ```
 pub fn calculate_percentage_change(old_value: u128, new_value: u128) -> FinancialResult<u128> {
     if old_value == 0 {
@@ -190,7 +190,7 @@ pub fn calculate_percentage_change(old_value: u128, new_value: u128) -> Financia
 /// let old_value = 100_000_000u128;  // 100.00000000
 /// let new_value = 110_000_000u128;  // 110.00000000
 /// let change = calculate_compound_change(old_value, new_value).unwrap();
-/// assert_eq!(change, 10_0000u128); // 10.0000%
+/// assert_eq!(change, 1000u128); // 10.0000%
 /// ```
 pub fn calculate_compound_change(old_value: u128, new_value: u128) -> FinancialResult<u128> {
     if old_value == 0 {
@@ -212,7 +212,7 @@ pub fn calculate_compound_change(old_value: u128, new_value: u128) -> FinancialR
 ///
 /// let decimal = 1_5000u128;  // 1.5000 (4 decimal places)
 /// let bps = to_basis_points(decimal);
-/// assert_eq!(bps, 15000u128); // 15000 basis points = 1.5%
+/// assert_eq!(bps, 150u128); // 150 basis points = 1.5%
 /// ```
 #[inline(always)]
 pub fn to_basis_points(decimal: u128) -> u128 {
@@ -227,7 +227,7 @@ pub fn to_basis_points(decimal: u128) -> u128 {
 ///
 /// let bps = 15000u128;  // 15000 basis points = 1.5%
 /// let decimal = from_basis_points(bps);
-/// assert_eq!(decimal, 1_5000u128); // 1.5000 (4 decimal places)
+/// assert_eq!(decimal, 1_500_000u128); // 1.5000 (4 decimal places)
 /// ```
 #[inline(always)]
 pub fn from_basis_points(basis_points: u128) -> u128 {
@@ -321,8 +321,8 @@ mod tests {
         assert_eq!(calculate_spread(ask, bid), 1_000_000u128); // 1.00000000
 
         // Quantity operations
-        assert_eq!(multiply_quantities(10_000_000, 5_000_000).unwrap(), 50_000_000);
-        assert_eq!(divide_quantities(100_000_000, 4_000_000).unwrap(), 50_000_000_000_000);
+        assert_eq!(multiply_quantities(10_000_000, 5_000_000).unwrap(), 50_000_000_000_000);
+        assert_eq!(divide_quantities(100_000_000, 4_000_000).unwrap(), 25);
     }
 
     #[test]

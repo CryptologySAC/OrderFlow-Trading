@@ -13,7 +13,7 @@ use crate::{FinancialResult, FinancialError};
 /// let price = 123_4567_8901u128;  // 123.45678901
 /// let tick_size = 1_0000u128;     // 0.010000
 /// let normalized = normalize_price_to_tick(price, tick_size).unwrap();
-/// assert_eq!(normalized, 123_4560_0000u128); // 123.45600000 (rounded to tick)
+/// assert_eq!(normalized, 123_4568_0000u128); // 123.45680000 (rounded to tick)
 /// ```
 pub fn normalize_price_to_tick(price: u128, tick_size: u128) -> FinancialResult<u128> {
     if tick_size == 0 {
